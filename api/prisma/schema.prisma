@@ -90,6 +90,8 @@ model LessonVariant {
   exercises    Json
 
   concept Concept @relation(fields: [conceptId], references: [id], onDelete: Cascade)
+
+  @@unique([conceptId, mode])
 }
 
 model UserProgress {
