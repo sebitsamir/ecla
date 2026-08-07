@@ -7,11 +7,7 @@ datasource db {
   url      = env("DATABASE_URL")
 }
 
-enum Role {
-  USER
-  ADMIN
-}
-
+// ─── ENUMS ───────────────────────────────────────────────
 enum Motivation {
   TRAVEL
   HERITAGE
@@ -26,33 +22,128 @@ enum DeliveryMode {
   PROFESSIONAL
 }
 
+// ─── USER ────────────────────────────────────────────────
 model User {
-  id            String       @id @default(uuid())
-  clerkId       String       @unique
-  email         String       @unique
-  role          Role         @default(USER)
-  motivation    Motivation?
-  preferredMode DeliveryMode @default(DRILL)
-  dailyGoalXp   Int          @default(50)
-  xpTotal       Int          @default(0)
-  streakDays    Int          @default(0)
-  isPro         Boolean      @default(false)
-  createdAt     DateTime     @default(now())
-  updatedAt     DateTime     @updatedAt
+  id                  String       @id @default(uuid())
+  clerkId             String       @unique
+  email               String       @unique
+  motivation          Motivation?
+  preferredMode       DeliveryMode @default(DRILL)
+  dailyGoalXp         Int          @default(50)
+  xpTotal             Int          @default(0)
+  streakDays          Int          @default(0)
+  lastActiveAt        DateTime?
+  isPro               Boolean      @default(false)
+  onboardingCompleted Boolean      @default(false)
+  currentLevel        String?
+  createdAt           DateTime     @default(now())
+  updatedAt           DateTime     @updatedAt
 
-  progress UserProgress[]
+  progress       UserProgress[]
+  streakLogs     StreakLog[]
+  conceptMastery ConceptMastery[]
+  vocabProgress  UserVocabProgress[]
 }
 
+// ─── COURSE STRUCTURE ────────────────────────────────────
+model Course {
+  id           String  @id @default(uuid())
+  languageCode String
+  cefrLevel    String
+  title        String
+  isPublished  Boolean @default(false)
+  units        Unit[]
+}
+
+model Unit {
+  id         String    @id @default(uuid())
+  courseId   String
+  title      String
+  orderIndex Int
+  course     Course    @relation(fields: [courseId], references: [id], onDelete: Cascade)
+  concepts   Concept[]
+}
+
+// ─── SHARED CONCEPT LAYER (written ONCE per grammar/vocab point) ───
+model Concept {
+  id          String   @id @default(uuid())
+  unitId      String
+  name        String
+  cefrLevel   String
+  grammarNote String
+  vocabItems  Json
+  orderIndex  Int
+  xpReward    Int      @default(20)
+  unit        Unit     @relation(fields: [unitId], references: [id], onDelete: Cascade)
+  variants    LessonVariant[]
+  progress    UserProgress[]
+  mastery     ConceptMastery[]
+}
+
+// ─── MODE-SPECIFIC DELTA (small flavor on top of Concept) ───
+model LessonVariant {
+  id           String  @id @default(uuid())
+  conceptId    String
+  mode         DeliveryMode
+  storyBeat    String?
+  culturalRef  String?
+  formalPhrase String?
+  exercises    Json
+  concept      Concept @relation(fields: [conceptId], references: [id], onDelete: Cascade)
+}
+
+// ─── PROGRESS (tracked per CONCEPT, shared across all modes) ───
 model UserProgress {
   id          String       @id @default(uuid())
   userId      String
-  lessonId    String
+  conceptId   String
   modeUsed    DeliveryMode
-  status      String       @default("NOT_STARTED")
+  status      String       @default("not_started")
   score       Int?
   xpEarned    Int          @default(0)
   completedAt DateTime?
-  createdAt   DateTime     @default(now())
+  user        User         @relation(fields: [userId], references: [id], onDelete: Cascade)
+  concept     Concept      @relation(fields: [conceptId], references: [id], onDelete: Cascade)
+}
 
-  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+// ─── ADAPTIVE DIFFICULTY (shared across ALL modes) ───
+model ConceptMastery {
+  id             String   @id @default(uuid())
+  userId         String
+  conceptId      String
+  correctCount   Int      @default(0)
+  incorrectCount Int      @default(0)
+  lastSeenAt     DateTime @default(now())
+  user           User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  concept        Concept  @relation(fields: [conceptId], references: [id], onDelete: Cascade)
+}
+
+// ─── VOCABULARY + SPACED REPETITION ─────────────────────
+model Vocabulary {
+  id          String @id @default(uuid())
+  word        String
+  translation String
+  audioUrl    String?
+  courseId    String
+  difficulty  Int    @default(1)
+}
+
+model UserVocabProgress {
+  id           String   @id @default(uuid())
+  userId       String
+  vocabId      String
+  easeFactor   Float    @default(2.5)
+  interval     Int      @default(1)
+  repetitions  Int      @default(0)
+  nextReviewAt DateTime
+}
+
+// ─── STREAKS ─────────────────────────────────────────────
+model StreakLog {
+  id          String   @id @default(uuid())
+  userId      String
+  date        DateTime
+  xpEarned    Int
+  lessonsDone Int
+  user        User     @relation(fields: [userId], references: [id], onDelete: Cascade)
 }
