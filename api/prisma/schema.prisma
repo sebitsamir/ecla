@@ -1,0 +1,58 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum Role {
+  USER
+  ADMIN
+}
+
+enum Motivation {
+  TRAVEL
+  HERITAGE
+  CAREER
+  FUN
+}
+
+enum DeliveryMode {
+  STORY
+  DRILL
+  IMMERSION
+  PROFESSIONAL
+}
+
+model User {
+  id            String       @id @default(uuid())
+  clerkId       String       @unique
+  email         String       @unique
+  role          Role         @default(USER)
+  motivation    Motivation?
+  preferredMode DeliveryMode @default(DRILL)
+  dailyGoalXp   Int          @default(50)
+  xpTotal       Int          @default(0)
+  streakDays    Int          @default(0)
+  isPro         Boolean      @default(false)
+  createdAt     DateTime     @default(now())
+  updatedAt     DateTime     @updatedAt
+
+  progress UserProgress[]
+}
+
+model UserProgress {
+  id          String       @id @default(uuid())
+  userId      String
+  lessonId    String
+  modeUsed    DeliveryMode
+  status      String       @default("NOT_STARTED")
+  score       Int?
+  xpEarned    Int          @default(0)
+  completedAt DateTime?
+  createdAt   DateTime     @default(now())
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+}
