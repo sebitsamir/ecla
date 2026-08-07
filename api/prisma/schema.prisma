@@ -7,7 +7,6 @@ datasource db {
   url      = env("DATABASE_URL")
 }
 
-// ─── ENUMS ───────────────────────────────────────────────
 enum Motivation {
   TRAVEL
   HERITAGE
@@ -22,7 +21,6 @@ enum DeliveryMode {
   PROFESSIONAL
 }
 
-// ─── USER ────────────────────────────────────────────────
 model User {
   id                  String       @id @default(uuid())
   clerkId             String       @unique
@@ -45,54 +43,55 @@ model User {
   vocabProgress  UserVocabProgress[]
 }
 
-// ─── COURSE STRUCTURE ────────────────────────────────────
 model Course {
   id           String  @id @default(uuid())
   languageCode String
   cefrLevel    String
   title        String
   isPublished  Boolean @default(false)
-  units        Unit[]
+
+  units      Unit[]
+  vocabulary Vocabulary[]
 }
 
 model Unit {
-  id         String    @id @default(uuid())
+  id         String @id @default(uuid())
   courseId   String
   title      String
   orderIndex Int
-  course     Course    @relation(fields: [courseId], references: [id], onDelete: Cascade)
-  concepts   Concept[]
+
+  course   Course    @relation(fields: [courseId], references: [id], onDelete: Cascade)
+  concepts Concept[]
 }
 
-// ─── SHARED CONCEPT LAYER (written ONCE per grammar/vocab point) ───
 model Concept {
-  id          String   @id @default(uuid())
+  id          String @id @default(uuid())
   unitId      String
   name        String
   cefrLevel   String
   grammarNote String
   vocabItems  Json
   orderIndex  Int
-  xpReward    Int      @default(20)
-  unit        Unit     @relation(fields: [unitId], references: [id], onDelete: Cascade)
-  variants    LessonVariant[]
-  progress    UserProgress[]
-  mastery     ConceptMastery[]
+  xpReward    Int    @default(20)
+
+  unit     Unit             @relation(fields: [unitId], references: [id], onDelete: Cascade)
+  variants LessonVariant[]
+  progress UserProgress[]
+  mastery  ConceptMastery[]
 }
 
-// ─── MODE-SPECIFIC DELTA (small flavor on top of Concept) ───
 model LessonVariant {
-  id           String  @id @default(uuid())
+  id           String       @id @default(uuid())
   conceptId    String
   mode         DeliveryMode
   storyBeat    String?
   culturalRef  String?
   formalPhrase String?
   exercises    Json
-  concept      Concept @relation(fields: [conceptId], references: [id], onDelete: Cascade)
+
+  concept Concept @relation(fields: [conceptId], references: [id], onDelete: Cascade)
 }
 
-// ─── PROGRESS (tracked per CONCEPT, shared across all modes) ───
 model UserProgress {
   id          String       @id @default(uuid())
   userId      String
@@ -102,11 +101,11 @@ model UserProgress {
   score       Int?
   xpEarned    Int          @default(0)
   completedAt DateTime?
-  user        User         @relation(fields: [userId], references: [id], onDelete: Cascade)
-  concept     Concept      @relation(fields: [conceptId], references: [id], onDelete: Cascade)
+
+  user    User    @relation(fields: [userId], references: [id], onDelete: Cascade)
+  concept Concept @relation(fields: [conceptId], references: [id], onDelete: Cascade)
 }
 
-// ─── ADAPTIVE DIFFICULTY (shared across ALL modes) ───
 model ConceptMastery {
   id             String   @id @default(uuid())
   userId         String
@@ -114,18 +113,21 @@ model ConceptMastery {
   correctCount   Int      @default(0)
   incorrectCount Int      @default(0)
   lastSeenAt     DateTime @default(now())
-  user           User     @relation(fields: [userId], references: [id], onDelete: Cascade)
-  concept        Concept  @relation(fields: [conceptId], references: [id], onDelete: Cascade)
+
+  user    User    @relation(fields: [userId], references: [id], onDelete: Cascade)
+  concept Concept @relation(fields: [conceptId], references: [id], onDelete: Cascade)
 }
 
-// ─── VOCABULARY + SPACED REPETITION ─────────────────────
 model Vocabulary {
-  id          String @id @default(uuid())
+  id          String  @id @default(uuid())
   word        String
   translation String
   audioUrl    String?
   courseId    String
-  difficulty  Int    @default(1)
+  difficulty  Int     @default(1)
+
+  course   Course              @relation(fields: [courseId], references: [id], onDelete: Cascade)
+  progress UserVocabProgress[]
 }
 
 model UserVocabProgress {
@@ -136,14 +138,17 @@ model UserVocabProgress {
   interval     Int      @default(1)
   repetitions  Int      @default(0)
   nextReviewAt DateTime
+
+  user  User       @relation(fields: [userId], references: [id], onDelete: Cascade)
+  vocab Vocabulary @relation(fields: [vocabId], references: [id], onDelete: Cascade)
 }
 
-// ─── STREAKS ─────────────────────────────────────────────
 model StreakLog {
   id          String   @id @default(uuid())
   userId      String
   date        DateTime
   xpEarned    Int
   lessonsDone Int
-  user        User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
 }
