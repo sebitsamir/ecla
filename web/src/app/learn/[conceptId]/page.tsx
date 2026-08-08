@@ -75,14 +75,14 @@ export default function LearnPage() {
         fetchLesson()
     }, [getToken, params.conceptId])
 
-    const checkAnswer = () => {
-        if (isRevealed || !userInput.trim()) return
+    const checkAnswer = (value: string) => {
+        if (isRevealed || !value.trim()) return
 
         const exercises: Exercise[] = lesson.variant.exercises
         const currentExercise = exercises[currentIndex]
 
         // Normalize for comparison (trim whitespace, lowercase)
-        const normalizedInput = userInput.trim().toLowerCase()
+        const normalizedInput = value.trim().toLowerCase()
         const normalizedAnswer = currentExercise.answer.trim().toLowerCase()
 
         const correct = normalizedInput === normalizedAnswer
@@ -233,7 +233,7 @@ export default function LearnPage() {
                                         return (
                                             <button
                                                 key={i}
-                                                onClick={() => !isRevealed && setUserInput(option)}
+                                                onClick={() => !isRevealed && checkAnswer(option)}
                                                 disabled={isRevealed}
                                                 className={`w-full p-4 rounded-xl border text-left transition-all flex items-center justify-between ${styles}`}
                                             >
@@ -255,8 +255,8 @@ export default function LearnPage() {
                                             onChange={(e) => setUserInput(e.target.value)}
                                             disabled={isRevealed}
                                             className={`w-full p-4 rounded-xl border bg-zinc-900 text-white text-lg focus:outline-none transition disabled:opacity-70 ${isRevealed
-                                                    ? isCorrect ? 'border-emerald-500' : 'border-rose-500'
-                                                    : 'border-zinc-700 focus:border-emerald-500'
+                                                ? isCorrect ? 'border-emerald-500' : 'border-rose-500'
+                                                : 'border-zinc-700 focus:border-emerald-500'
                                                 }`}
                                             placeholder="Type your answer..."
                                             autoFocus
@@ -268,8 +268,8 @@ export default function LearnPage() {
                                             onChange={(e) => setUserInput(e.target.value)}
                                             disabled={isRevealed}
                                             className={`w-full p-4 rounded-xl border bg-zinc-900 text-white text-lg focus:outline-none transition disabled:opacity-70 min-h-[100px] ${isRevealed
-                                                    ? isCorrect ? 'border-emerald-500' : 'border-rose-500'
-                                                    : 'border-zinc-700 focus:border-emerald-500'
+                                                ? isCorrect ? 'border-emerald-500' : 'border-rose-500'
+                                                : 'border-zinc-700 focus:border-emerald-500'
                                                 }`}
                                             placeholder="Type the translation..."
                                             autoFocus
@@ -278,7 +278,7 @@ export default function LearnPage() {
 
                                     {!isRevealed && (
                                         <button
-                                            onClick={checkAnswer}
+                                            onClick={() => checkAnswer(userInput)}
                                             disabled={!userInput.trim()}
                                             className="w-full py-3 bg-emerald-600 hover:bg-emerald-500 disabled:bg-zinc-800 disabled:text-zinc-500 rounded-xl font-semibold transition-colors"
                                         >

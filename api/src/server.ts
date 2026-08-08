@@ -52,6 +52,9 @@ const lessonCompleteSchema = z.object({
     xpEarned: z.number().int().min(0).max(100),
 })
 
+const modeSchema = z.object({
+    mode: z.enum(['STORY', 'DRILL', 'IMMERSION', 'PROFESSIONAL']),
+})
 
 // Error Handler
 class AppError extends Error {
@@ -169,43 +172,54 @@ app.get('/api/v1/dashboard', async (req: Request, res: Response, next: NextFunct
     try {
         const userId = requireAuth(req)
 
+        // FIX: Select ID and dailyGoalXp/streakDays so we can query streaks and return them
         const user = await prisma.user.findUnique({
             where: { clerkId: userId },
-            select: { preferredMode: true }
+            select: { 
+                id: true,
+                preferredMode: true, 
+                dailyGoalXp: true, 
+                streakDays: true 
+            }
         })
 
-        if (!user) {
-            throw new AppError('User not found', 404)
-        }
+        if (!user) throw new AppError('User not found', 404)
 
-        // Find the first published concept and ONLY fetch the variant for the user's preferred mode
+        // Get today's XP
+        const today = new Date().toISOString().split('T')[0]
+        const todayLog = await prisma.streakLog.findUnique({
+            where: { userId_date: { userId: user.id, date: today } }
+        })
+        const dailyXp = todayLog?.xpEarned || 0
+
+        // Find the next concept
         const nextConcept = await prisma.concept.findFirst({
             where: { unit: { course: { isPublished: true } } },
             orderBy: { orderIndex: 'asc' },
             include: {
-                variants: {
-                    where: { mode: user.preferredMode },
-                },
+                variants: { where: { mode: user.preferredMode } },
             },
         })
 
-        if (!nextConcept || nextConcept.variants.length === 0) {
-            return res.json({ nextLesson: null, message: 'No lessons available yet.' })
-        }
+        const nextLesson = nextConcept && nextConcept.variants.length > 0 ? {
+            conceptId: nextConcept.id,
+            conceptName: nextConcept.name,
+            mode: user.preferredMode,
+            variant: nextConcept.variants[0],
+        } : null
 
+        // FIX: Return the habit engine data
         res.json({
-            nextLesson: {
-                conceptId: nextConcept.id,
-                conceptName: nextConcept.name,
-                mode: user.preferredMode,
-                variant: nextConcept.variants[0],
-            },
+            dailyXp,
+            dailyGoalXp: user.dailyGoalXp,
+            streakDays: user.streakDays,
+            preferredMode: user.preferredMode,
+            nextLesson,
         })
     } catch (error) {
         next(error)
     }
 })
-
 
 // Fetch Specific Lesson
 app.get('/api/v1/lessons/:conceptId', async (req: Request, res: Response, next: NextFunction) => {
@@ -281,7 +295,7 @@ app.get('/api/v1/course/map', async (req: Request, res: Response, next: NextFunc
                 name: concept.name,
                 xpReward: concept.xpReward,
                 isAvailable: concept.variants.length > 0,
-                mastery: concept.mastery[0] || null, // Contains correctCount, incorrectCount
+                mastery: concept.mastery[0] || null, 
             })),
         }))
 
@@ -294,17 +308,20 @@ app.get('/api/v1/course/map', async (req: Request, res: Response, next: NextFunc
 // Complete Lesson & Update Mastery 
 app.post('/api/v1/lessons/complete', async (req: Request, res: Response, next: NextFunction) => {
     try {
+        // FIX: Added Auth check and Zod parsing
         const userId = requireAuth(req)
-
         const parsed = lessonCompleteSchema.safeParse(req.body)
         if (!parsed.success) throw new AppError('Invalid completion data', 400)
 
         const { conceptId, mode, correctCount, incorrectCount, xpEarned } = parsed.data
 
-        // 1. Record the progress for this specific session
+        const user = await prisma.user.findUnique({ where: { clerkId: userId } })
+        if (!user) throw new AppError('User not found', 404)
+
+        // 1. Record the session progress
         await prisma.userProgress.create({
             data: {
-                userId: (await prisma.user.findUnique({ where: { clerkId: userId } }))!.id,
+                userId: user.id,
                 conceptId,
                 modeUsed: mode,
                 status: 'completed',
@@ -314,37 +331,77 @@ app.post('/api/v1/lessons/complete', async (req: Request, res: Response, next: N
             },
         })
 
-        // 2. Update User's total XP and last active time
-        const user = await prisma.user.update({
-            where: { clerkId: userId },
-            data: {
-                xpTotal: { increment: xpEarned },
-                lastActiveAt: new Date(),
-            },
-        })
-
-        // 3. Update Concept Mastery (Adaptive Engine foundation)
+        // 2. Update Concept Mastery
         await prisma.conceptMastery.upsert({
-            where: {
-                userId_conceptId: {
-                    userId: user.id,
-                    conceptId,
-                },
-            },
+            where: { userId_conceptId: { userId: user.id, conceptId } },
             update: {
                 correctCount: { increment: correctCount },
                 incorrectCount: { increment: incorrectCount },
                 lastSeenAt: new Date(),
             },
+            create: { userId: user.id, conceptId, correctCount, incorrectCount },
+        })
+
+        // 3. Handle Daily Streak Logic
+        const today = new Date().toISOString().split('T')[0] // "YYYY-MM-DD"
+        const yesterday = new Date(Date.now() - 86400000).toISOString().split('T')[0]
+
+        // FIX: Check if today's log exists BEFORE upserting it
+        const existingTodayLog = await prisma.streakLog.findUnique({
+            where: { userId_date: { userId: user.id, date: today } }
+        })
+
+        await prisma.streakLog.upsert({
+            where: { userId_date: { userId: user.id, date: today } },
+            update: {
+                xpEarned: { increment: xpEarned },
+                lessonsDone: { increment: 1 },
+            },
             create: {
                 userId: user.id,
-                conceptId,
-                correctCount,
-                incorrectCount,
+                date: today,
+                xpEarned,
+                lessonsDone: 1,
             },
         })
 
-        res.json({ success: true, newXpTotal: user.xpTotal })
+        let newStreakDays = user.streakDays
+        if (!existingTodayLog) {
+            // This is the first lesson of the day
+            const yesterdayLog = await prisma.streakLog.findUnique({
+                where: { userId_date: { userId: user.id, date: yesterday } }
+            })
+            newStreakDays = yesterdayLog ? user.streakDays + 1 : 1
+        }
+
+        const updatedUser = await prisma.user.update({
+            where: { clerkId: userId },
+            data: {
+                xpTotal: { increment: xpEarned },
+                streakDays: newStreakDays,
+                lastActiveAt: new Date(),
+            },
+        })
+
+        res.json({ success: true, newXpTotal: updatedUser.xpTotal, newStreak: newStreakDays })
+    } catch (error) {
+        next(error)
+    }
+})
+
+// FIX: Added the Mode Switcher Route
+app.post('/api/v1/user/mode', async (req: Request, res: Response, next: NextFunction) => {
+    try {
+        const userId = requireAuth(req)
+        const parsed = modeSchema.safeParse(req.body)
+        if (!parsed.success) throw new AppError('Invalid mode', 400)
+
+        await prisma.user.update({
+            where: { clerkId: userId },
+            data: { preferredMode: parsed.data.mode },
+        })
+
+        res.json({ success: true })
     } catch (error) {
         next(error)
     }

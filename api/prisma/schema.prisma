@@ -148,9 +148,11 @@ model UserVocabProgress {
 model StreakLog {
   id          String   @id @default(uuid())
   userId      String
-  date        DateTime
-  xpEarned    Int
-  lessonsDone Int
-
+  date        String   // Format: "YYYY-MM-DD"
+  xpEarned    Int      @default(0)
+  lessonsDone Int      @default(0)
+  
   user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, date])
 }
