@@ -4,17 +4,18 @@ import { useEffect, useState, useCallback } from 'react'
 import { useParams, useRouter } from 'next/navigation'
 import { useAuth } from '@clerk/nextjs'
 import {
-    ArrowLeft, Loader2, CheckCircle2, XCircle, ArrowRight,
-    BookOpen, Zap, Music, GraduationCap, Sparkles
+    Loader2, CheckCircle2, XCircle, ArrowRight,
+    BookOpen, Zap, Music, GraduationCap, Sparkles, X
 } from 'lucide-react'
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL ?? 'http://localhost:4000'
 
 type Exercise = {
-    type: string
+    type: 'mcq' | 'fill_blank' | 'translate'
     prompt: string
-    options: string[]
+    options?: string[]
     answer: string
+    hint?: string
 }
 
 const getModeIcon = (mode: string) => {
@@ -29,12 +30,12 @@ const getModeIcon = (mode: string) => {
 
 const getModeColor = (mode: string) => {
     const colors: Record<string, string> = {
-        STORY: 'text-blue-400 bg-blue-500/10',
-        DRILL: 'text-yellow-400 bg-yellow-500/10',
-        IMMERSION: 'text-purple-400 bg-purple-500/10',
-        PROFESSIONAL: 'text-emerald-400 bg-emerald-500/10',
+        STORY: 'text-blue-400 bg-blue-500/10 border-blue-500/20',
+        DRILL: 'text-yellow-400 bg-yellow-500/10 border-yellow-500/20',
+        IMMERSION: 'text-purple-400 bg-purple-500/10 border-purple-500/20',
+        PROFESSIONAL: 'text-emerald-400 bg-emerald-500/10 border-emerald-500/20',
     }
-    return colors[mode] ?? 'text-zinc-400 bg-zinc-800'
+    return colors[mode] ?? 'text-zinc-400 bg-zinc-800 border-zinc-700'
 }
 
 export default function LearnPage() {
@@ -48,8 +49,9 @@ export default function LearnPage() {
 
     // Exercise State
     const [currentIndex, setCurrentIndex] = useState(0)
-    const [selectedOption, setSelectedOption] = useState<string | null>(null)
+    const [userInput, setUserInput] = useState<string>('')
     const [isRevealed, setIsRevealed] = useState(false)
+    const [isCorrect, setIsCorrect] = useState(false)
     const [correctCount, setCorrectCount] = useState(0)
     const [incorrectCount, setIncorrectCount] = useState(0)
     const [isFinished, setIsFinished] = useState(false)
@@ -73,12 +75,21 @@ export default function LearnPage() {
         fetchLesson()
     }, [getToken, params.conceptId])
 
-    const handleSelect = (option: string) => {
-        if (isRevealed) return
-        setSelectedOption(option)
+    const checkAnswer = () => {
+        if (isRevealed || !userInput.trim()) return
+
+        const exercises: Exercise[] = lesson.variant.exercises
+        const currentExercise = exercises[currentIndex]
+
+        // Normalize for comparison (trim whitespace, lowercase)
+        const normalizedInput = userInput.trim().toLowerCase()
+        const normalizedAnswer = currentExercise.answer.trim().toLowerCase()
+
+        const correct = normalizedInput === normalizedAnswer
+        setIsCorrect(correct)
         setIsRevealed(true)
 
-        if (option === lesson.variant.exercises[currentIndex].answer) {
+        if (correct) {
             setCorrectCount(c => c + 1)
         } else {
             setIncorrectCount(c => c + 1)
@@ -86,10 +97,12 @@ export default function LearnPage() {
     }
 
     const handleNext = () => {
-        if (currentIndex < lesson.variant.exercises.length - 1) {
+        const exercises: Exercise[] = lesson.variant.exercises
+        if (currentIndex < exercises.length - 1) {
             setCurrentIndex(i => i + 1)
-            setSelectedOption(null)
+            setUserInput('')
             setIsRevealed(false)
+            setIsCorrect(false)
         } else {
             setIsFinished(true)
             saveProgress()
@@ -102,7 +115,7 @@ export default function LearnPage() {
         try {
             const token = await getToken()
             const totalQuestions = lesson.variant.exercises.length
-            const xpEarned = Math.round((correctCount / totalQuestions) * 20) // Max 20 XP
+            const xpEarned = Math.round((correctCount / totalQuestions) * (lesson.xpReward || 20))
 
             await fetch(`${API_URL}/api/v1/lessons/complete`, {
                 method: 'POST',
@@ -159,7 +172,7 @@ export default function LearnPage() {
                     onClick={() => router.push('/')}
                     className="p-2 hover:bg-zinc-800 rounded-lg transition"
                 >
-                    <XCircle className="w-6 h-6 text-zinc-400" />
+                    <X className="w-6 h-6 text-zinc-400" />
                 </button>
 
                 <div className="flex-1 h-2 bg-zinc-800 rounded-full overflow-hidden">
@@ -175,8 +188,8 @@ export default function LearnPage() {
                 {!isFinished ? (
                     <>
                         {/* Mode Flavor Text */}
-                        {lesson.mode !== 'DRILL' && (
-                            <div className={`w-full p-4 rounded-xl mb-8 flex items-start gap-3 ${modeColor}`}>
+                        {lesson.mode !== 'DRILL' && (lesson.variant.storyBeat || lesson.variant.culturalRef || lesson.variant.formalPhrase) && (
+                            <div className={`w-full p-4 rounded-xl mb-8 border flex items-start gap-3 ${modeColor}`}>
                                 <Icon className="w-5 h-5 mt-0.5 flex-shrink-0" />
                                 <div>
                                     <p className="text-xs uppercase tracking-wider font-semibold mb-1 opacity-80">
@@ -197,53 +210,98 @@ export default function LearnPage() {
                             <h2 className="text-2xl md:text-3xl font-bold leading-tight">
                                 {currentExercise.prompt}
                             </h2>
+                            {currentExercise.hint && (
+                                <p className="text-zinc-500 text-sm mt-2 italic">Hint: {currentExercise.hint}</p>
+                            )}
                         </div>
 
-                        {/* Options */}
-                        <div className="w-full space-y-3 mb-8">
-                            {currentExercise.options.map((option, i) => {
-                                const isCorrectOption = option === currentExercise.answer
-                                const isSelected = selectedOption === option
+                        {/* Dynamic Exercise Input */}
+                        <div className="w-full mb-8 space-y-4">
+                            {currentExercise.type === 'mcq' && (
+                                <div className="space-y-3">
+                                    {currentExercise.options?.map((option, i) => {
+                                        const isCorrectOption = option === currentExercise.answer
+                                        const isSelected = userInput === option
 
-                                let styles = 'border-zinc-700 hover:border-zinc-500 hover:bg-zinc-800/50'
+                                        let styles = 'border-zinc-700 hover:border-zinc-500 hover:bg-zinc-800/50'
+                                        if (isRevealed) {
+                                            if (isCorrectOption) styles = 'border-emerald-500 bg-emerald-500/10 text-emerald-100'
+                                            else if (isSelected && !isCorrectOption) styles = 'border-rose-500 bg-rose-500/10 text-rose-100'
+                                            else styles = 'border-zinc-800 opacity-50'
+                                        }
 
-                                if (isRevealed) {
-                                    if (isCorrectOption) {
-                                        styles = 'border-emerald-500 bg-emerald-500/10 text-emerald-100'
-                                    } else if (isSelected && !isCorrectOption) {
-                                        styles = 'border-rose-500 bg-rose-500/10 text-rose-100'
-                                    } else {
-                                        styles = 'border-zinc-800 opacity-50'
-                                    }
-                                }
+                                        return (
+                                            <button
+                                                key={i}
+                                                onClick={() => !isRevealed && setUserInput(option)}
+                                                disabled={isRevealed}
+                                                className={`w-full p-4 rounded-xl border text-left transition-all flex items-center justify-between ${styles}`}
+                                            >
+                                                <span className="font-medium">{option}</span>
+                                                {isRevealed && isCorrectOption && <CheckCircle2 className="w-5 h-5 text-emerald-400" />}
+                                                {isRevealed && isSelected && !isCorrectOption && <XCircle className="w-5 h-5 text-rose-400" />}
+                                            </button>
+                                        )
+                                    })}
+                                </div>
+                            )}
 
-                                return (
-                                    <button
-                                        key={i}
-                                        onClick={() => handleSelect(option)}
-                                        disabled={isRevealed}
-                                        className={`w-full p-4 rounded-xl border text-left transition-all duration-200 flex items-center justify-between group ${styles}`}
-                                    >
-                                        <span className="font-medium">{option}</span>
-                                        {isRevealed && isCorrectOption && <CheckCircle2 className="w-5 h-5 text-emerald-400" />}
-                                        {isRevealed && isSelected && !isCorrectOption && <XCircle className="w-5 h-5 text-rose-400" />}
-                                    </button>
-                                )
-                            })}
+                            {(currentExercise.type === 'fill_blank' || currentExercise.type === 'translate') && (
+                                <>
+                                    {currentExercise.type === 'fill_blank' ? (
+                                        <input
+                                            type="text"
+                                            value={userInput}
+                                            onChange={(e) => setUserInput(e.target.value)}
+                                            disabled={isRevealed}
+                                            className={`w-full p-4 rounded-xl border bg-zinc-900 text-white text-lg focus:outline-none transition disabled:opacity-70 ${isRevealed
+                                                    ? isCorrect ? 'border-emerald-500' : 'border-rose-500'
+                                                    : 'border-zinc-700 focus:border-emerald-500'
+                                                }`}
+                                            placeholder="Type your answer..."
+                                            autoFocus
+                                            onKeyDown={(e) => e.key === 'Enter' && checkAnswer()}
+                                        />
+                                    ) : (
+                                        <textarea
+                                            value={userInput}
+                                            onChange={(e) => setUserInput(e.target.value)}
+                                            disabled={isRevealed}
+                                            className={`w-full p-4 rounded-xl border bg-zinc-900 text-white text-lg focus:outline-none transition disabled:opacity-70 min-h-[100px] ${isRevealed
+                                                    ? isCorrect ? 'border-emerald-500' : 'border-rose-500'
+                                                    : 'border-zinc-700 focus:border-emerald-500'
+                                                }`}
+                                            placeholder="Type the translation..."
+                                            autoFocus
+                                        />
+                                    )}
+
+                                    {!isRevealed && (
+                                        <button
+                                            onClick={checkAnswer}
+                                            disabled={!userInput.trim()}
+                                            className="w-full py-3 bg-emerald-600 hover:bg-emerald-500 disabled:bg-zinc-800 disabled:text-zinc-500 rounded-xl font-semibold transition-colors"
+                                        >
+                                            Check Answer
+                                        </button>
+                                    )}
+                                </>
+                            )}
                         </div>
 
                         {/* Feedback & Next Button */}
                         {isRevealed && (
                             <div className="w-full animate-in fade-in slide-in-from-bottom-4 duration-300">
-                                {selectedOption === currentExercise.answer ? (
+                                {isCorrect ? (
                                     <div className="p-4 rounded-xl bg-emerald-500/10 border border-emerald-500/20 mb-4 flex items-center gap-3">
                                         <Sparkles className="w-5 h-5 text-emerald-400" />
                                         <p className="text-emerald-200 font-medium">Perfect! Keep going.</p>
                                     </div>
                                 ) : (
-                                    <div className="p-4 rounded-xl bg-rose-500/10 border border-rose-500/20 mb-4 flex items-center gap-3">
-                                        <p className="text-rose-200 text-sm">
-                                            Incorrect. The correct answer is <span className="font-bold">{currentExercise.answer}</span>.
+                                    <div className="p-4 rounded-xl bg-rose-500/10 border border-rose-500/20 mb-4">
+                                        <p className="text-rose-200 text-sm mb-1">Incorrect.</p>
+                                        <p className="text-rose-100 font-medium">
+                                            Correct answer: <span className="font-bold">{currentExercise.answer}</span>
                                         </p>
                                     </div>
                                 )}
@@ -268,11 +326,17 @@ export default function LearnPage() {
                         <p className="text-zinc-400 text-lg">
                             You scored {correctCount} out of {exercises.length} and earned{' '}
                             <span className="text-emerald-400 font-bold">
-                                {Math.round((correctCount / exercises.length) * 20)} XP
+                                {Math.round((correctCount / exercises.length) * (lesson.xpReward || 20))} XP
                             </span>
                         </p>
 
                         <div className="pt-6 flex flex-col sm:flex-row gap-4 justify-center">
+                            <button
+                                onClick={() => router.push('/course')}
+                                className="px-8 py-3 bg-emerald-600 hover:bg-emerald-500 rounded-xl font-semibold transition-colors"
+                            >
+                                Continue Learning
+                            </button>
                             <button
                                 onClick={() => router.push('/')}
                                 className="px-8 py-3 bg-zinc-800 hover:bg-zinc-700 rounded-xl font-semibold transition-colors"

@@ -246,6 +246,51 @@ app.get('/api/v1/lessons/:conceptId', async (req: Request, res: Response, next: 
     }
 })
 
+// Curriculum Map 
+app.get('/api/v1/course/map', async (req: Request, res: Response, next: NextFunction) => {
+    try {
+        const userId = requireAuth(req)
+        const user = await prisma.user.findUnique({ where: { clerkId: userId } })
+        if (!user) throw new AppError('User not found', 404)
+
+        const course = await prisma.course.findFirst({
+            where: { isPublished: true },
+            include: {
+                units: {
+                    orderBy: { orderIndex: 'asc' },
+                    include: {
+                        concepts: {
+                            orderBy: { orderIndex: 'asc' },
+                            include: {
+                                mastery: { where: { userId: user.id } },
+                                variants: { where: { mode: user.preferredMode }, select: { id: true } },
+                            },
+                        },
+                    },
+                },
+            },
+        })
+
+        if (!course) return res.json({ units: [] })
+
+        const units = course.units.map(unit => ({
+            id: unit.id,
+            title: unit.title,
+            concepts: unit.concepts.map(concept => ({
+                id: concept.id,
+                name: concept.name,
+                xpReward: concept.xpReward,
+                isAvailable: concept.variants.length > 0,
+                mastery: concept.mastery[0] || null, // Contains correctCount, incorrectCount
+            })),
+        }))
+
+        res.json({ units })
+    } catch (error) {
+        next(error)
+    }
+})
+
 // Complete Lesson & Update Mastery 
 app.post('/api/v1/lessons/complete', async (req: Request, res: Response, next: NextFunction) => {
     try {

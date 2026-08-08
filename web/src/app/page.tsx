@@ -1,9 +1,10 @@
 'use client'
 
+import Link from 'next/link'
 import { useEffect, useState, useCallback } from 'react'
 import { useRouter } from 'next/navigation'
 import { SignInButton, SignUpButton, UserButton, useAuth } from '@clerk/nextjs'
-import {BookOpen, Zap, Music, GraduationCap, Loader2, ArrowRight, AlertCircle, } from 'lucide-react'
+import { BookOpen, Zap, Music, GraduationCap, Loader2, ArrowRight, AlertCircle, } from 'lucide-react'
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL ?? 'http://localhost:4000'
 
@@ -184,7 +185,15 @@ export default function Home() {
 
         {/* Continue Learning Card */}
         <div className="bg-zinc-900 border border-zinc-800 rounded-2xl p-6 mb-6">
-          <p className="text-zinc-400 text-sm mb-4">Continue Learning</p>
+          <div className="flex items-center justify-between mb-4">
+            <p className="text-zinc-400 text-sm">Continue Learning</p>
+            <Link
+              href="/course"
+              className="text-xs font-medium text-emerald-400 hover:text-emerald-300 flex items-center gap-1 transition-colors"
+            >
+              View Full Course <ArrowRight className="w-3 h-3" />
+            </Link>
+          </div>
 
           {loadingLesson ? (
             <div className="flex items-center gap-3 py-4">
