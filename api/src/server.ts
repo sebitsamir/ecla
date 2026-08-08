@@ -44,6 +44,15 @@ const onboardingSchema = z.object({
     currentLevel: z.enum(['A1', 'A2', 'B1', 'B2', 'C1']).optional(),
 })
 
+const lessonCompleteSchema = z.object({
+    conceptId: z.string().uuid(),
+    mode: z.enum(['STORY', 'DRILL', 'IMMERSION', 'PROFESSIONAL']),
+    correctCount: z.number().int().min(0),
+    incorrectCount: z.number().int().min(0),
+    xpEarned: z.number().int().min(0).max(100),
+})
+
+
 // Error Handler
 class AppError extends Error {
     statusCode: number
@@ -192,6 +201,105 @@ app.get('/api/v1/dashboard', async (req: Request, res: Response, next: NextFunct
                 variant: nextConcept.variants[0],
             },
         })
+    } catch (error) {
+        next(error)
+    }
+})
+
+
+// Fetch Specific Lesson
+app.get('/api/v1/lessons/:conceptId', async (req: Request, res: Response, next: NextFunction) => {
+    try {
+        const userId = requireAuth(req)
+        const { conceptId } = req.params
+
+        const user = await prisma.user.findUnique({
+            where: { clerkId: userId },
+            select: { preferredMode: true },
+        })
+        if (!user) throw new AppError('User not found', 404)
+
+        const concept = await prisma.concept.findUnique({
+            where: { id: conceptId },
+            include: {
+                variants: {
+                    where: { mode: user.preferredMode },
+                },
+            },
+        })
+
+        if (!concept || concept.variants.length === 0) {
+            throw new AppError('Lesson not found or not available in your preferred mode', 404)
+        }
+
+        res.json({
+            lesson: {
+                conceptId: concept.id,
+                conceptName: concept.name,
+                grammarNote: concept.grammarNote,
+                mode: user.preferredMode,
+                variant: concept.variants[0],
+            },
+        })
+    } catch (error) {
+        next(error)
+    }
+})
+
+// Complete Lesson & Update Mastery 
+app.post('/api/v1/lessons/complete', async (req: Request, res: Response, next: NextFunction) => {
+    try {
+        const userId = requireAuth(req)
+
+        const parsed = lessonCompleteSchema.safeParse(req.body)
+        if (!parsed.success) throw new AppError('Invalid completion data', 400)
+
+        const { conceptId, mode, correctCount, incorrectCount, xpEarned } = parsed.data
+
+        // 1. Record the progress for this specific session
+        await prisma.userProgress.create({
+            data: {
+                userId: (await prisma.user.findUnique({ where: { clerkId: userId } }))!.id,
+                conceptId,
+                modeUsed: mode,
+                status: 'completed',
+                score: correctCount,
+                xpEarned,
+                completedAt: new Date(),
+            },
+        })
+
+        // 2. Update User's total XP and last active time
+        const user = await prisma.user.update({
+            where: { clerkId: userId },
+            data: {
+                xpTotal: { increment: xpEarned },
+                lastActiveAt: new Date(),
+            },
+        })
+
+        // 3. Update Concept Mastery (Adaptive Engine foundation)
+        await prisma.conceptMastery.upsert({
+            where: {
+                userId_conceptId: {
+                    userId: user.id,
+                    conceptId,
+                },
+            },
+            update: {
+                correctCount: { increment: correctCount },
+                incorrectCount: { increment: incorrectCount },
+                lastSeenAt: new Date(),
+            },
+            create: {
+                userId: user.id,
+                conceptId,
+                correctCount,
+                incorrectCount,
+            },
+        })
+
+        res.json({ success: true, newXpTotal: user.xpTotal })
     } catch (error) {
         next(error)
     }
