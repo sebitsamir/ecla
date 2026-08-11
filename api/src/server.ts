@@ -4,11 +4,13 @@ import cors from 'cors'
 import { clerkMiddleware, getAuth } from '@clerk/express'
 import { PrismaClient } from '@prisma/client'
 import { z } from 'zod'
-
+import Groq from 'groq-sdk'
 // Prisma Client 
 const prisma = new PrismaClient({
     log: process.env.NODE_ENV === 'development' ? ['query', 'warn', 'error'] : ['error'],
 })
+
+const groq = new Groq({ apiKey: process.env.GROQ_API_KEY })
 
 // Express App 
 const app = express()
@@ -551,6 +553,58 @@ app.post('/api/v1/flashcards/review', async (req: Request, res: Response, next: 
         })
 
         res.json({ success: true, nextReviewInDays: interval })
+    } catch (error) {
+        next(error)
+    }
+})
+
+// AI Chat Tutor
+const chatSchema = z.object({
+    messages: z.array(z.object({
+        role: z.enum(['user', 'assistant']),
+        content: z.string().min(1).max(2000),
+    })).min(1).max(30),
+})
+
+const motivationHints: Record<string, string> = {
+    TRAVEL: 'Focus on practical travel situations: airports, restaurants, directions, hotels.',
+    HERITAGE: 'Focus on family, relationships, and emotional vocabulary.',
+    CAREER: 'Focus on professional and workplace conversations.',
+    FUN: 'Keep it playful. Use humor and casual topics.',
+}
+
+app.post('/api/v1/chat', async (req: Request, res: Response, next: NextFunction) => {
+    try {
+        const userId = requireAuth(req)
+        const parsed = chatSchema.safeParse(req.body)
+        if (!parsed.success) throw new AppError('Invalid chat data', 400)
+
+        const user = await prisma.user.findUnique({ where: { clerkId: userId } })
+        if (!user) throw new AppError('User not found', 404)
+
+        const level = user.currentLevel ?? 'A1'
+        const motivation = user.motivation ?? 'FUN'
+
+        const systemPrompt = `You are the Fluenta AI Spanish tutor.
+The student's CEFR level is ${level}. Their motivation is: ${motivation}. ${motivationHints[motivation] ?? ''}
+Rules:
+- Reply mostly in Spanish, using vocabulary and grammar appropriate for level ${level}. For A1/A2 use short, simple sentences.
+- If the level is A1 or A2, add a brief English translation in parentheses after your Spanish reply.
+- If the student makes a mistake, gently restate the correct sentence. Never be punishing.
+- Keep every reply under 80 words.
+- Be warm, encouraging, and a little fun.`
+
+        const completion = await groq.chat.completions.create({
+            model: 'llama-3.1-8b-instant',
+            messages: [
+                { role: 'system', content: systemPrompt },
+                ...parsed.data.messages.map(m => ({ role: m.role, content: m.content })),
+            ],
+            temperature: 0.7,
+            max_tokens: 300,
+        })
+
+        res.json({ reply: completion.choices[0]?.message?.content ?? '...' })
     } catch (error) {
         next(error)
     }

@@ -6,7 +6,7 @@ import { SignInButton, SignUpButton, UserButton, useAuth } from '@clerk/nextjs'
 import Link from 'next/link'
 import {
   BookOpen, Zap, Music, GraduationCap, Loader2, ArrowRight,
-  AlertCircle, Flame, Target, ChevronDown, AlertTriangle, RefreshCw, RotateCcw
+  AlertCircle, Flame, Target, Sparkles, ChevronDown, AlertTriangle, RefreshCw, RotateCcw
 } from 'lucide-react'
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL ?? 'http://localhost:4000'
@@ -260,6 +260,18 @@ export default function Home() {
             <div>
               <p className="font-semibold">Course Map</p>
               <p className="text-sm text-zinc-500">View all concepts</p>
+            </div>
+          </Link>
+          <Link
+            href="/chat"
+            className="bg-zinc-900 border border-zinc-800 hover:border-emerald-500/50 rounded-2xl p-5 flex items-center gap-4 transition-all group"
+          >
+            <div className="p-3 rounded-xl bg-emerald-500/10 group-hover:bg-emerald-500/20 transition-colors">
+              <Sparkles className="w-6 h-6 text-emerald-400" />
+            </div>
+            <div>
+              <p className="font-semibold">AI Tutor</p>
+              <p className="text-sm text-zinc-500">Chat in Spanish</p>
             </div>
           </Link>
         </div>
