@@ -6,7 +6,7 @@ import { SignInButton, SignUpButton, UserButton, useAuth } from '@clerk/nextjs'
 import Link from 'next/link'
 import {
   BookOpen, Zap, Music, GraduationCap, Loader2, ArrowRight,
-  AlertCircle, Flame, Target, ChevronDown, AlertTriangle, RefreshCw
+  AlertCircle, Flame, Target, ChevronDown, AlertTriangle, RefreshCw, RotateCcw
 } from 'lucide-react'
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL ?? 'http://localhost:4000'
@@ -235,6 +235,35 @@ export default function Home() {
           </div>
         </div>
 
+        {/* Quick Actions */}
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 mb-6">
+          <Link
+            href="/review"
+            className="bg-zinc-900 border border-zinc-800 hover:border-emerald-500/50 rounded-2xl p-5 flex items-center gap-4 transition-all group"
+          >
+            <div className="p-3 rounded-xl bg-purple-500/10 group-hover:bg-purple-500/20 transition-colors">
+              <RotateCcw className="w-6 h-6 text-purple-400" />
+            </div>
+            <div>
+              <p className="font-semibold">Review Flashcards</p>
+              <p className="text-sm text-zinc-500">Spaced repetition</p>
+            </div>
+          </Link>
+
+          <Link
+            href="/course"
+            className="bg-zinc-900 border border-zinc-800 hover:border-emerald-500/50 rounded-2xl p-5 flex items-center gap-4 transition-all group"
+          >
+            <div className="p-3 rounded-xl bg-blue-500/10 group-hover:bg-blue-500/20 transition-colors">
+              <BookOpen className="w-6 h-6 text-blue-400" />
+            </div>
+            <div>
+              <p className="font-semibold">Course Map</p>
+              <p className="text-sm text-zinc-500">View all concepts</p>
+            </div>
+          </Link>
+        </div>
+
         {/* Next Lesson Card */}
         <div className="bg-zinc-900 border border-zinc-800 rounded-2xl p-6 mb-6">
           {loadingLesson ? (
@@ -261,12 +290,6 @@ export default function Home() {
               <p className="text-zinc-500">No lessons available.</p>
             </div>
           )}
-        </div>
-
-        <div className="flex justify-center">
-          <Link href="/course" className="text-sm text-zinc-500 hover:text-white transition-colors underline underline-offset-4">
-            View Full Course Map
-          </Link>
         </div>
       </div>
     </main>

@@ -210,7 +210,36 @@ async function main() {
         })
     }
 
-    console.log('\nSeeding complete! 3 Concepts created with all 4 mode variants each.')
+    // Seed vocabulary for sm-2 flashcards
+    const vocabWords = [
+        { word: 'feliz', translation: 'happy' },
+        { word: 'triste', translation: 'sad' },
+        { word: 'cansado', translation: 'tired' },
+        { word: 'aburrido', translation: 'bored' },
+        { word: 'ocupado', translation: 'busy' },
+        { word: 'el aeropuerto', translation: 'the airport' },
+        { word: 'la boda', translation: 'the wedding' },
+        { word: 'hablar', translation: 'to speak' },
+        { word: 'trabajar', translation: 'to work' },
+        { word: 'estudiar', translation: 'to study' },
+    ]
+
+    for (const v of vocabWords) {
+        await prisma.vocabulary.upsert({
+            where: { id: `vocab-${v.word}` },
+            update: {},
+            create: {
+                id: `vocab-${v.word}`,
+                word: v.word,
+                translation: v.translation,
+                courseId: course.id,
+                difficulty: 1,
+            },
+        })
+    }
+    console.log(`  ✓ Seeded ${vocabWords.length} Vocabulary words for Flashcards`)
+
+    console.log('\nSeeding complete!')
 }
 
 main()

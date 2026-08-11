@@ -145,6 +145,8 @@ model UserVocabProgress {
 
   user  User       @relation(fields: [userId], references: [id], onDelete: Cascade)
   vocab Vocabulary @relation(fields: [vocabId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, vocabId])
 }
 
 model StreakLog {

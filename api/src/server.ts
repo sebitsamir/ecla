@@ -447,6 +447,115 @@ app.post('/api/v1/user/mode', async (req: Request, res: Response, next: NextFunc
     }
 })
 
+// ─── Fetch Due Flashcards ────────────────────────────────────
+app.get('/api/v1/flashcards/due', async (req: Request, res: Response, next: NextFunction) => {
+    try {
+        const userId = requireAuth(req)
+        const user = await prisma.user.findUnique({ where: { clerkId: userId } })
+        if (!user) throw new AppError('User not found', 404)
+
+        const now = new Date()
+
+        // Find all vocab for the course
+        const allVocab = await prisma.vocabulary.findMany({
+            where: { courseId: 'course-spanish-a1' }
+        })
+
+        // Get user's progress on these cards
+        const progress = await prisma.userVocabProgress.findMany({
+            where: {
+                userId: user.id,
+                vocabId: { in: allVocab.map(v => v.id) }
+            }
+        })
+
+        const dueCards = allVocab.map(vocab => {
+            const prog = progress.find(p => p.vocabId === vocab.id)
+
+            // If no progress, it's a new card (due immediately)
+            // If progress exists, check if nextReviewAt is in the past
+            if (!prog || prog.nextReviewAt <= now) {
+                return {
+                    id: vocab.id,
+                    word: vocab.word,
+                    translation: vocab.translation,
+                    progress: prog || null
+                }
+            }
+            return null
+        }).filter(Boolean)
+
+        res.json({ cards: dueCards.slice(0, 20) }) // Cap at 20 cards per session
+    } catch (error) {
+        next(error)
+    }
+})
+
+// Process Flashcard Review (SM-2 Algorithm)
+const flashcardReviewSchema = z.object({
+    vocabId: z.string(),
+    quality: z.number().int().min(0).max(5), // 0=Again, 3=Hard, 4=Good, 5=Easy
+})
+
+app.post('/api/v1/flashcards/review', async (req: Request, res: Response, next: NextFunction) => {
+    try {
+        const userId = requireAuth(req)
+        const parsed = flashcardReviewSchema.safeParse(req.body)
+        if (!parsed.success) throw new AppError('Invalid review data', 400)
+
+        const { vocabId, quality } = parsed.data
+        const user = await prisma.user.findUnique({ where: { clerkId: userId } })
+        if (!user) throw new AppError('User not found', 404)
+
+        // Fetch existing progress or create default
+        let prog = await prisma.userVocabProgress.findFirst({
+            where: { userId: user.id, vocabId }
+        })
+
+        let easeFactor = prog?.easeFactor ?? 2.5
+        let interval = prog?.interval ?? 1
+        let repetitions = prog?.repetitions ?? 0
+
+        // SM-2 Algorithm Math
+        if (quality < 3) {
+            // Failed (Again)
+            repetitions = 0
+            interval = 1
+        } else {
+            // Passed
+            if (repetitions === 0) interval = 1
+            else if (repetitions === 1) interval = 6
+            else interval = Math.round(interval * easeFactor)
+
+            repetitions += 1
+        }
+
+        // Update Ease Factor
+        easeFactor = easeFactor + (0.1 - (5 - quality) * (0.08 + (5 - quality) * 0.02))
+        if (easeFactor < 1.3) easeFactor = 1.3
+
+        const nextReviewAt = new Date()
+        nextReviewAt.setDate(nextReviewAt.getDate() + interval)
+
+        await prisma.userVocabProgress.upsert({
+            where: { id: prog?.id || 'new-record' }, // Fallback for create
+            update: { easeFactor, interval, repetitions, nextReviewAt },
+            create: {
+                userId: user.id,
+                vocabId,
+                easeFactor,
+                interval,
+                repetitions,
+                nextReviewAt,
+            },
+        })
+
+        res.json({ success: true, nextReviewInDays: interval })
+    } catch (error) {
+        next(error)
+    }
+})
+
 // 404 Handler
 app.use((_req: Request, res: Response) => {
     res.status(404).json({ error: 'Route not found' })
