@@ -3,7 +3,7 @@
 import { useEffect, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { useAuth } from '@clerk/nextjs'
-import { ArrowLeft, Lock, CheckCircle2, Play, Loader2 } from 'lucide-react'
+import { ArrowLeft, Lock, Crown, Play, Loader2, AlertTriangle } from 'lucide-react'
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL ?? 'http://localhost:4000'
 
@@ -28,7 +28,17 @@ export default function CoursePage() {
                 setLoading(false)
             }
         }
+
         fetchMap()
+
+        const handleUpdate = () => { setLoading(true); fetchMap(); }
+        window.addEventListener('fluenta:progress-updated', handleUpdate)
+        window.addEventListener('focus', handleUpdate)
+
+        return () => {
+            window.removeEventListener('fluenta:progress-updated', handleUpdate)
+            window.removeEventListener('focus', handleUpdate)
+        }
     }, [getToken])
 
     if (loading) {
@@ -55,32 +65,55 @@ export default function CoursePage() {
                             <h2 className="text-xl font-semibold mb-4 border-b border-zinc-800 pb-2">{unit.title}</h2>
                             <div className="space-y-3">
                                 {unit.concepts.map((concept: any) => {
-                                    const isCompleted = concept.mastery && concept.mastery.correctCount > 0
                                     const isLocked = !concept.isAvailable
+                                    const isMastered = concept.status === 'mastered'
+                                    const isStruggling = concept.status === 'struggling'
+                                    const isInProgress = concept.status === 'in_progress'
+
+                                    let borderClass = 'border-zinc-700 bg-zinc-900 hover:border-emerald-500 hover:bg-zinc-800'
+                                    let iconBg = 'bg-zinc-800'
+                                    let Icon = Play
+                                    let iconColor = 'text-zinc-400'
+                                    let statusText = `${concept.xpReward} XP`
+
+                                    if (isLocked) {
+                                        borderClass = 'border-zinc-800 bg-zinc-900/50 opacity-50 cursor-not-allowed'
+                                        Icon = Lock
+                                        iconColor = 'text-zinc-500'
+                                    } else if (isMastered) {
+                                        borderClass = 'border-emerald-500/40 bg-emerald-500/5 hover:border-emerald-400'
+                                        iconBg = 'bg-emerald-500/20'
+                                        Icon = Crown
+                                        iconColor = 'text-emerald-400'
+                                        statusText = `Mastered · ${concept.accuracy}%`
+                                    } else if (isStruggling) {
+                                        borderClass = 'border-amber-500/40 bg-amber-500/5 hover:border-amber-400'
+                                        iconBg = 'bg-amber-500/20'
+                                        Icon = AlertTriangle
+                                        iconColor = 'text-amber-400'
+                                        statusText = `Needs Review · ${concept.accuracy}%`
+                                    } else if (isInProgress) {
+                                        borderClass = 'border-blue-500/40 bg-blue-500/5 hover:border-blue-400'
+                                        iconBg = 'bg-blue-500/20'
+                                        Icon = Play
+                                        iconColor = 'text-blue-400'
+                                        statusText = `In Progress · ${concept.accuracy}%`
+                                    }
 
                                     return (
                                         <button
                                             key={concept.id}
                                             onClick={() => !isLocked && router.push(`/learn/${concept.id}`)}
                                             disabled={isLocked}
-                                            className={`w-full p-4 rounded-xl border flex items-center justify-between transition-all ${isLocked
-                                                    ? 'border-zinc-800 bg-zinc-900/50 opacity-50 cursor-not-allowed'
-                                                    : isCompleted
-                                                        ? 'border-emerald-500/30 bg-emerald-500/5 hover:bg-emerald-500/10'
-                                                        : 'border-zinc-700 bg-zinc-900 hover:border-emerald-500 hover:bg-zinc-800'
-                                                }`}
+                                            className={`w-full p-4 rounded-xl border flex items-center justify-between transition-all ${borderClass}`}
                                         >
                                             <div className="flex items-center gap-4">
-                                                <div className={`p-2 rounded-lg ${isCompleted ? 'bg-emerald-500/20' : 'bg-zinc-800'}`}>
-                                                    {isLocked ? <Lock className="w-5 h-5 text-zinc-500" /> :
-                                                        isCompleted ? <CheckCircle2 className="w-5 h-5 text-emerald-400" /> :
-                                                            <Play className="w-5 h-5 text-zinc-400" />}
+                                                <div className={`p-2 rounded-lg ${iconBg}`}>
+                                                    <Icon className={`w-5 h-5 ${iconColor}`} />
                                                 </div>
                                                 <div className="text-left">
                                                     <p className="font-semibold">{concept.name}</p>
-                                                    <p className="text-sm text-zinc-500">
-                                                        {isCompleted ? `Mastered · ${concept.mastery.correctCount} correct` : `${concept.xpReward} XP`}
-                                                    </p>
+                                                    <p className="text-sm text-zinc-500">{statusText}</p>
                                                 </div>
                                             </div>
                                         </button>

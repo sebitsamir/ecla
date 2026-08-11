@@ -4,9 +4,9 @@ import { useEffect, useState, useCallback } from 'react'
 import { useRouter } from 'next/navigation'
 import { SignInButton, SignUpButton, UserButton, useAuth } from '@clerk/nextjs'
 import Link from 'next/link'
-import { 
-  BookOpen, Zap, Music, GraduationCap, Loader2, ArrowRight, 
-  AlertCircle, Flame, Target, ChevronDown 
+import {
+  BookOpen, Zap, Music, GraduationCap, Loader2, ArrowRight,
+  AlertCircle, Flame, Target, ChevronDown, AlertTriangle, RefreshCw
 } from 'lucide-react'
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL ?? 'http://localhost:4000'
@@ -32,6 +32,8 @@ export default function Home() {
   const [nextLesson, setNextLesson] = useState<any>(null)
   const [loadingLesson, setLoadingLesson] = useState(true)
   const [showModeMenu, setShowModeMenu] = useState(false)
+  const [reviewRequired, setReviewRequired] = useState(false)
+  const [accuracy, setAccuracy] = useState(100)
 
   const fetchDashboardData = useCallback(async () => {
     try {
@@ -42,12 +44,14 @@ export default function Home() {
       })
       if (!res.ok) throw new Error('Failed to fetch')
       const data = await res.json()
-      
+
       setDailyXp(data.dailyXp)
       setDailyGoalXp(data.dailyGoalXp)
       setStreakDays(data.streakDays)
       setPreferredMode(data.preferredMode)
       setNextLesson(data.nextLesson)
+      setReviewRequired(data.reviewRequired)
+      setAccuracy(data.accuracy)
     } catch (err) {
       console.error(err)
     } finally {
@@ -78,7 +82,20 @@ export default function Home() {
   }, [isLoaded, isSignedIn, getToken, router])
 
   useEffect(() => {
-    if (screen === 'dashboard') fetchDashboardData()
+    if (screen !== 'dashboard') return
+
+    void fetchDashboardData()
+
+    const handleUpdate = () => void fetchDashboardData()
+
+    // Listen for the shout from the Lesson Player
+    window.addEventListener('fluenta:progress-updated', handleUpdate)
+    window.addEventListener('focus', handleUpdate)
+
+    return () => {
+      window.removeEventListener('fluenta:progress-updated', handleUpdate)
+      window.removeEventListener('focus', handleUpdate)
+    }
   }, [screen, fetchDashboardData])
 
   const switchMode = async (newMode: keyof typeof modeConfig) => {
@@ -91,7 +108,7 @@ export default function Home() {
       })
       setPreferredMode(newMode)
       setShowModeMenu(false)
-      fetchDashboardData() // Reload to show the new mode's lesson variant
+      void fetchDashboardData() // Reload to show the new mode's lesson variant
     } catch (err) {
       console.error(err)
     }
@@ -149,11 +166,11 @@ export default function Home() {
             <div className="relative w-16 h-16">
               <svg className="w-full h-full transform -rotate-90">
                 <circle cx="32" cy="32" r="28" stroke="currentColor" strokeWidth="4" fill="transparent" className="text-zinc-800" />
-                <circle cx="32" cy="32" r="28" stroke="currentColor" strokeWidth="4" fill="transparent" 
-                  strokeDasharray={2 * Math.PI * 28} 
-                  strokeDashoffset={2 * Math.PI * 28 * (1 - progressPercent / 100)} 
+                <circle cx="32" cy="32" r="28" stroke="currentColor" strokeWidth="4" fill="transparent"
+                  strokeDasharray={2 * Math.PI * 28}
+                  strokeDashoffset={2 * Math.PI * 28 * (1 - progressPercent / 100)}
                   strokeLinecap="round"
-                  className="text-emerald-500 transition-all duration-500" 
+                  className="text-emerald-500 transition-all duration-500"
                 />
               </svg>
               <Target className="w-5 h-5 text-emerald-500 absolute top-1/2 left-1/2 transform -translate-x-1/2 -translate-y-1/2" />
@@ -161,11 +178,35 @@ export default function Home() {
           </div>
         </div>
 
+        {/* Adaptive Difficulty Intervention */}
+        {reviewRequired && nextLesson && (
+          <div className="bg-amber-500/10 border border-amber-500/30 rounded-2xl p-6 mb-6 animate-in fade-in slide-in-from-top-4 duration-500">
+            <div className="flex items-start gap-4">
+              <div className="p-2 rounded-lg bg-amber-500/20">
+                <AlertTriangle className="w-6 h-6 text-amber-400" />
+              </div>
+              <div className="flex-1">
+                <h3 className="font-bold text-lg text-amber-100">Review Required</h3>
+                <p className="text-amber-200/80 text-sm mt-1 mb-4">
+                  You scored {accuracy}% on <span className="font-semibold">{nextLesson.conceptName}</span>.
+                  Let's solidify this before moving on. Try reviewing it in a different mode for a fresh perspective!
+                </p>
+                <button
+                  onClick={() => router.push(`/learn/${nextLesson.conceptId}`)}
+                  className="px-5 py-2 bg-amber-500 hover:bg-amber-400 text-black rounded-lg font-semibold transition-colors flex items-center gap-2 text-sm"
+                >
+                  <RefreshCw className="w-4 h-4" /> Review Concept
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
+
         {/* Mode Switcher */}
         <div className="mb-4 flex items-center justify-between">
           <p className="text-zinc-400 text-sm">Continue Learning</p>
           <div className="relative">
-            <button 
+            <button
               onClick={() => setShowModeMenu(!showModeMenu)}
               className="flex items-center gap-2 text-sm font-medium text-emerald-400 hover:text-emerald-300 transition-colors bg-zinc-900 border border-zinc-800 px-3 py-1.5 rounded-lg"
             >
@@ -173,7 +214,7 @@ export default function Home() {
               {CurrentMode.label} Mode
               <ChevronDown className="w-3 h-3" />
             </button>
-            
+
             {showModeMenu && (
               <div className="absolute right-0 mt-2 w-48 bg-zinc-900 border border-zinc-800 rounded-xl shadow-xl z-10 py-1 animate-in fade-in zoom-in-95 duration-200">
                 {Object.entries(modeConfig).map(([key, config]) => {
@@ -203,7 +244,7 @@ export default function Home() {
           ) : nextLesson ? (
             <div>
               <h2 className="text-xl font-semibold mb-2">{nextLesson.conceptName}</h2>
-              
+
               {nextLesson.variant.storyBeat && <p className="text-zinc-300 italic mb-4 text-sm">&ldquo;{nextLesson.variant.storyBeat}&rdquo;</p>}
               {nextLesson.variant.culturalRef && <p className="text-zinc-300 italic mb-4 text-sm">&ldquo;{nextLesson.variant.culturalRef}&rdquo;</p>}
               {nextLesson.variant.formalPhrase && <p className="text-zinc-300 italic mb-4 text-sm">&ldquo;{nextLesson.variant.formalPhrase}&rdquo;</p>}

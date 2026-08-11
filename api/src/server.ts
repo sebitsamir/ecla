@@ -45,7 +45,7 @@ const onboardingSchema = z.object({
 })
 
 const lessonCompleteSchema = z.object({
-    conceptId: z.string().uuid(),
+    conceptId: z.string(),
     mode: z.enum(['STORY', 'DRILL', 'IMMERSION', 'PROFESSIONAL']),
     correctCount: z.number().int().min(0),
     incorrectCount: z.number().int().min(0),
@@ -171,50 +171,77 @@ app.post('/api/v1/onboarding/complete', async (req: Request, res: Response, next
 app.get('/api/v1/dashboard', async (req: Request, res: Response, next: NextFunction) => {
     try {
         const userId = requireAuth(req)
-
-        // FIX: Select ID and dailyGoalXp/streakDays so we can query streaks and return them
         const user = await prisma.user.findUnique({
             where: { clerkId: userId },
-            select: { 
-                id: true,
-                preferredMode: true, 
-                dailyGoalXp: true, 
-                streakDays: true 
-            }
+            select: { id: true, preferredMode: true, dailyGoalXp: true, streakDays: true }
         })
-
         if (!user) throw new AppError('User not found', 404)
 
-        // Get today's XP
         const today = new Date().toISOString().split('T')[0]
         const todayLog = await prisma.streakLog.findUnique({
             where: { userId_date: { userId: user.id, date: today } }
         })
         const dailyXp = todayLog?.xpEarned || 0
 
-        // Find the next concept
-        const nextConcept = await prisma.concept.findFirst({
+        // Fetch ALL concepts to find the true "next" one
+        const allConcepts = await prisma.concept.findMany({
             where: { unit: { course: { isPublished: true } } },
             orderBy: { orderIndex: 'asc' },
             include: {
                 variants: { where: { mode: user.preferredMode } },
+                mastery: { where: { userId: user.id } },
+                progress: { where: { userId: user.id, status: 'completed' } }
             },
         })
 
-        const nextLesson = nextConcept && nextConcept.variants.length > 0 ? {
-            conceptId: nextConcept.id,
-            conceptName: nextConcept.name,
-            mode: user.preferredMode,
-            variant: nextConcept.variants[0],
-        } : null
+        // 1. Find first uncompleted concept
+        let nextConcept = allConcepts.find(c => c.progress.length === 0)
 
-        // FIX: Return the habit engine data
+        // 2. If all are completed, find one that is struggling (accuracy < 80%)
+        if (!nextConcept) {
+            nextConcept = allConcepts.find(c => {
+                const m = c.mastery[0]
+                const total = (m?.correctCount || 0) + (m?.incorrectCount || 0)
+                const acc = total > 0 ? m!.correctCount / total : 1
+                return total >= 2 && acc < 0.8
+            })
+        }
+
+        // 3. Fallback to first concept if everything is mastered
+        if (!nextConcept && allConcepts.length > 0) {
+            nextConcept = allConcepts[0]
+        }
+
+        if (!nextConcept || nextConcept.variants.length === 0) {
+            return res.json({
+                dailyXp, dailyGoalXp: user.dailyGoalXp, streakDays: user.streakDays,
+                preferredMode: user.preferredMode, nextLesson: null, reviewRequired: false, accuracy: 100
+            })
+        }
+
+        // Calculate Review Required (Adaptive Engine)
+        const mastery = nextConcept.mastery[0]
+        const totalAttempts = (mastery?.correctCount || 0) + (mastery?.incorrectCount || 0)
+        const accuracy = totalAttempts > 0 ? (mastery!.correctCount / totalAttempts) : 1
+
+        let reviewRequired = false
+        if (totalAttempts >= 2 && accuracy < 0.6) {
+            reviewRequired = true
+        }
+
         res.json({
             dailyXp,
             dailyGoalXp: user.dailyGoalXp,
             streakDays: user.streakDays,
             preferredMode: user.preferredMode,
-            nextLesson,
+            nextLesson: {
+                conceptId: nextConcept.id,
+                conceptName: nextConcept.name,
+                mode: user.preferredMode,
+                variant: nextConcept.variants[0],
+            },
+            reviewRequired,
+            accuracy: Math.round(accuracy * 100),
         })
     } catch (error) {
         next(error)
@@ -290,13 +317,26 @@ app.get('/api/v1/course/map', async (req: Request, res: Response, next: NextFunc
         const units = course.units.map(unit => ({
             id: unit.id,
             title: unit.title,
-            concepts: unit.concepts.map(concept => ({
-                id: concept.id,
-                name: concept.name,
-                xpReward: concept.xpReward,
-                isAvailable: concept.variants.length > 0,
-                mastery: concept.mastery[0] || null, 
-            })),
+            concepts: unit.concepts.map(concept => {
+                const mastery = concept.mastery[0]
+                const totalAttempts = (mastery?.correctCount || 0) + (mastery?.incorrectCount || 0)
+                const accuracy = totalAttempts > 0 ? (mastery!.correctCount / totalAttempts) : 0
+
+                let status: 'mastered' | 'struggling' | 'in_progress' | 'not_started' = 'not_started'
+                if (totalAttempts === 0) status = 'not_started'
+                else if (accuracy >= 0.8) status = 'mastered'
+                else if (accuracy < 0.6) status = 'struggling'
+                else status = 'in_progress'
+
+                return {
+                    id: concept.id,
+                    name: concept.name,
+                    xpReward: concept.xpReward,
+                    isAvailable: concept.variants.length > 0,
+                    status,
+                    accuracy: Math.round(accuracy * 100),
+                }
+            }),
         }))
 
         res.json({ units })

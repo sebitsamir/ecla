@@ -118,6 +118,8 @@ model ConceptMastery {
 
   user    User    @relation(fields: [userId], references: [id], onDelete: Cascade)
   concept Concept @relation(fields: [conceptId], references: [id], onDelete: Cascade)
+
+   @@unique([userId, conceptId])
 }
 
 model Vocabulary {

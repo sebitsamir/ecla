@@ -117,7 +117,7 @@ export default function LearnPage() {
             const totalQuestions = lesson.variant.exercises.length
             const xpEarned = Math.round((correctCount / totalQuestions) * (lesson.xpReward || 20))
 
-            await fetch(`${API_URL}/api/v1/lessons/complete`, {
+            const res = await fetch(`${API_URL}/api/v1/lessons/complete`, {
                 method: 'POST',
                 headers: {
                     'Content-Type': 'application/json',
@@ -131,8 +131,16 @@ export default function LearnPage() {
                     xpEarned,
                 }),
             })
+
+            if (res.ok) {
+                // SHOUT TO THE DASHBOARD TO REFRESH!
+                window.dispatchEvent(new Event('fluenta:progress-updated'))
+            } else {
+                const errorText = await res.text()
+                console.error('API rejected progress save:', errorText)
+            }
         } catch (e) {
-            console.error('Failed to save progress', e)
+            console.error('Network error saving progress:', e)
         } finally {
             setSaving(false)
         }
