@@ -14,6 +14,16 @@ export default clerkMiddleware(async (auth, request) => {
         await auth.protect()
     }
 
+    // ADMIN ROUTE PROTECTION
+    if (pathname.startsWith('/admin')) {
+        const { userId } = await auth()
+
+        // If the user is not the specific admin ID, redirect immediately
+        if (userId !== process.env.ADMIN_CLERK_ID) {
+            return NextResponse.redirect(new URL('/', request.url))
+        }
+    }
+
     return NextResponse.next()
 })
 

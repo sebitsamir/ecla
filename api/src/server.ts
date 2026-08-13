@@ -88,6 +88,14 @@ function requireAuth(req: Request): string {
     return userId
 }
 
+function requireAdmin(req: Request): string {
+    const userId = requireAuth(req)
+    if (userId !== process.env.ADMIN_CLERK_ID) {
+        throw new AppError('Forbidden: Admin access only', 403)
+    }
+    return userId
+}
+
 // Routes
 
 // Health check (public)
@@ -108,22 +116,42 @@ app.get('/api/v1/health', async (_req: Request, res: Response) => {
     }
 })
 
-// Sync user from Clerk to database
+// Sync user from Clerk to database (Handles Ghost Users & Provider Switching)
 app.post('/api/v1/sync-user', async (req: Request, res: Response, next: NextFunction) => {
     try {
         const userId = requireAuth(req)
         const email = (req.auth?.sessionClaims?.email as string) || 'unknown'
 
-        const user = await prisma.user.upsert({
-            where: { clerkId: userId },
-            update: { email },
-            create: { clerkId: userId, email },
-        })
+        // 1. Try to find user by the current Clerk ID
+        let user = await prisma.user.findUnique({ where: { clerkId: userId } })
+
+        if (user) {
+            // User exists. Just ensure the email is up to date (in case they changed it in Clerk)
+            if (user.email !== email) {
+                user = await prisma.user.update({ where: { id: user.id }, data: { email } })
+            }
+        } else {
+            // 2. Clerk ID not found. Check if a "ghost" user exists with this email
+            const ghostUser = await prisma.user.findUnique({ where: { email } })
+
+            if (ghostUser) {
+                // Reclaim the old account and attach the new Clerk ID
+                user = await prisma.user.update({
+                    where: { id: ghostUser.id },
+                    data: { clerkId: userId }
+                })
+            } else {
+                // 3. Truly new user. Create them.
+                user = await prisma.user.create({
+                    data: { clerkId: userId, email }
+                })
+            }
+        }
 
         res.json({
             synced: true,
             user,
-            onboardingCompleted: user.onboardingCompleted,
+            onboardingCompleted: user.onboardingCompleted
         })
     } catch (error) {
         next(error)
@@ -350,7 +378,7 @@ app.get('/api/v1/course/map', async (req: Request, res: Response, next: NextFunc
 // Complete Lesson & Update Mastery 
 app.post('/api/v1/lessons/complete', async (req: Request, res: Response, next: NextFunction) => {
     try {
-        // FIX: Added Auth check and Zod parsing
+        // Added Auth check and Zod parsing
         const userId = requireAuth(req)
         const parsed = lessonCompleteSchema.safeParse(req.body)
         if (!parsed.success) throw new AppError('Invalid completion data', 400)
@@ -388,7 +416,7 @@ app.post('/api/v1/lessons/complete', async (req: Request, res: Response, next: N
         const today = new Date().toISOString().split('T')[0] // "YYYY-MM-DD"
         const yesterday = new Date(Date.now() - 86400000).toISOString().split('T')[0]
 
-        // FIX: Check if today's log exists BEFORE upserting it
+        // Check if today's log exists BEFORE upserting it
         const existingTodayLog = await prisma.streakLog.findUnique({
             where: { userId_date: { userId: user.id, date: today } }
         })
@@ -431,7 +459,7 @@ app.post('/api/v1/lessons/complete', async (req: Request, res: Response, next: N
     }
 })
 
-// FIX: Added the Mode Switcher Route
+// Added the Mode Switcher Route
 app.post('/api/v1/user/mode', async (req: Request, res: Response, next: NextFunction) => {
     try {
         const userId = requireAuth(req)
@@ -449,7 +477,7 @@ app.post('/api/v1/user/mode', async (req: Request, res: Response, next: NextFunc
     }
 })
 
-// ─── Fetch Due Flashcards ────────────────────────────────────
+// Fetch Due Flashcards
 app.get('/api/v1/flashcards/due', async (req: Request, res: Response, next: NextFunction) => {
     try {
         const userId = requireAuth(req)
@@ -608,6 +636,120 @@ Rules:
     } catch (error) {
         next(error)
     }
+})
+
+// Admin: List Concepts
+app.get('/api/v1/admin/concepts', async (req: Request, res: Response, next: NextFunction) => {
+    try {
+        requireAdmin(req)
+        const concepts = await prisma.concept.findMany({
+            orderBy: { orderIndex: 'asc' },
+            include: { variants: true, unit: true },
+        })
+        res.json({ concepts })
+    } catch (error) { next(error) }
+})
+
+// Admin: Create/Update Concept & Variants
+const conceptSchema = z.object({
+    id: z.string().optional(), // If present, update. If absent, create.
+    unitId: z.string().uuid(),
+    name: z.string().min(1),
+    cefrLevel: z.enum(['A1', 'A2', 'B1', 'B2', 'C1']),
+    grammarNote: z.string().min(1),
+    vocabItems: z.any(), // JSON array
+    orderIndex: z.number().int(),
+    xpReward: z.number().int(),
+    variants: z.array(z.object({
+        mode: z.enum(['STORY', 'DRILL', 'IMMERSION', 'PROFESSIONAL']),
+        storyBeat: z.string().nullable(),
+        culturalRef: z.string().nullable(),
+        formalPhrase: z.string().nullable(),
+        exercises: z.any(), // JSON array
+    }))
+})
+
+app.post('/api/v1/admin/concepts', async (req: Request, res: Response, next: NextFunction) => {
+    try {
+        requireAdmin(req)
+        const parsed = conceptSchema.safeParse(req.body)
+        if (!parsed.success) throw new AppError('Invalid concept data', 400)
+
+        const data = parsed.data
+
+        if (data.id) {
+            // Update existing
+            await prisma.concept.update({
+                where: { id: data.id },
+                data: {
+                    unitId: data.unitId, name: data.name, cefrLevel: data.cefrLevel,
+                    grammarNote: data.grammarNote, vocabItems: data.vocabItems,
+                    orderIndex: data.orderIndex, xpReward: data.xpReward,
+                },
+            })
+            // Update variants
+            for (const v of data.variants) {
+                await prisma.lessonVariant.upsert({
+                    where: { conceptId_mode: { conceptId: data.id, mode: v.mode } },
+                    update: { storyBeat: v.storyBeat, culturalRef: v.culturalRef, formalPhrase: v.formalPhrase, exercises: v.exercises },
+                    create: { conceptId: data.id, mode: v.mode, storyBeat: v.storyBeat, culturalRef: v.culturalRef, formalPhrase: v.formalPhrase, exercises: v.exercises },
+                })
+            }
+        } else {
+            // Create new
+            const concept = await prisma.concept.create({
+                data: {
+                    id: `concept-${Date.now()}`, // Simple ID generation
+                    unitId: data.unitId, name: data.name, cefrLevel: data.cefrLevel,
+                    grammarNote: data.grammarNote, vocabItems: data.vocabItems,
+                    orderIndex: data.orderIndex, xpReward: data.xpReward,
+                },
+            })
+            for (const v of data.variants) {
+                await prisma.lessonVariant.create({
+                    data: { conceptId: concept.id, mode: v.mode, storyBeat: v.storyBeat, culturalRef: v.culturalRef, formalPhrase: v.formalPhrase, exercises: v.exercises },
+                })
+            }
+        }
+
+        res.json({ success: true })
+    } catch (error) { next(error) }
+})
+
+// Admin: AI Flavor Generator
+const generateSchema = z.object({
+    mode: z.enum(['STORY', 'IMMERSION', 'PROFESSIONAL']),
+    conceptName: z.string(),
+    grammarNote: z.string(),
+    vocabItems: z.any(),
+})
+
+app.post('/api/v1/admin/generate-flavor', async (req: Request, res: Response, next: NextFunction) => {
+    try {
+        requireAdmin(req)
+        const parsed = generateSchema.safeParse(req.body)
+        if (!parsed.success) throw new AppError('Invalid generation data', 400)
+
+        const { mode, conceptName, grammarNote, vocabItems } = parsed.data
+
+        let prompt = ""
+        if (mode === 'STORY') {
+            prompt = `Write a 2-sentence story beat for a language learning app. The concept is "${conceptName}" (${grammarNote}). Use these vocab words: ${vocabItems.map((v: any) => v.word).join(', ')}. Make it engaging and slightly humorous.`
+        } else if (mode === 'IMMERSION') {
+            prompt = `Write a 2-sentence cultural reference or fun fact for a language learning app. The concept is "${conceptName}" (${grammarNote}). Use these vocab words: ${vocabItems.map((v: any) => v.word).join(', ')}. Make it authentic and interesting.`
+        } else if (mode === 'PROFESSIONAL') {
+            prompt = `Write a 2-sentence formal-register phrase or professional context example for a language learning app. The concept is "${conceptName}" (${grammarNote}). Use these vocab words: ${vocabItems.map((v: any) => v.word).join(', ')}. Make it suitable for a workplace setting.`
+        }
+
+        const completion = await groq.chat.completions.create({
+            model: 'llama-3.1-8b-instant',
+            messages: [{ role: 'user', content: prompt }],
+            temperature: 0.7,
+            max_tokens: 150,
+        })
+
+        res.json({ text: completion.choices[0]?.message?.content ?? '' })
+    } catch (error) { next(error) }
 })
 
 // 404 Handler
