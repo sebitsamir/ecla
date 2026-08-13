@@ -24,3 +24,34 @@ body {
   color: var(--foreground);
   font-family: Arial, Helvetica, sans-serif;
 }
+
+/* Mobile Polish & Native Feel */
+html, body {
+  /* Prevent pull-to-refresh and overscroll bouncing on mobile */
+  overscroll-behavior-y: none;
+  -webkit-tap-highlight-color: transparent;
+}
+
+/* Safe area insets for iPhone notches and home indicators */
+@supports (padding: max(0px)) {
+  .safe-bottom {
+    padding-bottom: max(1rem, env(safe-area-inset-bottom));
+  }
+  .safe-top {
+    padding-top: max(1rem, env(safe-area-inset-top));
+  }
+}
+
+/* Prevent double-tap zoom on buttons (makes taps feel instant) */
+button, a, [role="button"] {
+  touch-action: manipulation;
+}
+
+/* Hide scrollbars but keep functionality for horizontal scrolls */
+.no-scrollbar::-webkit-scrollbar {
+  display: none;
+}
+.no-scrollbar {
+  -ms-overflow-style: none;
+  scrollbar-width: none;
+}

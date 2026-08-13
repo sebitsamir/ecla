@@ -212,14 +212,25 @@ export default function LearnPage() {
 
                         {/* Question */}
                         <div className="w-full mb-8">
-                            <p className="text-zinc-500 text-sm mb-2">
-                                Question {currentIndex + 1} of {exercises.length}
-                            </p>
-                            <h2 className="text-2xl md:text-3xl font-bold leading-tight">
-                                {currentExercise.prompt}
-                            </h2>
-                            {currentExercise.hint && (
-                                <p className="text-zinc-500 text-sm mt-2 italic">Hint: {currentExercise.hint}</p>
+                            {!currentExercise ? (
+                                <div className="text-center py-8">
+                                    <p className="text-rose-400 font-semibold mb-2">No exercises found for this concept.</p>
+                                    <button onClick={() => router.push('/course')} className="text-emerald-400 hover:underline">
+                                        Return to Course Map
+                                    </button>
+                                </div>
+                            ) : (
+                                <>
+                                    <p className="text-zinc-500 text-sm mb-2">
+                                        Question {currentIndex + 1} of {exercises.length}
+                                    </p>
+                                    <h2 className="text-2xl md:text-3xl font-bold leading-tight">
+                                        {currentExercise.prompt}
+                                    </h2>
+                                    {currentExercise.hint && (
+                                        <p className="text-zinc-500 text-sm mt-2 italic">Hint: {currentExercise.hint}</p>
+                                    )}
+                                </>
                             )}
                         </div>
 

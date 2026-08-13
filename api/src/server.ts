@@ -653,7 +653,7 @@ app.get('/api/v1/admin/concepts', async (req: Request, res: Response, next: Next
 // Admin: Create/Update Concept & Variants
 const conceptSchema = z.object({
     id: z.string().optional(), // If present, update. If absent, create.
-    unitId: z.string().uuid(),
+    unitId: z.string(),
     name: z.string().min(1),
     cefrLevel: z.enum(['A1', 'A2', 'B1', 'B2', 'C1']),
     grammarNote: z.string().min(1),
@@ -749,6 +749,51 @@ app.post('/api/v1/admin/generate-flavor', async (req: Request, res: Response, ne
         })
 
         res.json({ text: completion.choices[0]?.message?.content ?? '' })
+    } catch (error) { next(error) }
+})
+
+// Admin: AI Exercise Generator
+const exerciseGenSchema = z.object({
+    mode: z.enum(['STORY', 'DRILL', 'IMMERSION', 'PROFESSIONAL']),
+    conceptName: z.string(),
+    grammarNote: z.string(),
+    vocabItems: z.any(),
+})
+
+app.post('/api/v1/admin/generate-exercises', async (req: Request, res: Response, next: NextFunction) => {
+    try {
+        requireAdmin(req)
+        const parsed = exerciseGenSchema.safeParse(req.body)
+        if (!parsed.success) throw new AppError('Invalid generation data', 400)
+
+        const { mode, conceptName, grammarNote, vocabItems } = parsed.data
+
+        const prompt = `You are a Spanish language teacher. 
+    Concept: "${conceptName}"
+    Rule: ${grammarNote}
+    Vocab: ${vocabItems.map((v: any) => v.word).join(', ')}
+    
+    Generate exactly 3 exercises for a ${mode} mode lesson. 
+    Types allowed: "mcq" (needs 'options' array), "fill_blank", or "translate".
+    
+    Return ONLY a valid JSON array. Do not use markdown backticks. Do not add text outside the JSON.
+    Example format: [{"type":"mcq","prompt":"I eat","options":["Como","Comes"],"answer":"Como"}]`
+
+        const completion = await groq.chat.completions.create({
+            model: 'llama-3.1-8b-instant',
+            messages: [{ role: 'user', content: prompt }],
+            temperature: 0.7,
+            max_tokens: 500,
+        })
+
+        let text = completion.choices[0]?.message?.content ?? '[]'
+        // Clean up markdown backticks if the AI adds them
+        text = text.replace(/```json/g, '').replace(/```/g, '').trim()
+
+        // Verify it's valid JSON before sending
+        try { JSON.parse(text) } catch { text = '[]' }
+
+        res.json({ exercises: JSON.parse(text) })
     } catch (error) { next(error) }
 })
 
