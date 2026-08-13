@@ -303,7 +303,7 @@ export default function LearnPage() {
 
                                     {!isRevealed && (
                                         <button
-                                            onClick={() => checkAnswer(userInput)}
+                                            onClick={() => checkAnswer(userInput)} // <-- MUST BE (userInput) HERE
                                             disabled={!userInput.trim()}
                                             className="w-full py-3 bg-emerald-600 hover:bg-emerald-500 disabled:bg-zinc-800 disabled:text-zinc-500 rounded-xl font-semibold transition-colors"
                                         >

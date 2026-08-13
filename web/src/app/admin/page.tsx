@@ -270,7 +270,7 @@ export default function AdminPage() {
                                 <h2 className="text-xl font-semibold">{variant.mode} Mode Variant</h2>
                                 {variant.mode !== 'DRILL' && (
                                     <button
-                                        onClick={() => handleGenerate(variant.mode)}
+                                        onClick={() => handleGenerate(variant.mode as 'STORY' | 'IMMERSION' | 'PROFESSIONAL')} // <-- ADD THE CAST HERE
                                         disabled={generating === variant.mode}
                                         className="px-3 py-1.5 bg-purple-600 hover:bg-purple-500 disabled:bg-zinc-800 rounded-lg text-sm font-medium flex items-center gap-2 transition-colors"
                                     >
