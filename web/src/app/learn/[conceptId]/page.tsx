@@ -7,6 +7,7 @@ import {
     Loader2, CheckCircle2, XCircle, ArrowRight,
     BookOpen, Zap, Music, GraduationCap, Sparkles, X
 } from 'lucide-react'
+import posthog from 'posthog-js'
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL ?? 'http://localhost:4000'
 
@@ -133,6 +134,11 @@ export default function LearnPage() {
             })
 
             if (res.ok) {
+                posthog.capture('lesson_completed', {
+                    concept_id: lesson.conceptId,
+                    mode: lesson.mode,
+                    xp_earned: xpEarned
+                })
                 // SHOUT TO THE DASHBOARD TO REFRESH!
                 window.dispatchEvent(new Event('fluenta:progress-updated'))
             } else {

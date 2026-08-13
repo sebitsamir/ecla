@@ -8,6 +8,7 @@ import {
   BookOpen, Zap, Music, GraduationCap, Loader2, ArrowRight,
   AlertCircle, Flame, Target, Sparkles, ChevronDown, AlertTriangle, RefreshCw, RotateCcw
 } from 'lucide-react'
+import posthog from 'posthog-js'
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL ?? 'http://localhost:4000'
 
@@ -106,6 +107,10 @@ export default function Home() {
         headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
         body: JSON.stringify({ mode: newMode }),
       })
+
+      // Track the mode switch!
+      posthog.capture('mode_switched', { new_mode: newMode })
+
       setPreferredMode(newMode)
       setShowModeMenu(false)
       void fetchDashboardData() // Reload to show the new mode's lesson variant
