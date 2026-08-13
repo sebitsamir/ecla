@@ -285,7 +285,7 @@ export default function LearnPage() {
                                                 }`}
                                             placeholder="Type your answer..."
                                             autoFocus
-                                            onKeyDown={(e) => e.key === 'Enter' && checkAnswer()}
+                                            onKeyDown={(e) => e.key === 'Enter' && checkAnswer(userInput)}
                                         />
                                     ) : (
                                         <textarea
