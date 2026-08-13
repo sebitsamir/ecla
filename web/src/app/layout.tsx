@@ -8,7 +8,7 @@ import "./globals.css";
 const inter = Inter({ subsets: ["latin"] });
 
 export const metadata: Metadata = {
-  title: 'Fluenta',
+  title: 'Luma',
   description: 'One curriculum. Four ways to learn.',
   viewport: {
     width: 'device-width',

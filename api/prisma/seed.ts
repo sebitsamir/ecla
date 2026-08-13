@@ -3,7 +3,7 @@ import { PrismaClient, DeliveryMode } from '@prisma/client'
 const prisma = new PrismaClient()
 
 async function main() {
-    console.log('Seeding Fluenta database...')
+    console.log('Seeding luma database...')
 
     // 1. Create Course
     const course = await prisma.course.upsert({

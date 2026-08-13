@@ -32,11 +32,11 @@ export default function CoursePage() {
         fetchMap()
 
         const handleUpdate = () => { setLoading(true); fetchMap(); }
-        window.addEventListener('fluenta:progress-updated', handleUpdate)
+        window.addEventListener('luma:progress-updated', handleUpdate)
         window.addEventListener('focus', handleUpdate)
 
         return () => {
-            window.removeEventListener('fluenta:progress-updated', handleUpdate)
+            window.removeEventListener('luma:progress-updated', handleUpdate)
             window.removeEventListener('focus', handleUpdate)
         }
     }, [getToken])

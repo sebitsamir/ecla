@@ -613,7 +613,7 @@ app.post('/api/v1/chat', async (req: Request, res: Response, next: NextFunction)
         const level = user.currentLevel ?? 'A1'
         const motivation = user.motivation ?? 'FUN'
 
-        const systemPrompt = `You are the Fluenta AI Spanish tutor.
+        const systemPrompt = `You are the luma AI Spanish tutor.
 The student's CEFR level is ${level}. Their motivation is: ${motivation}. ${motivationHints[motivation] ?? ''}
 Rules:
 - Reply mostly in Spanish, using vocabulary and grammar appropriate for level ${level}. For A1/A2 use short, simple sentences.
@@ -809,7 +809,7 @@ app.use(errorHandler)
 const PORT = parseInt(process.env.PORT || '4000', 10)
 
 app.listen(PORT, () => {
-    console.log(`Fluenta API running on http://localhost:${PORT}`)
+    console.log(`luma API running on http://localhost:${PORT}`)
 })
 
 // Graceful Shutdown

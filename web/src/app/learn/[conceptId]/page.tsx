@@ -140,7 +140,7 @@ export default function LearnPage() {
                     xp_earned: xpEarned
                 })
                 // SHOUT TO THE DASHBOARD TO REFRESH!
-                window.dispatchEvent(new Event('fluenta:progress-updated'))
+                window.dispatchEvent(new Event('luma:progress-updated'))
             } else {
                 const errorText = await res.text()
                 console.error('API rejected progress save:', errorText)

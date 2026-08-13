@@ -69,7 +69,7 @@ export default function FeedbackButton() {
                                     <Send className="w-6 h-6 text-emerald-400" />
                                 </div>
                                 <h4 className="text-xl font-bold mb-2">Thank you!</h4>
-                                <p className="text-zinc-400 text-sm">Your feedback helps us build a better Fluenta.</p>
+                                <p className="text-zinc-400 text-sm">Your feedback helps us build a better Luma.</p>
                             </div>
                         ) : (
                             /* Form State */
