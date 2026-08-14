@@ -32,11 +32,11 @@ export default function CoursePage() {
         fetchMap()
 
         const handleUpdate = () => { setLoading(true); fetchMap(); }
-        window.addEventListener('luma:progress-updated', handleUpdate)
+        window.addEventListener('ecla:progress-updated', handleUpdate)
         window.addEventListener('focus', handleUpdate)
 
         return () => {
-            window.removeEventListener('luma:progress-updated', handleUpdate)
+            window.removeEventListener('ecla:progress-updated', handleUpdate)
             window.removeEventListener('focus', handleUpdate)
         }
     }, [getToken])

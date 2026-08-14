@@ -142,7 +142,7 @@ export default function LearnPage() {
                     total_questions: totalQuestions
                 })
                 // SHOUT TO THE DASHBOARD TO REFRESH!
-                window.dispatchEvent(new Event('luma:progress-updated'))
+                window.dispatchEvent(new Event('ecla:progress-updated'))
             } else {
                 const errorText = await res.text()
                 console.error('API rejected progress save:', errorText)

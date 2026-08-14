@@ -126,7 +126,7 @@ app.post('/api/v1/sync-user', async (req: Request, res: Response, next: NextFunc
         let user = await prisma.user.findUnique({ where: { clerkId: userId } })
 
         if (user) {
-            // User exists. Just ensure the email is up to date (in case they changed it in Clerk)
+            // User exists. Just ensure the email is up to date
             if (user.email !== email) {
                 user = await prisma.user.update({ where: { id: user.id }, data: { email } })
             }
@@ -135,15 +135,22 @@ app.post('/api/v1/sync-user', async (req: Request, res: Response, next: NextFunc
             const ghostUser = await prisma.user.findUnique({ where: { email } })
 
             if (ghostUser) {
-                // Reclaim the old account and attach the new Clerk ID
+                // Reclaim the old account, attach new Clerk ID, AND reset onboarding for testing
                 user = await prisma.user.update({
                     where: { id: ghostUser.id },
-                    data: { clerkId: userId }
+                    data: { 
+                        clerkId: userId,
+                        onboardingCompleted: false
+                    }
                 })
             } else {
-                // 3. Truly new user. Create them.
+                // 3. Truly new user. Create them with onboarding explicitly set to false
                 user = await prisma.user.create({
-                    data: { clerkId: userId, email }
+                    data: { 
+                        clerkId: userId, 
+                        email,
+                        onboardingCompleted: false 
+                    }
                 })
             }
         }
@@ -613,7 +620,7 @@ app.post('/api/v1/chat', async (req: Request, res: Response, next: NextFunction)
         const level = user.currentLevel ?? 'A1'
         const motivation = user.motivation ?? 'FUN'
 
-        const systemPrompt = `You are the luma AI Spanish tutor.
+        const systemPrompt = `You are the ecla AI Spanish tutor.
 The student's CEFR level is ${level}. Their motivation is: ${motivation}. ${motivationHints[motivation] ?? ''}
 Rules:
 - Reply mostly in Spanish, using vocabulary and grammar appropriate for level ${level}. For A1/A2 use short, simple sentences.
@@ -809,7 +816,7 @@ app.use(errorHandler)
 const PORT = parseInt(process.env.PORT || '4000', 10)
 
 app.listen(PORT, () => {
-    console.log(`luma API running on http://localhost:${PORT}`)
+    console.log(`ecla API running on http://localhost:${PORT}`)
 })
 
 // Graceful Shutdown

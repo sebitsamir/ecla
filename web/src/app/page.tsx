@@ -28,7 +28,7 @@ export default function LandingPage() {
                         <div className="w-8 h-8 rounded-lg bg-emerald-600 flex items-center justify-center">
                             <Sparkles className="w-4 h-4 text-white" />
                         </div>
-                        <span className="text-lg font-bold tracking-tight text-white">Luma</span>
+                        <span className="text-lg font-bold tracking-tight text-white">ECLA</span>
                     </div>
 
                     <div className="flex items-center gap-4">
@@ -61,7 +61,7 @@ export default function LandingPage() {
                     </h1>
 
                     <p className="text-lg sm:text-xl text-zinc-400 max-w-2xl mx-auto mb-12 leading-relaxed">
-                        Ditch the repetitive, one-size-fits-all drills. Luma adapts to how you learn best with four distinct, context-rich modes designed for real-world fluency.
+                        Ditch the repetitive, one-size-fits-all drills. ecla adapts to how you learn best with four distinct, context-rich modes designed for real-world fluency.
                     </p>
 
                     <div className="flex flex-col sm:flex-row items-center justify-center gap-4">
@@ -177,7 +177,7 @@ export default function LandingPage() {
                         Ready to find your fluency?
                     </h2>
                     <p className="text-lg text-zinc-400 mb-10 max-w-xl mx-auto">
-                        Join the exclusive Luma beta today. Shape the future of language learning and get lifetime access to premium features.
+                        Join the exclusive Ecla beta today. Shape the future of language learning and get lifetime access to premium features.
                     </p>
                     <SignUpButton mode="modal">
                         <button className="inline-flex items-center justify-center gap-2 px-8 py-4 rounded-xl bg-white text-zinc-950 font-bold text-lg hover:bg-zinc-200 transition-colors active:scale-[0.98]">
@@ -195,10 +195,10 @@ export default function LandingPage() {
                         <div className="w-6 h-6 rounded bg-emerald-600 flex items-center justify-center">
                             <Sparkles className="w-3 h-3 text-white" />
                         </div>
-                        <span className="text-sm font-semibold text-zinc-300">Luma</span>
+                        <span className="text-sm font-semibold text-zinc-300">Ecla</span>
                     </div>
                     <p className="text-sm text-zinc-600">
-                        © {new Date().getFullYear()} Luma Language Learning. All rights reserved.
+                        © {new Date().getFullYear()} Ecla Language Learning. All rights reserved.
                     </p>
                 </div>
             </footer>

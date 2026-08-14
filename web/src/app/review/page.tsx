@@ -59,7 +59,7 @@ export default function ReviewPage() {
             setTimeout(() => setCurrentIndex(i => i + 1), 200)
         } else {
             setSessionComplete(true)
-            window.dispatchEvent(new Event('luma:progress-updated')) // Update dashboard
+            window.dispatchEvent(new Event('ecla:progress-updated')) // Update dashboard
         }
     }
 

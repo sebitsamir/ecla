@@ -92,11 +92,11 @@ export default function Home() {
     const handleUpdate = () => void fetchDashboardData()
 
     // Listen for the shout from the Lesson Player
-    window.addEventListener('luma:progress-updated', handleUpdate)
+    window.addEventListener('ecla:progress-updated', handleUpdate)
     window.addEventListener('focus', handleUpdate)
 
     return () => {
-      window.removeEventListener('luma:progress-updated', handleUpdate)
+      window.removeEventListener('ecla:progress-updated', handleUpdate)
       window.removeEventListener('focus', handleUpdate)
     }
   }, [screen, fetchDashboardData])
@@ -124,7 +124,7 @@ export default function Home() {
   if (screen === 'loading') return <main className="min-h-screen bg-zinc-950 flex items-center justify-center"><Loader2 className="w-8 h-8 text-emerald-500 animate-spin" /></main>
   if (screen === 'signedOut') return (
     <main className="min-h-screen bg-zinc-950 text-white flex flex-col items-center justify-center p-8">
-      <h1 className="text-4xl font-bold mb-3 tracking-tight">Luma</h1>
+      <h1 className="text-4xl font-bold mb-3 tracking-tight">ecla</h1>
       <p className="text-zinc-400 mb-8 text-center max-w-md">One curriculum. Four ways to learn.</p>
       <div className="flex gap-4">
         <SignInButton mode="modal"><button className="px-6 py-3 bg-zinc-800 hover:bg-zinc-700 rounded-xl font-medium transition-colors">Sign In</button></SignInButton>
@@ -149,7 +149,7 @@ export default function Home() {
     <main className="min-h-screen bg-zinc-950 text-white p-6 md:p-8">
       <div className="max-w-4xl mx-auto">
         <div className="flex items-center justify-between mb-8">
-          <h1 className="text-2xl md:text-3xl font-bold tracking-tight">Luma</h1>
+          <h1 className="text-2xl md:text-3xl font-bold tracking-tight">ecla</h1>
           <UserButton />
         </div>
 
