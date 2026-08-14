@@ -87,6 +87,8 @@ export default function Home() {
 
     void fetchDashboardData()
 
+    posthog.capture('dashboard_viewed')
+
     const handleUpdate = () => void fetchDashboardData()
 
     // Listen for the shout from the Lesson Player

@@ -20,6 +20,7 @@ import {
     TrendingUp,
     Award,
 } from 'lucide-react'
+import posthog from 'posthog-js'
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL ?? 'http://localhost:4000'
 
@@ -262,6 +263,14 @@ export default function OnboardingPage() {
                 const data = await res.json().catch(() => ({}))
                 throw new Error(data.error || `API responded with ${res.status}`)
             }
+
+            // Track successful onboarding completion
+            posthog.capture('onboarding_completed', {
+                motivation: motivation,
+                preferred_mode: preferredMode,
+                daily_goal_xp: dailyGoalXp,
+                starting_level: currentLevel,
+            })
 
             router.push('/')
             router.refresh()

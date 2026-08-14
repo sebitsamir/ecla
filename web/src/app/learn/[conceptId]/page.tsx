@@ -137,7 +137,9 @@ export default function LearnPage() {
                 posthog.capture('lesson_completed', {
                     concept_id: lesson.conceptId,
                     mode: lesson.mode,
-                    xp_earned: xpEarned
+                    xp_earned: xpEarned,
+                    score: correctCount,
+                    total_questions: totalQuestions
                 })
                 // SHOUT TO THE DASHBOARD TO REFRESH!
                 window.dispatchEvent(new Event('luma:progress-updated'))
