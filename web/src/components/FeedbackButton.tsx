@@ -1,15 +1,21 @@
 'use client'
 
 import { useState } from 'react'
+import { usePathname } from 'next/navigation'
 import { MessageSquare, X, Send, Bug, Lightbulb, Smile } from 'lucide-react'
 import posthog from 'posthog-js'
 
 export default function FeedbackButton() {
+    const pathname = usePathname()
     const [isOpen, setIsOpen] = useState(false)
     const [type, setType] = useState<'bug' | 'feature' | 'general'>('general')
     const [message, setMessage] = useState('')
     const [isSending, setIsSending] = useState(false)
     const [isSent, setIsSent] = useState(false)
+
+    const position = pathname === '/chat'
+        ? 'bottom-24 right-4 lg:bottom-6 lg:right-6'
+        : 'bottom-4 right-4 sm:bottom-6 sm:right-6'
 
     const handleSubmit = async (e: React.FormEvent) => {
         e.preventDefault()
@@ -38,10 +44,10 @@ export default function FeedbackButton() {
 
     return (
         <>
-            {/* Floating Trigger — icon only, unobtrusive */}
+            {/* Floating Trigger — icon only, unobtrusive, context-aware position */}
             <button
                 onClick={() => setIsOpen(true)}
-                className="fixed bottom-6 right-6 z-40 flex h-12 w-12 items-center justify-center rounded-full border border-white/10 bg-night-800/80 text-cream/60 backdrop-blur-sm shadow-glow-sm transition-all duration-200 hover:bg-night-800 hover:text-cream hover:border-glow/40 active:scale-95"
+                className={`fixed ${position} z-40 flex h-11 w-11 items-center justify-center rounded-full border border-white/10 bg-night-800/80 text-cream/60 opacity-80 backdrop-blur-sm shadow-glow-sm transition-all duration-200 hover:opacity-100 hover:text-cream hover:border-glow/40 active:scale-95`}
                 title="Send feedback"
                 aria-label="Send feedback"
             >
@@ -50,11 +56,11 @@ export default function FeedbackButton() {
 
             {/* Modal Overlay */}
             {isOpen && (
-                <div 
+                <div
                     className="fixed inset-0 z-50 flex items-end justify-center bg-black/60 backdrop-blur-sm sm:items-center sm:p-4"
                     onClick={() => setIsOpen(false)}
                 >
-                    <div 
+                    <div
                         className="w-full max-w-md rounded-t-3xl border border-white/10 bg-night-800 shadow-glow-md sm:rounded-card overflow-hidden"
                         onClick={(e) => e.stopPropagation()}
                     >
@@ -64,6 +70,7 @@ export default function FeedbackButton() {
                             <button
                                 onClick={() => setIsOpen(false)}
                                 className="rounded-lg p-1.5 text-cream/50 hover:bg-night-700 hover:text-cream transition-colors"
+                                aria-label="Close feedback"
                             >
                                 <X className="h-5 w-5" />
                             </button>
@@ -85,11 +92,10 @@ export default function FeedbackButton() {
                                             key={t.id}
                                             type="button"
                                             onClick={() => setType(t.id as any)}
-                                            className={`flex flex-col items-center gap-1.5 p-3 rounded-xl border transition-all ${
-                                                isActive
-                                                    ? 'border-glow/50 bg-glow/10 text-glow'
-                                                    : 'border-white/10 bg-night-900/50 text-cream/50 hover:border-white/25 hover:text-cream/70'
-                                            }`}
+                                            className={`flex flex-col items-center gap-1.5 p-3 rounded-xl border transition-all ${isActive
+                                                ? 'border-glow/50 bg-glow/10 text-glow'
+                                                : 'border-white/10 bg-night-900/50 text-cream/50 hover:border-white/25 hover:text-cream/70'
+                                                }`}
                                         >
                                             <Icon className="h-5 w-5" />
                                             <span className="text-xs font-semibold">{t.label}</span>
@@ -104,10 +110,10 @@ export default function FeedbackButton() {
                                     value={message}
                                     onChange={(e) => setMessage(e.target.value)}
                                     placeholder={
-                                        type === 'bug' 
-                                            ? "Describe what went wrong..." 
-                                            : type === 'feature' 
-                                                ? "What would you like to see?" 
+                                        type === 'bug'
+                                            ? "Describe what went wrong..."
+                                            : type === 'feature'
+                                                ? "What would you like to see?"
                                                 : "Tell us what's on your mind..."
                                     }
                                     className="w-full p-4 rounded-xl bg-night-900/60 border border-white/10 text-cream placeholder:text-cream/30 focus:outline-none focus:border-glow focus:ring-1 focus:ring-glow/30 transition-all min-h-[120px] resize-none text-sm"
@@ -127,7 +133,7 @@ export default function FeedbackButton() {
                                     className="w-full py-3.5 rounded-xl bg-glow hover:bg-glow-bright disabled:bg-night-900/60 disabled:text-cream/30 text-night-900 font-bold transition-all flex items-center justify-center gap-2 active:scale-[0.98]"
                                 >
                                     {isSending ? 'Sending...' : 'Send Feedback'}
-                                    {!isSending && <Send className="h-4 w-4" />}
+                                    {!isSending && <Send className="h-4 h-4" />}
                                 </button>
                             )}
                         </form>
