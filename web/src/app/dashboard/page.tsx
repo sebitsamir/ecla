@@ -2,315 +2,482 @@
 
 import { useEffect, useState, useCallback } from 'react'
 import { useRouter } from 'next/navigation'
-import { SignInButton, SignUpButton, UserButton, useAuth } from '@clerk/nextjs'
+import { UserButton, useAuth } from '@clerk/nextjs'
 import Link from 'next/link'
 import {
-  BookOpen, Zap, Music, GraduationCap, Loader2, ArrowRight,
-  AlertCircle, Flame, Target, Sparkles, ChevronDown, AlertTriangle, RefreshCw, RotateCcw
+  BookOpen, Zap, Music, GraduationCap, ArrowRight,
+  Flame, Target, Sparkles, RotateCcw, MessageCircle, Map,
+  CheckCircle2, X, Lock, Palette, Moon,
 } from 'lucide-react'
 import posthog from 'posthog-js'
+import NightBackground from '@/components/NightBackground'
+import ModeAmbience from '@/components/ModeAmbience'
+import Firefly from '@/components/Firefly'
+import { COSMETICS, CosmeticId, DEFAULT_GLOW } from '@/lib/cosmetics'
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL ?? 'http://localhost:4000'
 
-const modeConfig = {
-  STORY: { label: 'Story', icon: BookOpen, color: 'text-blue-400' },
-  DRILL: { label: 'Drill', icon: Zap, color: 'text-yellow-400' },
-  IMMERSION: { label: 'Immersion', icon: Music, color: 'text-purple-400' },
-  PROFESSIONAL: { label: 'Professional', icon: GraduationCap, color: 'text-emerald-400' },
+const MODE_META: Record<string, { id: string; label: string; desc: string; dot: string; bg: string; text: string; border: string; glow: string; Icon: any }> = {
+  STORY: { id: 'STORY', label: 'Story', desc: 'Narrative', dot: 'bg-story', bg: 'bg-story', text: 'text-night-900', border: 'border-story', glow: 'shadow-[0_0_24px_rgba(255,180,90,0.35)]', Icon: BookOpen },
+  DRILL: { id: 'DRILL', label: 'Drill', desc: 'Fast reps', dot: 'bg-drill', bg: 'bg-drill', text: 'text-night-900', border: 'border-drill', glow: 'shadow-[0_0_24px_rgba(77,216,230,0.35)]', Icon: Zap },
+  IMMERSION: { id: 'IMMERSION', label: 'Immersion', desc: 'Culture', dot: 'bg-immersion', bg: 'bg-immersion', text: 'text-night-900', border: 'border-immersion', glow: 'shadow-[0_0_24px_rgba(185,140,240,0.35)]', Icon: Music },
+  PROFESSIONAL: { id: 'PROFESSIONAL', label: 'Professional', desc: 'Workplace', dot: 'bg-pro', bg: 'bg-pro', text: 'text-night-900', border: 'border-pro', glow: 'shadow-[0_0_24px_rgba(127,166,255,0.35)]', Icon: GraduationCap },
+}
+type ModeId = keyof typeof MODE_META
+
+const GLOW_TIERS: Record<string, { color: string; mood: 'idle' | 'proud' | 'radiant' }> = {
+  Dim: { color: '#9a7a3d', mood: 'idle' },
+  Warm: { color: '#FFC857', mood: 'idle' },
+  Radiant: { color: '#FFE29A', mood: 'proud' },
+  Brilliant: { color: '#FFF6CF', mood: 'radiant' },
 }
 
-type ScreenState = 'loading' | 'signedOut' | 'error' | 'dashboard'
+function getGreeting(): string {
+  const h = new Date().getHours()
+  if (h < 5) return 'Still up'
+  if (h < 12) return 'Good morning'
+  if (h < 17) return 'Good afternoon'
+  if (h < 21) return 'Good evening'
+  return 'Good night'
+}
 
-export default function Home() {
-  const { isLoaded, isSignedIn, getToken } = useAuth()
+export default function DashboardPage() {
   const router = useRouter()
+  const { getToken } = useAuth()
 
-  const [screen, setScreen] = useState<ScreenState>('loading')
+  const [loading, setLoading] = useState(true)
   const [dailyXp, setDailyXp] = useState(0)
   const [dailyGoalXp, setDailyGoalXp] = useState(50)
   const [streakDays, setStreakDays] = useState(0)
-  const [preferredMode, setPreferredMode] = useState<keyof typeof modeConfig>('DRILL')
+  const [preferredMode, setPreferredMode] = useState<ModeId>('DRILL')
   const [nextLesson, setNextLesson] = useState<any>(null)
-  const [loadingLesson, setLoadingLesson] = useState(true)
-  const [showModeMenu, setShowModeMenu] = useState(false)
-  const [reviewRequired, setReviewRequired] = useState(false)
-  const [accuracy, setAccuracy] = useState(100)
+  const [comboStreak, setComboStreak] = useState(0)
+  const [glowTier, setGlowTier] = useState('Dim')
+  const [glowNext, setGlowNext] = useState(7)
+  const [activeDays, setActiveDays] = useState(0)
+  const [showModeSwitcher, setShowModeSwitcher] = useState(false)
 
-  const fetchDashboardData = useCallback(async () => {
+  // Cosmetics state
+  const [unlockedCosmetics, setUnlockedCosmetics] = useState<string[]>(['gold'])
+  const [equippedCosmetic, setEquippedCosmetic] = useState<CosmeticId>('gold')
+  const [showWardrobe, setShowWardrobe] = useState(false)
+  const [unlockCelebration, setUnlockCelebration] = useState<CosmeticId | null>(null)
+
+  const glowColors = COSMETICS[equippedCosmetic]?.colors ?? DEFAULT_GLOW
+
+  const fetchDashboard = useCallback(async () => {
     try {
-      setLoadingLesson(true)
+      setLoading(true)
       const token = await getToken()
-      const res = await fetch(`${API_URL}/api/v1/dashboard`, {
-        headers: { Authorization: `Bearer ${token}` },
-      })
+      const res = await fetch(`${API_URL}/api/v1/dashboard`, { headers: { Authorization: `Bearer ${token}` } })
       if (!res.ok) throw new Error('Failed to fetch')
       const data = await res.json()
-
-      setDailyXp(data.dailyXp)
-      setDailyGoalXp(data.dailyGoalXp)
-      setStreakDays(data.streakDays)
-      setPreferredMode(data.preferredMode)
+      setDailyXp(data.dailyXp || 0)
+      setDailyGoalXp(data.dailyGoalXp || 50)
+      setStreakDays(data.streakDays || 0)
+      if (data.preferredMode && MODE_META[data.preferredMode]) setPreferredMode(data.preferredMode as ModeId)
       setNextLesson(data.nextLesson)
-      setReviewRequired(data.reviewRequired)
-      setAccuracy(data.accuracy)
-    } catch (err) {
-      console.error(err)
-    } finally {
-      setLoadingLesson(false)
-    }
+      setComboStreak(data.comboStreak || 0)
+      setGlowTier(data.glowTier || 'Dim')
+      setGlowNext(data.glowNext ?? 7)
+      setActiveDays(data.activeDays || 0)
+
+      // Cosmetics data
+      setUnlockedCosmetics(data.unlockedCosmetics ?? ['gold'])
+      if (data.equippedCosmetic && COSMETICS[data.equippedCosmetic as CosmeticId]) {
+        setEquippedCosmetic(data.equippedCosmetic as CosmeticId)
+      }
+      if (data.newUnlocks?.length) {
+        setTimeout(() => setUnlockCelebration(data.newUnlocks[0]), 600)
+      }
+    } catch (err) { console.error(err) } finally { setLoading(false) }
   }, [getToken])
 
-  useEffect(() => {
-    if (!isLoaded) return
-    if (!isSignedIn) { setScreen('signedOut'); return }
-
-    async function syncUser() {
-      try {
-        const token = await getToken()
-        const res = await fetch(`${API_URL}/api/v1/sync-user`, {
-          method: 'POST',
-          headers: { Authorization: `Bearer ${token}` },
-        })
-        if (!res.ok) throw new Error('Sync failed')
-        const data = await res.json()
-        if (!data.onboardingCompleted) { router.push('/onboarding'); return }
-        setScreen('dashboard')
-      } catch (err) {
-        setScreen('error')
-      }
-    }
-    syncUser()
-  }, [isLoaded, isSignedIn, getToken, router])
+  useEffect(() => { fetchDashboard() }, [fetchDashboard])
 
   useEffect(() => {
-    if (screen !== 'dashboard') return
-
-    void fetchDashboardData()
-
-    posthog.capture('dashboard_viewed')
-
-    const handleUpdate = () => void fetchDashboardData()
-
-    // Listen for the shout from the Lesson Player
-    window.addEventListener('ecla:progress-updated', handleUpdate)
+    const handleUpdate = () => fetchDashboard()
+    window.addEventListener('luma:progress-updated', handleUpdate)
     window.addEventListener('focus', handleUpdate)
-
     return () => {
-      window.removeEventListener('ecla:progress-updated', handleUpdate)
+      window.removeEventListener('luma:progress-updated', handleUpdate)
       window.removeEventListener('focus', handleUpdate)
     }
-  }, [screen, fetchDashboardData])
+  }, [fetchDashboard])
 
-  const switchMode = async (newMode: keyof typeof modeConfig) => {
+  const switchMode = async (mode: ModeId) => {
+    if (mode === preferredMode) { setShowModeSwitcher(false); return }
+
+    const previousMode = preferredMode
+    setPreferredMode(mode)
+    setShowModeSwitcher(false)
+
     try {
       const token = await getToken()
       await fetch(`${API_URL}/api/v1/user/mode`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
-        body: JSON.stringify({ mode: newMode }),
+        body: JSON.stringify({ mode }),
       })
-
-      // Track the mode switch!
-      posthog.capture('mode_switched', { new_mode: newMode })
-
-      setPreferredMode(newMode)
-      setShowModeMenu(false)
-      void fetchDashboardData() // Reload to show the new mode's lesson variant
-    } catch (err) {
-      console.error(err)
+      posthog.capture('mode_switched', { new_mode: mode, source: 'dashboard' })
+      fetchDashboard()
+    } catch (e) {
+      console.error(e)
+      setPreferredMode(previousMode)
     }
   }
 
-  if (screen === 'loading') return <main className="min-h-screen bg-zinc-950 flex items-center justify-center"><Loader2 className="w-8 h-8 text-emerald-500 animate-spin" /></main>
-  if (screen === 'signedOut') return (
-    <main className="min-h-screen bg-zinc-950 text-white flex flex-col items-center justify-center p-8">
-      <h1 className="text-4xl font-bold mb-3 tracking-tight">ecla</h1>
-      <p className="text-zinc-400 mb-8 text-center max-w-md">One curriculum. Four ways to learn.</p>
-      <div className="flex gap-4">
-        <SignInButton mode="modal"><button className="px-6 py-3 bg-zinc-800 hover:bg-zinc-700 rounded-xl font-medium transition-colors">Sign In</button></SignInButton>
-        <SignUpButton mode="modal"><button className="px-6 py-3 bg-emerald-600 hover:bg-emerald-500 rounded-xl font-medium transition-colors">Get Started</button></SignUpButton>
-      </div>
-    </main>
-  )
-  if (screen === 'error') return (
-    <main className="min-h-screen bg-zinc-950 text-white flex flex-col items-center justify-center p-8">
-      <AlertCircle className="w-8 h-8 text-rose-400 mb-4" />
-      <p className="text-zinc-400 mb-6">Could not reach the API.</p>
-      <button onClick={() => window.location.reload()} className="px-6 py-3 bg-emerald-600 rounded-xl font-medium">Retry</button>
-    </main>
-  )
+  const equipCosmetic = async (id: CosmeticId) => {
+    const prev = equippedCosmetic
+    setEquippedCosmetic(id)
+    try {
+      const token = await getToken()
+      await fetch(`${API_URL}/api/v1/user/cosmetics/equip`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+        body: JSON.stringify({ cosmeticId: id }),
+      })
+      posthog.capture('cosmetic_equipped', { cosmetic_id: id })
+    } catch (e) {
+      console.error(e)
+      setEquippedCosmetic(prev)
+    }
+  }
+
+  if (loading) {
+    return (
+      <main className="min-h-screen font-body">
+        <NightBackground />
+        <div className="flex min-h-screen items-center justify-center"><Firefly mood="thinking" size={120} /></div>
+      </main>
+    )
+  }
 
   const progressPercent = Math.min((dailyXp / dailyGoalXp) * 100, 100)
-  const circumference = 2 * Math.PI * 40 // radius 40
-  const strokeDashoffset = circumference - (progressPercent / 100) * circumference
-  const CurrentMode = modeConfig[preferredMode]
+  const mode = MODE_META[preferredMode]
+  const ModeIcon = mode.Icon
+  const tier = GLOW_TIERS[glowTier] || GLOW_TIERS.Dim
+  const tierProgress = glowTier === 'Brilliant' ? 100 : Math.round((activeDays / (activeDays + glowNext)) * 100)
 
   return (
-    <main className="min-h-screen bg-zinc-950 text-white p-6 md:p-8">
-      <div className="max-w-4xl mx-auto">
-        <div className="flex items-center justify-between mb-8">
-          <h1 className="text-2xl md:text-3xl font-bold tracking-tight">ecla</h1>
+    <main className="min-h-screen font-body">
+      <style>{`
+        @keyframes combo-pop { 0% { transform: scale(1); } 50% { transform: scale(1.15); } 100% { transform: scale(1); } }
+        .combo-pop { animation: combo-pop .5s ease-out; }
+        @keyframes dome-glow { 0%,100% { opacity:.5; } 50% { opacity:.9; } }
+        .dome-glow { animation: dome-glow 3s ease-in-out infinite; }
+      `}</style>
+
+      <NightBackground />
+      <ModeAmbience mode={preferredMode} /> {/*Changes screen atmosphere based on mode */}
+
+      {/* Top bar */}
+      <header className="sticky top-0 z-40 backdrop-blur-md bg-night-950/70 border-b border-white/5">
+        <div className="mx-auto max-w-3xl px-4 h-16 flex items-center justify-between">
+          <div className="flex items-center gap-2">
+            <div className="h-7 w-7 rounded-lg bg-glow flex items-center justify-center"><Sparkles className="h-3.5 w-3.5 text-night-900" /></div>
+            <span className="font-display text-lg font-bold text-cream">Ecla</span>
+          </div>
           <UserButton />
         </div>
+      </header>
 
-        {/* Stats Row: Streak & Daily Goal */}
-        <div className="grid grid-cols-2 gap-4 mb-8">
-          <div className="bg-zinc-900 border border-zinc-800 rounded-2xl p-5 flex items-center gap-4">
-            <div className="p-3 rounded-xl bg-orange-500/10">
-              <Flame className="w-6 h-6 text-orange-400" />
+      <div className="mx-auto max-w-3xl px-4 py-8 space-y-6">
+
+        {/* Hero: Firefly Dome + Greeting + Combo */}
+        <section className="relative rounded-card border border-white/5 bg-night-800/60 p-6 md:p-8 backdrop-blur-sm overflow-hidden shadow-glow-sm">
+          <div className="pointer-events-none absolute -top-20 left-1/2 -translate-x-1/2 h-48 w-48 rounded-full dome-glow" style={{ background: `radial-gradient(circle, ${glowColors.halo}40 0%, transparent 70%)`, filter: 'blur(10px)' }} />
+
+          <div className="relative flex flex-col items-center text-center mb-6">
+            {/* Tappable firefly wearing the equipped glow */}
+            <div className="mb-3 cursor-pointer" onClick={() => setShowWardrobe(true)} title="Glow Collection">
+              <Firefly mood={tier.mood} size={130} glow={glowColors} />
             </div>
-            <div>
-              <p className="text-zinc-500 text-xs uppercase tracking-wider">Streak</p>
-              <p className="text-2xl font-bold">{streakDays} <span className="text-sm text-zinc-500 font-normal">days</span></p>
-            </div>
+            <h1 className="font-display text-2xl md:text-3xl font-bold text-cream mb-1 flex items-center justify-center gap-2">
+              {getGreeting()} <Moon className="h-6 w-6 text-glow" />
+            </h1>
+            <p className="text-sm text-cream/50">Ecla missed you.</p>
           </div>
 
-          <div className="bg-zinc-900 border border-zinc-800 rounded-2xl p-5 flex items-center justify-between">
-            <div>
-              <p className="text-zinc-500 text-xs uppercase tracking-wider mb-1">Daily Goal</p>
-              <p className="text-2xl font-bold">{dailyXp} <span className="text-sm text-zinc-500 font-normal">/ {dailyGoalXp} XP</span></p>
+          {comboStreak >= 3 && (
+            <div className="combo-pop mb-4 inline-flex items-center gap-2 rounded-full border border-glow/40 bg-glow/10 px-4 py-2 text-sm font-bold text-glow">
+              <Zap className="h-4 w-4" />
+              <span>{comboStreak}-answer streak — bonus XP incoming!</span>
             </div>
-            <div className="relative w-16 h-16">
-              <svg className="w-full h-full transform -rotate-90">
-                <circle cx="32" cy="32" r="28" stroke="currentColor" strokeWidth="4" fill="transparent" className="text-zinc-800" />
-                <circle cx="32" cy="32" r="28" stroke="currentColor" strokeWidth="4" fill="transparent"
-                  strokeDasharray={2 * Math.PI * 28}
-                  strokeDashoffset={2 * Math.PI * 28 * (1 - progressPercent / 100)}
+          )}
+
+          <div className="grid grid-cols-2 gap-3">
+            <div className="rounded-xl border border-white/5 bg-night-900/60 p-4">
+              <div className="flex items-center gap-2 mb-2">
+                <Flame className="h-5 w-5 text-glow" />
+                <span className="text-xs font-bold uppercase tracking-wider text-cream/40">Day Streak</span>
+              </div>
+              <p className="font-display text-3xl font-black text-glow">{streakDays}</p>
+              <p className="text-xs text-cream/50">{streakDays === 1 ? 'day running' : 'days running'}</p>
+            </div>
+
+            <div className="rounded-xl border border-white/5 bg-night-900/60 p-4">
+              <div className="flex items-center gap-2 mb-2">
+                <Sparkles className="h-5 w-5" style={{ color: tier.color }} />
+                <span className="text-xs font-bold uppercase tracking-wider text-cream/40">Glow</span>
+              </div>
+              <p className="font-display text-2xl font-black" style={{ color: tier.color }}>{glowTier}</p>
+              <p className="text-xs text-cream/50">
+                {glowTier === 'Brilliant' ? (
+                  <span className="flex items-center gap-1">
+                    Max tier <Sparkles className="h-3 w-3 inline" />
+                  </span>
+                ) : (
+                  `${glowNext} days to next tier`
+                )}
+              </p>
+            </div>
+          </div>
+        </section>
+
+        {/* Daily XP Goal Ring */}
+        <section className="rounded-card border border-white/5 bg-night-800/60 p-6 backdrop-blur-sm shadow-glow-sm">
+          <div className="flex items-center justify-between mb-4">
+            <div>
+              <p className="text-xs font-bold uppercase tracking-wider text-cream/40 mb-1">Today's Goal</p>
+              <p className="font-display text-2xl font-bold text-cream">{dailyXp} <span className="text-cream/40 text-lg">/ {dailyGoalXp} XP</span></p>
+            </div>
+            <div className="relative h-20 w-20">
+              <svg className="h-full w-full -rotate-90" viewBox="0 0 100 100">
+                <circle cx="50" cy="50" r="42" stroke="rgba(244,241,234,0.1)" strokeWidth="8" fill="transparent" />
+                <circle
+                  cx="50" cy="50" r="42"
+                  stroke={tier.color} strokeWidth="8" fill="transparent"
+                  strokeDasharray={`${2 * Math.PI * 42}`}
+                  strokeDashoffset={`${2 * Math.PI * 42 * (1 - progressPercent / 100)}`}
                   strokeLinecap="round"
-                  className="text-emerald-500 transition-all duration-500"
+                  style={{ filter: `drop-shadow(0 0 6px ${tier.color})`, transition: 'stroke-dashoffset .6s ease-out' }}
                 />
               </svg>
-              <Target className="w-5 h-5 text-emerald-500 absolute top-1/2 left-1/2 transform -translate-x-1/2 -translate-y-1/2" />
+              <div className="absolute inset-0 flex items-center justify-center">
+                <Target className="h-5 w-5 text-cream/70" />
+              </div>
             </div>
           </div>
-        </div>
+          {progressPercent >= 100 ? (
+            <p className="text-sm font-semibold text-leaf flex items-center gap-2"><CheckCircle2 className="h-4 w-4" /> Daily goal complete — Ecla is shining!</p>
+          ) : (
+            <p className="text-sm text-cream/50">{dailyGoalXp - dailyXp} XP left today. One more lesson?</p>
+          )}
+        </section>
 
-        {/* Adaptive Difficulty Intervention */}
-        {reviewRequired && nextLesson && (
-          <div className="bg-amber-500/10 border border-amber-500/30 rounded-2xl p-6 mb-6 animate-in fade-in slide-in-from-top-4 duration-500">
-            <div className="flex items-start gap-4">
-              <div className="p-2 rounded-lg bg-amber-500/20">
-                <AlertTriangle className="w-6 h-6 text-amber-400" />
-              </div>
-              <div className="flex-1">
-                <h3 className="font-bold text-lg text-amber-100">Review Required</h3>
-                <p className="text-amber-200/80 text-sm mt-1 mb-4">
-                  You scored {accuracy}% on <span className="font-semibold">{nextLesson.conceptName}</span>.
-                  Let's solidify this before moving on. Try reviewing it in a different mode for a fresh perspective!
-                </p>
+        {/* Mode switcher */}
+        <section className="rounded-card border border-white/5 bg-night-800/60 p-6 backdrop-blur-sm shadow-glow-sm">
+          <div className="flex items-center justify-between mb-4">
+            <p className="text-xs font-bold uppercase tracking-wider text-cream/40">Learning Mode</p>
+            <button onClick={() => setShowModeSwitcher(true)} className="text-xs font-semibold text-cream/60 hover:text-cream transition-colors">Switch →</button>
+          </div>
+          <div className="no-scrollbar flex gap-2 overflow-x-auto pb-1">
+            {(Object.keys(MODE_META) as ModeId[]).map(id => {
+              const m = MODE_META[id]
+              const MIcon = m.Icon
+              const active = id === preferredMode
+              return (
                 <button
-                  onClick={() => router.push(`/learn/${nextLesson.conceptId}`)}
-                  className="px-5 py-2 bg-amber-500 hover:bg-amber-400 text-black rounded-lg font-semibold transition-colors flex items-center gap-2 text-sm"
+                  key={id}
+                  onClick={() => switchMode(id)}
+                  className={`flex flex-shrink-0 items-center gap-2.5 rounded-full border px-4 py-2 transition-all ${active ? `${m.border} ${m.bg}/15 ${m.glow}` : 'border-white/10 bg-night-900/60 hover:border-white/20'}`}
                 >
-                  <RefreshCw className="w-4 h-4" /> Review Concept
+                  <MIcon className={`h-4 w-4 ${active ? m.text : 'text-cream/70'}`} />
+                  <span className={`text-sm font-semibold ${active ? m.text : 'text-cream/70'}`}>{m.label}</span>
+                  <span className={`h-1.5 w-1.5 rounded-full ${m.dot}`} />
                 </button>
-              </div>
-            </div>
+              )
+            })}
           </div>
-        )}
+        </section>
 
-        {/* Mode Switcher */}
-        <div className="mb-4 flex items-center justify-between">
-          <p className="text-zinc-400 text-sm">Continue Learning</p>
-          <div className="relative">
-            <button
-              onClick={() => setShowModeMenu(!showModeMenu)}
-              className="flex items-center gap-2 text-sm font-medium text-emerald-400 hover:text-emerald-300 transition-colors bg-zinc-900 border border-zinc-800 px-3 py-1.5 rounded-lg"
-            >
-              <CurrentMode.icon className={`w-4 h-4 ${CurrentMode.color}`} />
-              {CurrentMode.label} Mode
-              <ChevronDown className="w-3 h-3" />
-            </button>
-
-            {showModeMenu && (
-              <div className="absolute right-0 mt-2 w-48 bg-zinc-900 border border-zinc-800 rounded-xl shadow-xl z-10 py-1 animate-in fade-in zoom-in-95 duration-200">
-                {Object.entries(modeConfig).map(([key, config]) => {
-                  const Icon = config.icon
-                  return (
-                    <button
-                      key={key}
-                      onClick={() => switchMode(key as keyof typeof modeConfig)}
-                      className={`w-full px-4 py-2 flex items-center gap-3 hover:bg-zinc-800 transition-colors ${preferredMode === key ? 'bg-zinc-800' : ''}`}
-                    >
-                      <Icon className={`w-4 h-4 ${config.color}`} />
-                      <span className="text-sm">{config.label}</span>
-                    </button>
-                  )
-                })}
+        {/* Continue Learning */}
+        <section className="rounded-card border border-white/5 bg-night-800/60 p-6 backdrop-blur-sm shadow-glow-sm">
+          <p className="text-xs font-bold uppercase tracking-wider text-cream/40 mb-4">Continue Learning</p>
+          {nextLesson ? (
+            <div className="relative">
+              <div className="flex items-start gap-4">
+                <div className="relative flex-shrink-0">
+                  <div className="pointer-events-none absolute -top-12 left-1/2 -translate-x-1/2 z-10">
+                    <Firefly mood="idle" size={56} glow={glowColors} />
+                  </div>
+                  <div className={`flex h-16 w-16 items-center justify-center rounded-2xl border-2 ${mode.border} ${mode.bg}/15 ${mode.glow}`}>
+                    <ModeIcon className={`h-7 w-7 ${mode.text}`} />
+                  </div>
+                </div>
+                <div className="flex-1 min-w-0 pt-1">
+                  <p className={`text-xs font-bold uppercase tracking-wider ${mode.text} mb-1`}>{mode.label} Mode · +{nextLesson.xpReward} XP</p>
+                  <h3 className="font-display text-lg font-bold text-cream truncate">{nextLesson.conceptName}</h3>
+                  {nextLesson.variant?.storyBeat && <p className="mt-1 text-xs text-cream/50 italic truncate">&ldquo;{nextLesson.variant.storyBeat}&rdquo;</p>}
+                  {nextLesson.variant?.culturalRef && <p className="mt-1 text-xs text-cream/50 italic truncate">&ldquo;{nextLesson.variant.culturalRef}&rdquo;</p>}
+                  {nextLesson.variant?.formalPhrase && <p className="mt-1 text-xs text-cream/50 italic truncate">&ldquo;{nextLesson.variant.formalPhrase}&rdquo;</p>}
+                </div>
               </div>
-            )}
-          </div>
-        </div>
-
-        {/* Quick Actions */}
-        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 mb-6">
-          <Link
-            href="/review"
-            className="bg-zinc-900 border border-zinc-800 hover:border-emerald-500/50 rounded-2xl p-5 flex items-center gap-4 transition-all group"
-          >
-            <div className="p-3 rounded-xl bg-purple-500/10 group-hover:bg-purple-500/20 transition-colors">
-              <RotateCcw className="w-6 h-6 text-purple-400" />
-            </div>
-            <div>
-              <p className="font-semibold">Review Flashcards</p>
-              <p className="text-sm text-zinc-500">Spaced repetition</p>
-            </div>
-          </Link>
-
-          <Link
-            href="/course"
-            className="bg-zinc-900 border border-zinc-800 hover:border-emerald-500/50 rounded-2xl p-5 flex items-center gap-4 transition-all group"
-          >
-            <div className="p-3 rounded-xl bg-blue-500/10 group-hover:bg-blue-500/20 transition-colors">
-              <BookOpen className="w-6 h-6 text-blue-400" />
-            </div>
-            <div>
-              <p className="font-semibold">Course Map</p>
-              <p className="text-sm text-zinc-500">View all concepts</p>
-            </div>
-          </Link>
-          <Link
-            href="/chat"
-            className="bg-zinc-900 border border-zinc-800 hover:border-emerald-500/50 rounded-2xl p-5 flex items-center gap-4 transition-all group"
-          >
-            <div className="p-3 rounded-xl bg-emerald-500/10 group-hover:bg-emerald-500/20 transition-colors">
-              <Sparkles className="w-6 h-6 text-emerald-400" />
-            </div>
-            <div>
-              <p className="font-semibold">AI Tutor</p>
-              <p className="text-sm text-zinc-500">Chat in Spanish</p>
-            </div>
-          </Link>
-        </div>
-
-        {/* Next Lesson Card */}
-        <div className="bg-zinc-900 border border-zinc-800 rounded-2xl p-6 mb-6">
-          {loadingLesson ? (
-            <div className="flex items-center gap-3 py-8 justify-center">
-              <Loader2 className="w-5 h-5 text-zinc-500 animate-spin" />
-            </div>
-          ) : nextLesson ? (
-            <div>
-              <h2 className="text-xl font-semibold mb-2">{nextLesson.conceptName}</h2>
-
-              {nextLesson.variant.storyBeat && <p className="text-zinc-300 italic mb-4 text-sm">&ldquo;{nextLesson.variant.storyBeat}&rdquo;</p>}
-              {nextLesson.variant.culturalRef && <p className="text-zinc-300 italic mb-4 text-sm">&ldquo;{nextLesson.variant.culturalRef}&rdquo;</p>}
-              {nextLesson.variant.formalPhrase && <p className="text-zinc-300 italic mb-4 text-sm">&ldquo;{nextLesson.variant.formalPhrase}&rdquo;</p>}
-
               <button
-                onClick={() => router.push(`/learn/${nextLesson.conceptId}`)}
-                className="mt-2 px-6 py-3 bg-emerald-600 hover:bg-emerald-500 rounded-xl font-semibold transition-colors flex items-center gap-2"
+                onClick={() => router.push(`/learn/${nextLesson.conceptId}?mode=${preferredMode}`)}
+                className={`mt-5 w-full py-3.5 rounded-xl ${mode.bg} ${mode.text} font-display font-bold transition-all hover:brightness-110 active:scale-[0.98] flex items-center justify-center gap-2 ${mode.glow}`}
               >
-                Start Lesson <ArrowRight className="w-4 h-4" />
+                Start Lesson <ArrowRight className="h-4 w-4" />
               </button>
             </div>
           ) : (
             <div className="py-8 text-center">
-              <p className="text-zinc-500">No lessons available.</p>
+              <Firefly mood="proud" size={80} className="mx-auto mb-3" glow={glowColors} />
+              <p className="text-cream/60">You've finished everything! New lessons coming soon.</p>
             </div>
           )}
-        </div>
+        </section>
+
+        {/* Quick Actions Grid */}
+        <section className="grid grid-cols-2 md:grid-cols-3 gap-3">
+          <Link href="/review" className="group rounded-card border border-white/5 bg-night-800/60 p-5 backdrop-blur-sm hover:border-immersion/50 hover:bg-night-800 transition-all">
+            <div className="h-11 w-11 rounded-xl bg-immersion/10 flex items-center justify-center mb-3 group-hover:bg-immersion/20 transition-colors">
+              <RotateCcw className="h-5 w-5 text-immersion" />
+            </div>
+            <p className="font-display font-bold text-cream">Review</p>
+            <p className="text-xs text-cream/50 mt-0.5">Spaced repetition</p>
+          </Link>
+          <Link href="/course" className="group rounded-card border border-white/5 bg-night-800/60 p-5 backdrop-blur-sm hover:border-glow/50 hover:bg-night-800 transition-all">
+            <div className="h-11 w-11 rounded-xl bg-glow/10 flex items-center justify-center mb-3 group-hover:bg-glow/20 transition-colors">
+              <Map className="h-5 w-5 text-glow" />
+            </div>
+            <p className="font-display font-bold text-cream">The Path</p>
+            <p className="text-xs text-cream/50 mt-0.5">Full course map</p>
+          </Link>
+          <Link href="/chat" className="group rounded-card border border-white/5 bg-night-800/60 p-5 backdrop-blur-sm hover:border-pro/50 hover:bg-night-800 transition-all col-span-2 md:col-span-1">
+            <div className="h-11 w-11 rounded-xl bg-pro/10 flex items-center justify-center mb-3 group-hover:bg-pro/20 transition-colors">
+              <MessageCircle className="h-5 w-5 text-pro" />
+            </div>
+            <p className="font-display font-bold text-cream">AI Tutor</p>
+            <p className="text-xs text-cream/50 mt-0.5">Chat in Spanish</p>
+          </Link>
+        </section>
+
+        {/* Glow Meter progress */}
+        <section className="rounded-card border border-white/5 bg-night-800/60 p-6 backdrop-blur-sm shadow-glow-sm">
+          <div className="flex items-center justify-between mb-3">
+            <div>
+              <p className="text-xs font-bold uppercase tracking-wider text-cream/40 mb-1">Ecla's Glow Meter</p>
+              <p className="font-display text-lg font-bold text-cream">
+                <span style={{ color: tier.color }}>{glowTier}</span>
+                {glowTier !== 'Brilliant' && <span className="text-cream/40"> · {activeDays}/30 active days</span>}
+              </p>
+            </div>
+            <div className="flex items-center gap-3">
+              {/* Collection Chip */}
+              <button
+                onClick={() => setShowWardrobe(true)}
+                className="flex items-center gap-1.5 rounded-full border border-white/10 bg-night-900/60 px-3 py-1.5 text-xs font-bold text-cream/70 hover:text-cream hover:border-white/25 transition-all"
+              >
+                <Palette className="h-3.5 w-3.5" style={{ color: glowColors.halo }} />
+                Collection · {unlockedCosmetics.length}/{Object.keys(COSMETICS).length}
+              </button>
+              <div className="flex gap-1">
+                {['Dim', 'Warm', 'Radiant', 'Brilliant'].map(t => (
+                  <div
+                    key={t}
+                    className={`h-2.5 w-2.5 rounded-full ${GLOW_TIERS[t].color === tier.color ? '' : 'opacity-30'}`}
+                    style={{ background: GLOW_TIERS[t].color }}
+                    title={t}
+                  />
+                ))}
+              </div>
+            </div>
+          </div>
+          {glowTier !== 'Brilliant' && (
+            <div className="relative h-2 rounded-full bg-white/5 overflow-hidden">
+              <div className="h-full rounded-full transition-all duration-700" style={{ width: `${tierProgress}%`, background: `linear-gradient(90deg, ${tier.color}, #FFF6CF)` }} />
+            </div>
+          )}
+          <p className="mt-3 text-xs text-cream/50">
+            {glowTier === 'Brilliant'
+              ? 'Maximum tier reached. Ecla shines brightest for you.'
+              : `${glowNext} more active day${glowNext === 1 ? '' : 's'} to evolve to ${getTierAfter(glowTier)}. Consistency compounds.`}
+          </p>
+        </section>
       </div>
+
+      {/* Wardrobe Modal */}
+      {showWardrobe && (
+        <div className="fixed inset-0 z-50 flex items-end justify-center bg-black/60 backdrop-blur-sm sm:items-center sm:p-4" onClick={() => setShowWardrobe(false)}>
+          <div className="w-full max-w-md rounded-t-3xl border border-white/10 bg-night-800 p-6 shadow-glow-md sm:rounded-card sm:p-8" onClick={e => e.stopPropagation()}>
+            <div className="mb-5 flex items-center justify-between">
+              <div>
+                <h3 className="font-display text-xl font-bold text-cream">Glow Collection</h3>
+                <p className="text-xs text-cream/50 mt-0.5">Ecla's light, your style.</p>
+              </div>
+              <button onClick={() => setShowWardrobe(false)} className="rounded-lg p-1.5 text-cream/50 hover:bg-night-700 hover:text-cream"><X className="h-5 w-5" /></button>
+            </div>
+            <div className="grid grid-cols-2 gap-3">
+              {(Object.values(COSMETICS)).map(c => {
+                const unlocked = unlockedCosmetics.includes(c.id)
+                const equipped = equippedCosmetic === c.id
+                return (
+                  <button
+                    key={c.id}
+                    disabled={!unlocked}
+                    onClick={() => { equipCosmetic(c.id); setShowWardrobe(false); }}
+                    className={`relative rounded-xl border p-4 text-left transition-all ${equipped ? 'border-white/30 bg-night-900' : unlocked ? 'border-white/10 bg-night-900/60 hover:border-white/25' : 'border-white/5 bg-night-900/30 opacity-60'
+                      }`}
+                  >
+                    <div
+                      className="mb-3 h-12 w-12 rounded-full"
+                      style={{
+                        background: `radial-gradient(circle at 40% 35%, ${c.colors.core} 0%, ${c.colors.mid} 50%, ${c.colors.deep} 100%)`,
+                        boxShadow: unlocked ? `0 0 18px ${c.colors.halo}66` : 'none',
+                        filter: unlocked ? 'none' : 'grayscale(0.8) brightness(0.5)',
+                      }}
+                    />
+                    <p className="font-display text-sm font-bold text-cream">{c.name}</p>
+                    {equipped ? (
+                      <p className="text-xs font-semibold text-glow mt-0.5">Equipped</p>
+                    ) : unlocked ? (
+                      <p className="text-xs text-cream/50 mt-0.5">Tap to equip</p>
+                    ) : (
+                      <p className="text-xs text-cream/40 mt-0.5 flex items-center gap-1"><Lock className="h-3 w-3" /> {c.unlockText}</p>
+                    )}
+                  </button>
+                )
+              })}
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Unlock Celebration Modal */}
+      {unlockCelebration && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 backdrop-blur-sm p-4">
+          <div className="w-full max-w-sm rounded-card border border-white/10 bg-night-800 p-8 text-center shadow-glow-md">
+            <div className="mb-4 flex justify-center">
+              <Firefly mood="proud" size={120} glow={COSMETICS[unlockCelebration].colors} />
+            </div>
+            <p className="text-xs font-bold uppercase tracking-wider text-cream/40 mb-1">New Glow Unlocked</p>
+            <h3 className="font-display text-2xl font-bold mb-2" style={{ color: COSMETICS[unlockCelebration].colors.halo }}>
+              {COSMETICS[unlockCelebration].name}
+            </h3>
+            <p className="text-sm text-cream/60 mb-6">{COSMETICS[unlockCelebration].desc}</p>
+            <div className="flex gap-3">
+              <button
+                onClick={() => { equipCosmetic(unlockCelebration); setUnlockCelebration(null) }}
+                className="flex-1 rounded-xl py-3 font-bold text-night-900 transition-all hover:brightness-110"
+                style={{ background: COSMETICS[unlockCelebration].colors.halo }}
+              >
+                Equip Now
+              </button>
+              <button onClick={() => setUnlockCelebration(null)} className="flex-1 rounded-xl border border-white/10 bg-night-900/60 py-3 font-semibold text-cream/70 hover:text-cream">
+                Later
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </main>
   )
+}
+
+function getTierAfter(tier: string): string {
+  const order = ['Dim', 'Warm', 'Radiant', 'Brilliant']
+  const idx = order.indexOf(tier)
+  return order[Math.min(idx + 1, order.length - 1)]
 }

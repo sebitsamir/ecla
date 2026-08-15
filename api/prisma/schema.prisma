@@ -29,6 +29,8 @@ model User {
   preferredMode       DeliveryMode @default(DRILL)
   dailyGoalXp         Int          @default(50)
   xpTotal             Int          @default(0)
+  unlockedCosmetics   String[]     @default(["gold"])
+  equippedCosmetic    String       @default("gold")
   streakDays          Int          @default(0)
   lastActiveAt        DateTime?
   isPro               Boolean      @default(false)
