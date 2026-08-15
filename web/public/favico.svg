@@ -1,0 +1,30 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512">
+    <defs>
+        <radialGradient id="bg" cx="50%" cy="40%" r="80%">
+            <stop offset="0%" stop-color="#13294B"/><stop offset="55%" stop-color="#0B1C38"/><stop offset="100%" stop-color="#071224"/>
+        </radialGradient>
+        <linearGradient id="m" x1="0" y1="0" x2="1" y2="1">
+            <stop offset="0%" stop-color="#FFFDF4"/><stop offset="60%" stop-color="#F1EBD8"/><stop offset="100%" stop-color="#CFC5A9"/>
+        </linearGradient>
+        <radialGradient id="g" cx="50%" cy="50%" r="50%">
+            <stop offset="0%" stop-color="#FFE9A8" stop-opacity=".95"/><stop offset="35%" stop-color="#FFC857" stop-opacity=".5"/><stop offset="100%" stop-color="#FFC857" stop-opacity="0"/>
+        </radialGradient>
+        <linearGradient id="a" x1="0" y1="0" x2="0" y2="1">
+            <stop offset="0%" stop-color="#FFF6CF"/><stop offset="45%" stop-color="#FFD876"/><stop offset="100%" stop-color="#F09D2E"/>
+        </linearGradient>
+        <mask id="cut"><rect width="512" height="512" fill="black"/><circle cx="238" cy="268" r="152" fill="white"/><circle cx="305" cy="225" r="138" fill="black"/></mask>
+    </defs>
+    <rect width="512" height="512" rx="115" fill="url(#bg)"/>
+    <circle cx="96" cy="120" r="4" fill="#F4F1EA" opacity=".5"/>
+    <circle cx="420" cy="96" r="3" fill="#F4F1EA" opacity=".4"/>
+    <rect width="512" height="512" fill="url(#m)" mask="url(#cut)"/>
+    <g transform="translate(300 238) rotate(-28) scale(1.5)">
+    <circle cx="0" cy="26" r="52" fill="url(#g)"/>
+    <path d="M-4-12C-30-20-48-4-44 22-26 20-10 8-3-2Z" fill="#7a5f30"/>
+    <path d="M4-12C30-20 48-4 44 22 26 20 10 8 3-2Z" fill="#7a5f30"/>
+    <ellipse cx="0" cy="-14" rx="14" ry="11" fill="#D9B36A"/>
+    <circle cx="0" cy="-32" r="8.5" fill="#5C4522"/>
+    <path d="M0-2C13 6 15 30 0 48-15 30-13 6 0-2Z" fill="url(#a)"/>
+    <ellipse cx="0" cy="26" rx="6" ry="9" fill="#FFF6CF" opacity=".9"/>
+</g>
+</svg>

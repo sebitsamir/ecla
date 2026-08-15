@@ -5,41 +5,115 @@ import { useRouter } from 'next/navigation'
 import { useAuth, SignInButton, SignUpButton } from '@clerk/nextjs'
 import {
     BookOpen, Zap, Music, GraduationCap,
-    CheckCircle2, ArrowRight, Globe, Sparkles, ArrowUpRight
+    CheckCircle2, ArrowRight, Sparkles, ArrowUpRight,
+    Heart, Flame, Shield
 } from 'lucide-react'
+import NightBackground from '@/components/NightBackground'
+import Moon from '@/components/Moon'
+import Firefly from '@/components/Firefly'
+import Link from 'next/link'
+import { LogoMark } from '@/components/BrandLogo'
+import { Logo } from '@/components/BrandLogo'
 
 export default function LandingPage() {
     const router = useRouter()
     const { isSignedIn } = useAuth()
 
-    // Redirect authenticated users straight to the dashboard
     useEffect(() => {
         if (isSignedIn) {
             router.push('/dashboard')
         }
     }, [isSignedIn, router])
 
+    const modes = [
+        {
+            id: 'STORY',
+            label: 'Story',
+            tagline: 'Learn through narrative',
+            desc: 'Master vocabulary and grammar naturally through engaging, bite-sized stories. Context makes it stick.',
+            Icon: BookOpen,
+            accent: '#FFB45A',
+            bgClass: 'bg-story',
+        },
+        {
+            id: 'DRILL',
+            label: 'Drill',
+            tagline: 'Rapid-fire practice',
+            desc: 'Fast-paced, focused repetition to build muscle memory. Perfect for quick 5-minute sessions.',
+            Icon: Zap,
+            accent: '#4DD8E6',
+            bgClass: 'bg-drill',
+        },
+        {
+            id: 'IMMERSION',
+            label: 'Immersion',
+            tagline: 'Culture & native speech',
+            desc: 'Understand the idioms, humor, and cultural context that textbooks leave out.',
+            Icon: Music,
+            accent: '#B98CF0',
+            bgClass: 'bg-immersion',
+        },
+        {
+            id: 'PROFESSIONAL',
+            label: 'Professional',
+            tagline: 'Formal & workplace',
+            desc: 'Master business vocabulary, workplace etiquette, and speak with confidence in any career setting.',
+            Icon: GraduationCap,
+            accent: '#7FA6FF',
+            bgClass: 'bg-pro',
+        },
+    ]
+
+    const differentiators = [
+        {
+            Icon: Heart,
+            title: 'Warmth, not guilt',
+            desc: 'No shaming notifications. No streak resets that make you quit. Ecla rewards consistency with light, not punishment.',
+        },
+        {
+            Icon: Flame,
+            title: 'Four ways to learn',
+            desc: 'Switch between Story, Drill, Immersion, and Professional modes based on your mood, goals, or the time of day.',
+        },
+        {
+            Icon: Shield,
+            title: 'Your light, your style',
+            desc: 'Unlock glow colors as you grow. Your firefly evolves with you — from Classic Gold to Violet Dream.',
+        },
+    ]
+
     return (
-        <main className="min-h-screen bg-zinc-950 text-zinc-50 selection:bg-emerald-500/20">
-            {/* Crisp, Minimal Navigation */}
-            <header className="sticky top-0 z-50 bg-zinc-950/90 backdrop-blur-md border-b border-zinc-800">
-                <div className="max-w-6xl mx-auto px-6 h-16 flex items-center justify-between">
-                    <div className="flex items-center gap-3">
-                        <div className="w-8 h-8 rounded-lg bg-emerald-600 flex items-center justify-center">
-                            <Sparkles className="w-4 h-4 text-white" />
-                        </div>
-                        <span className="text-lg font-bold tracking-tight text-white">ECLA</span>
+        <main className="min-h-screen font-body text-cream selection:bg-glow/30 selection:text-night-900">
+            <style>{`
+                @keyframes gentle-float { 
+                    0%, 100% { transform: translateY(0); } 
+                    50% { transform: translateY(-8px); } 
+                }
+                .gentle-float { animation: gentle-float 8s ease-in-out infinite; }
+            `}</style>
+
+            <NightBackground />
+            <Moon phase="full" size="xl" position="top-right" />
+
+            {/* Navigation */}
+            <header className="sticky top-0 z-50 bg-night-950/80 backdrop-blur-md border-b border-white/5">
+                <div className="max-w-6xl mx-auto px-4 sm:px-6 h-16 flex items-center justify-between">
+                    <div className="flex items-center gap-2.5">
+                        <Link href="/" className="flex items-center gap-2.5">
+                            <LogoMark size={30} />
+                            <span className="font-display text-lg font-bold text-cream tracking-tight">Ecla</span>
+                        </Link>
                     </div>
 
-                    <div className="flex items-center gap-4">
+                    <div className="flex items-center gap-2 sm:gap-3">
                         <SignInButton mode="modal">
-                            <button className="hidden sm:inline-flex px-4 py-2 text-sm font-medium text-zinc-400 hover:text-white transition-colors">
+                            <button className="inline-flex px-3 sm:px-4 py-2 text-sm font-semibold text-cream/70 hover:text-cream transition-colors">
                                 Sign In
                             </button>
                         </SignInButton>
                         <SignUpButton mode="modal">
-                            <button className="inline-flex items-center gap-2 px-4 py-2 rounded-lg bg-white text-zinc-950 text-sm font-semibold hover:bg-zinc-200 transition-colors active:scale-[0.98]">
-                                Get Started
+                            <button className="inline-flex items-center gap-1 sm:gap-1.5 px-3 sm:px-4 py-2 rounded-full bg-glow text-night-900 text-sm font-bold hover:bg-glow-bright transition-all active:scale-[0.98]">
+                                <span className="sm:inline">Get Started</span>
                                 <ArrowRight className="w-4 h-4" />
                             </button>
                         </SignUpButton>
@@ -47,140 +121,212 @@ export default function LandingPage() {
                 </div>
             </header>
 
-            {/* Hero Section: Strict Typography & High Contrast */}
-            <section className="pt-32 pb-24 border-b border-zinc-800">
-                <div className="max-w-4xl mx-auto px-6 text-center">
-                    <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-zinc-900 border border-zinc-800 text-zinc-300 text-xs font-semibold uppercase tracking-wider mb-8">
-                        <span className="w-1.5 h-1.5 rounded-full bg-emerald-500" />
-                        Now in Exclusive Beta
-                    </div>
+            {/* HERO */}
+            <section className="relative pt-24 sm:pt-32 pb-24 sm:pb-40">
+                <div className="max-w-6xl mx-auto px-6">
+                    <div className="grid lg:grid-cols-2 gap-16 items-center">
+                        {/* Left: Copy */}
+                        <div className="text-center lg:text-left">
+                            <div className="inline-flex items-center gap-2 px-3 py-1.5 rounded-full border border-glow/30 bg-glow/5 mb-8">
+                                <span className="relative flex h-2 w-2">
+                                    <span className="absolute inline-flex h-full w-full rounded-full bg-glow opacity-75 animate-ping" />
+                                    <span className="relative inline-flex rounded-full h-2 w-2 bg-glow" />
+                                </span>
+                                <span className="text-xs font-bold uppercase tracking-wider text-glow">Now in Exclusive Beta</span>
+                            </div>
 
-                    <h1 className="text-5xl sm:text-7xl font-bold tracking-tighter text-white mb-8 leading-[1.1]">
-                        Master a new language, <br className="hidden sm:block" />
-                        <span className="text-zinc-400">your way.</span>
-                    </h1>
+                            <h1 className="font-display text-[clamp(2.5rem,6vw,4rem)] font-black leading-[1.1] tracking-tight mb-6">
+                                Master a language. <br className="hidden sm:block" />
+                                <span className="text-glow">Light the way.</span>
+                            </h1>
 
-                    <p className="text-lg sm:text-xl text-zinc-400 max-w-2xl mx-auto mb-12 leading-relaxed">
-                        Ditch the repetitive, one-size-fits-all drills. ecla adapts to how you learn best with four distinct, context-rich modes designed for real-world fluency.
-                    </p>
+                            <p className="text-lg sm:text-xl text-cream/70 max-w-xl mx-auto lg:mx-0 mb-10 leading-relaxed">
+                                Ditch the guilt-driven streaks and robotic drills. <span className="text-cream font-semibold">Ecla adapts to how you learn</span> — with four distinct modes, a firefly companion, and zero shame.
+                            </p>
 
-                    <div className="flex flex-col sm:flex-row items-center justify-center gap-4">
-                        <SignUpButton mode="modal">
-                            <button className="w-full sm:w-auto inline-flex items-center justify-center gap-2 px-8 py-4 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white font-semibold text-base transition-colors active:scale-[0.98]">
-                                Start Learning for Free
-                                <ArrowRight className="w-5 h-5" />
-                            </button>
-                        </SignUpButton>
-                        <button
-                            onClick={() => document.getElementById('modes')?.scrollIntoView({ behavior: 'smooth' })}
-                            className="w-full sm:w-auto inline-flex items-center justify-center gap-2 px-8 py-4 rounded-xl bg-zinc-900 border border-zinc-800 text-zinc-300 font-semibold text-base hover:bg-zinc-800 hover:text-white transition-colors active:scale-[0.98]"
-                        >
-                            See How It Works
-                        </button>
-                    </div>
+                            <div className="flex flex-col sm:flex-row items-stretch sm:items-center justify-center lg:justify-start gap-3">
+                                <SignUpButton mode="modal">
+                                    <button className="w-full sm:w-auto inline-flex items-center justify-center gap-2 px-8 py-4 rounded-xl bg-glow text-night-900 font-bold text-base hover:bg-glow-bright transition-all active:scale-[0.98] shadow-glow-sm">
+                                        Start Learning Free
+                                        <ArrowRight className="w-5 h-5" />
+                                    </button>
+                                </SignUpButton>
+                                <button
+                                    onClick={() => document.getElementById('modes')?.scrollIntoView({ behavior: 'smooth' })}
+                                    className="w-full sm:w-auto inline-flex items-center justify-center gap-2 px-8 py-4 rounded-xl border border-white/15 bg-night-800/60 text-cream font-semibold text-base hover:bg-night-800 hover:border-white/25 transition-all active:scale-[0.98] backdrop-blur-sm"
+                                >
+                                    See How It Works
+                                </button>
+                            </div>
 
-                    {/* Clean Social Proof */}
-                    <div className="mt-16 flex flex-wrap items-center justify-center gap-x-8 gap-y-4 text-sm text-zinc-500 font-medium">
-                        <div className="flex items-center gap-2">
-                            <CheckCircle2 className="w-4 h-4 text-emerald-500" />
-                            <span>No credit card required</span>
+                            <div className="mt-12 flex flex-wrap items-center justify-center lg:justify-start gap-x-8 gap-y-3 text-sm text-cream/50">
+                                <div className="flex items-center gap-2">
+                                    <CheckCircle2 className="w-4 h-4 text-leaf" />
+                                    <span>No credit card</span>
+                                </div>
+                                <div className="flex items-center gap-2">
+                                    <CheckCircle2 className="w-4 h-4 text-leaf" />
+                                    <span>Adapts to you</span>
+                                </div>
+                                <div className="flex items-center gap-2">
+                                    <CheckCircle2 className="w-4 h-4 text-leaf" />
+                                    <span>Smart Review</span>
+                                </div>
+                            </div>
                         </div>
-                        <div className="flex items-center gap-2">
-                            <CheckCircle2 className="w-4 h-4 text-emerald-500" />
-                            <span>AI-powered context</span>
-                        </div>
-                        <div className="flex items-center gap-2">
-                            <CheckCircle2 className="w-4 h-4 text-emerald-500" />
-                            <span>Spaced repetition</span>
+
+                        {/* Right: Firefly visual */}
+                        <div className="relative flex items-center justify-center lg:justify-end">
+                            <div className="relative">
+                                <div className="absolute inset-0 blur-[100px] opacity-40" style={{ background: 'radial-gradient(circle, #FFC857 0%, transparent 70%)' }} />
+                                <div className="relative gentle-float">
+                                    <Firefly mood="proud" size={320} />
+                                </div>
+                            </div>
                         </div>
                     </div>
                 </div>
             </section>
 
-            {/* The 4 Modes Section: Premium Feature Grid */}
-            <section id="modes" className="py-24 bg-zinc-950">
+            {/* THE ANTIDOTE */}
+            <section className="relative py-24 sm:py-32 border-t border-white/5">
                 <div className="max-w-6xl mx-auto px-6">
-                    <div className="max-w-3xl mb-16">
-                        <h2 className="text-3xl sm:text-4xl font-bold tracking-tight text-white mb-4">
-                            One curriculum. Four ways to learn.
+                    <div className="max-w-2xl mb-16 text-center mx-auto">
+                        <p className="text-sm font-bold uppercase tracking-widest text-glow mb-4">The Antidote</p>
+                        <h2 className="font-display text-3xl sm:text-4xl md:text-5xl font-black tracking-tight text-cream mb-5">
+                            Language learning <br className="sm:hidden" />
+                            <span className="text-cream/50">without the guilt.</span>
                         </h2>
-                        <p className="text-lg text-zinc-400">
-                            Switch between modes instantly based on your mood, goals, or the time of day.
+                        <p className="text-cream/60 text-lg">
+                            No shaming owl. No streak resets that make you quit. Just warmth, consistency, and a light that grows with you.
                         </p>
                     </div>
 
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                        {/* Story Mode */}
-                        <div className="group p-8 rounded-2xl bg-zinc-900/50 border border-zinc-800 hover:border-zinc-700 transition-all duration-300">
-                            <div className="w-12 h-12 rounded-xl bg-blue-500/10 border border-blue-500/20 flex items-center justify-center mb-6">
-                                <BookOpen className="w-6 h-6 text-blue-400" />
+                    <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+                        {differentiators.map((d) => (
+                            <div
+                                key={d.title}
+                                className="rounded-2xl border border-white/5 bg-night-800/50 backdrop-blur-sm p-8 hover:border-glow/30 hover:bg-night-800/80 transition-all duration-300"
+                            >
+                                <div className="h-12 w-12 rounded-xl bg-glow/10 border border-glow/20 flex items-center justify-center mb-6">
+                                    <d.Icon className="h-6 w-6 text-glow" />
+                                </div>
+                                <h3 className="font-display text-xl font-bold text-cream mb-3">{d.title}</h3>
+                                <p className="text-cream/60 leading-relaxed">{d.desc}</p>
                             </div>
-                            <h3 className="text-xl font-bold text-white mb-3">Story Mode</h3>
-                            <p className="text-zinc-400 leading-relaxed mb-6">
-                                Learn vocabulary and grammar naturally through engaging, bite-sized narratives. Context is everything, and stories make it stick.
-                            </p>
-                            <div className="flex items-center gap-1 text-sm font-medium text-blue-400 group-hover:text-blue-300 transition-colors">
-                                Learn more <ArrowUpRight className="w-4 h-4" />
+                        ))}
+                    </div>
+                </div>
+            </section>
+
+            {/* THE 4 MODES */}
+            <section id="modes" className="relative py-24 sm:py-32">
+                <div className="max-w-6xl mx-auto px-6">
+                    <div className="max-w-2xl mb-16">
+                        <p className="text-sm font-bold uppercase tracking-widest text-glow mb-4">Your Journey</p>
+                        <h2 className="font-display text-3xl sm:text-4xl md:text-5xl font-black tracking-tight text-cream mb-5">
+                            One curriculum. <br className="sm:hidden" />
+                            <span className="text-cream/50">Four ways to learn.</span>
+                        </h2>
+                        <p className="text-cream/60 text-lg">
+                            Switch modes instantly based on your mood, goals, or the time of day. The whole experience reshapes.
+                        </p>
+                    </div>
+
+                    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-5">
+                        {modes.map((mode) => (
+                            <div
+                                key={mode.id}
+                                className="group rounded-2xl border border-white/5 bg-night-800/50 backdrop-blur-sm p-6 hover:border-opacity-50 transition-all duration-300"
+                                style={{ ['--mode-accent' as any]: mode.accent }}
+                            >
+                                <div className="relative">
+                                    <div
+                                        className={`h-12 w-12 rounded-xl ${mode.bgClass}/15 border border-current/20 flex items-center justify-center mb-6`}
+                                        style={{ color: mode.accent }}
+                                    >
+                                        <mode.Icon className="h-6 w-6" />
+                                    </div>
+
+                                    <p className="text-xs font-bold uppercase tracking-wider mb-2" style={{ color: mode.accent }}>
+                                        {mode.label} Mode
+                                    </p>
+                                    <h3 className="font-display text-lg font-bold text-cream mb-3">{mode.tagline}</h3>
+                                    <p className="text-cream/60 leading-relaxed text-sm mb-6">{mode.desc}</p>
+
+                                    <div
+                                        className="flex items-center gap-1 text-sm font-semibold"
+                                        style={{ color: mode.accent }}
+                                    >
+                                        Explore <ArrowUpRight className="w-4 h-4" />
+                                    </div>
+                                </div>
+                            </div>
+                        ))}
+                    </div>
+                </div>
+            </section>
+
+            {/* MEET ECLA */}
+            <section className="relative py-24 sm:py-32 border-t border-white/5">
+                <div className="max-w-6xl mx-auto px-6">
+                    <div className="grid lg:grid-cols-2 gap-16 items-center">
+                        {/* Firefly visual */}
+                        <div className="relative flex items-center justify-center order-2 lg:order-1">
+                            <div className="relative">
+                                <div className="absolute inset-0 blur-[120px] opacity-30" style={{ background: 'radial-gradient(circle, #FFC857 0%, transparent 70%)' }} />
+                                <div className="relative">
+                                    <Firefly mood="idle" size={280} />
+                                </div>
                             </div>
                         </div>
 
-                        {/* Drill Mode */}
-                        <div className="group p-8 rounded-2xl bg-zinc-900/50 border border-zinc-800 hover:border-zinc-700 transition-all duration-300">
-                            <div className="w-12 h-12 rounded-xl bg-yellow-500/10 border border-yellow-500/20 flex items-center justify-center mb-6">
-                                <Zap className="w-6 h-6 text-yellow-400" />
-                            </div>
-                            <h3 className="text-xl font-bold text-white mb-3">Drill Mode</h3>
-                            <p className="text-zinc-400 leading-relaxed mb-6">
-                                Fast-paced, focused repetition to build muscle memory. Perfect for quick, 5-minute sessions to reinforce what you've learned.
+                        {/* Copy */}
+                        <div className="order-1 lg:order-2 text-center lg:text-left">
+                            <p className="text-sm font-bold uppercase tracking-widest text-glow mb-4">Meet Ecla</p>
+                            <h2 className="font-display text-3xl sm:text-4xl md:text-5xl font-black tracking-tight text-cream mb-6">
+                                Your firefly <br className="hidden sm:block" />
+                                <span className="text-glow">grows with you.</span>
+                            </h2>
+                            <p className="text-cream/60 text-lg leading-relaxed mb-8">
+                                Ecla isn't just a mascot — she's your companion. She celebrates your wins, dims when you struggle, and evolves her glow as your consistency compounds.
                             </p>
-                            <div className="flex items-center gap-1 text-sm font-medium text-yellow-400 group-hover:text-yellow-300 transition-colors">
-                                Learn more <ArrowUpRight className="w-4 h-4" />
-                            </div>
-                        </div>
-
-                        {/* Immersion Mode */}
-                        <div className="group p-8 rounded-2xl bg-zinc-900/50 border border-zinc-800 hover:border-zinc-700 transition-all duration-300">
-                            <div className="w-12 h-12 rounded-xl bg-purple-500/10 border border-purple-500/20 flex items-center justify-center mb-6">
-                                <Music className="w-6 h-6 text-purple-400" />
-                            </div>
-                            <h3 className="text-xl font-bold text-white mb-3">Immersion Mode</h3>
-                            <p className="text-zinc-400 leading-relaxed mb-6">
-                                Understand the cultural context behind the language. Learn the idioms, humor, and real-world usage that textbooks leave out.
-                            </p>
-                            <div className="flex items-center gap-1 text-sm font-medium text-purple-400 group-hover:text-purple-300 transition-colors">
-                                Learn more <ArrowUpRight className="w-4 h-4" />
-                            </div>
-                        </div>
-
-                        {/* Professional Mode */}
-                        <div className="group p-8 rounded-2xl bg-zinc-900/50 border border-zinc-800 hover:border-zinc-700 transition-all duration-300">
-                            <div className="w-12 h-12 rounded-xl bg-emerald-500/10 border border-emerald-500/20 flex items-center justify-center mb-6">
-                                <GraduationCap className="w-6 h-6 text-emerald-400" />
-                            </div>
-                            <h3 className="text-xl font-bold text-white mb-3">Professional Mode</h3>
-                            <p className="text-zinc-400 leading-relaxed mb-6">
-                                Master formal vocabulary, business etiquette, and professional communication. Speak with confidence in any workplace.
-                            </p>
-                            <div className="flex items-center gap-1 text-sm font-medium text-emerald-400 group-hover:text-emerald-300 transition-colors">
-                                Learn more <ArrowUpRight className="w-4 h-4" />
-                            </div>
+                            <ul className="space-y-4 text-left max-w-md mx-auto lg:mx-0">
+                                {[
+                                    'Perches on your current lesson',
+                                    'Reacts to every answer in real-time',
+                                    'Unlocks new glow colors as you progress',
+                                    'Celebrates your journey, not just streaks',
+                                ].map((item) => (
+                                    <li key={item} className="flex items-start gap-3 text-cream/70">
+                                        <div className="mt-1 h-5 w-5 rounded-full bg-glow/20 border border-glow/30 flex items-center justify-center flex-shrink-0">
+                                            <Sparkles className="h-3 w-3 text-glow" />
+                                        </div>
+                                        <span className="leading-relaxed">{item}</span>
+                                    </li>
+                                ))}
+                            </ul>
                         </div>
                     </div>
                 </div>
             </section>
 
-            {/* Final CTA Section: Clean & Direct */}
-            <section className="py-24 border-t border-zinc-800 bg-zinc-950">
+            {/* FINAL CTA */}
+            <section className="relative py-24 sm:py-32 border-t border-white/5">
                 <div className="max-w-3xl mx-auto px-6 text-center">
-                    <Globe className="w-12 h-12 text-zinc-600 mx-auto mb-8" />
-                    <h2 className="text-3xl sm:text-5xl font-bold tracking-tight text-white mb-6">
-                        Ready to find your fluency?
+                    <div className="relative inline-block mb-10">
+                        <div className="absolute inset-0 blur-[80px] opacity-30" style={{ background: 'radial-gradient(circle, #FFC857 0%, transparent 70%)' }} />
+                        <Firefly mood="proud" size={140} />
+                    </div>
+                    <h2 className="font-display text-3xl sm:text-5xl font-black tracking-tight text-cream mb-6 leading-tight">
+                        Ready to find <br className="sm:hidden" />
+                        <span className="text-glow">your fluency?</span>
                     </h2>
-                    <p className="text-lg text-zinc-400 mb-10 max-w-xl mx-auto">
-                        Join the exclusive Ecla beta today. Shape the future of language learning and get lifetime access to premium features.
+                    <p className="text-cream/60 text-lg mb-12 max-w-xl mx-auto leading-relaxed">
+                        Join the exclusive Ecla beta. Shape the future of language learning and keep your glow forever.
                     </p>
                     <SignUpButton mode="modal">
-                        <button className="inline-flex items-center justify-center gap-2 px-8 py-4 rounded-xl bg-white text-zinc-950 font-bold text-lg hover:bg-zinc-200 transition-colors active:scale-[0.98]">
+                        <button className="inline-flex items-center justify-center gap-2 px-10 py-4 rounded-xl bg-glow text-night-900 font-bold text-lg hover:bg-glow-bright transition-all active:scale-[0.98] shadow-glow-sm">
                             Create Free Account
                             <ArrowRight className="w-5 h-5" />
                         </button>
@@ -188,17 +334,12 @@ export default function LandingPage() {
                 </div>
             </section>
 
-            {/* Minimal Footer */}
-            <footer className="py-8 bg-zinc-950 border-t border-zinc-800">
+            {/* Footer */}
+            <footer className="py-10 border-t border-white/5">
                 <div className="max-w-6xl mx-auto px-6 flex flex-col sm:flex-row items-center justify-between gap-4">
-                    <div className="flex items-center gap-2">
-                        <div className="w-6 h-6 rounded bg-emerald-600 flex items-center justify-center">
-                            <Sparkles className="w-3 h-3 text-white" />
-                        </div>
-                        <span className="text-sm font-semibold text-zinc-300">Ecla</span>
-                    </div>
-                    <p className="text-sm text-zinc-600">
-                        © {new Date().getFullYear()} Ecla Language Learning. All rights reserved.
+                    <Logo className="text-4xl" fireflySize={44} />
+                    <p className="text-sm text-cream/40 text-center sm:text-right">
+                        © {new Date().getFullYear()} Ecla Language Learning. Warmth, not guilt.
                     </p>
                 </div>
             </footer>
