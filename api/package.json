@@ -6,7 +6,6 @@
   "scripts": {
     "test": "echo \"Error: no test specified\" && exit 1",
     "dev": "tsx watch src/server.ts",
-    "dev": "tsx watch src/server.ts",
     "start": "tsx src/server.ts",
     "build": "prisma generate",
     "prisma:migrate": "prisma migrate dev",

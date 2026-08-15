@@ -1,130 +1,203 @@
 'use client'
 
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { useAuth } from '@clerk/nextjs'
-import { ArrowLeft, Loader2, RotateCcw, CheckCircle2 } from 'lucide-react'
+import { ArrowLeft, RotateCcw } from 'lucide-react'
+import NightBackground from '@/components/NightBackground'
+import Firefly from '@/components/Firefly'
+import { useEquippedGlow } from '@/lib/useEquippedGlow'
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL ?? 'http://localhost:4000'
 
-type Card = {
-    id: string
-    word: string
-    translation: string
-}
+type Card = { id: string; word: string; translation: string; progress: any }
 
 export default function ReviewPage() {
     const router = useRouter()
     const { getToken } = useAuth()
+    const glowColors = useEquippedGlow() // gets the user's equipped glow palette
 
-    const [cards, setCards] = useState<Card[]>([])
-    const [currentIndex, setCurrentIndex] = useState(0)
-    const [isFlipped, setIsFlipped] = useState(false)
+    const [queue, setQueue] = useState<Card[]>([])
     const [loading, setLoading] = useState(true)
-    const [sessionComplete, setSessionComplete] = useState(false)
+    const [flipped, setFlipped] = useState(false)
+    const [stats, setStats] = useState({ reviewed: 0, good: 0, agains: 0 })
+    const [mood, setMood] = useState<'idle' | 'proud' | 'dim'>('idle')
+
+    /* Perf refs: one cached token + a sequential save queue (no connection storm) */
+    const tokenRef = useRef<string | null>(null)
+    const saveChain = useRef<Promise<void>>(Promise.resolve())
+    const lastPointer = useRef(0)
+
+    useEffect(() => { fetchDue() }, [getToken])
+
+    async function fetchDue() {
+        try {
+            if (!tokenRef.current) tokenRef.current = await getToken()
+            const res = await fetch(`${API_URL}/api/v1/flashcards/due`, { headers: { Authorization: `Bearer ${tokenRef.current}` } })
+            const data = await res.json()
+            setQueue(data.cards || [])
+        } catch (e) { console.error(e) } finally { setLoading(false) }
+    }
+
+    const card = queue[0]
+    const finished = !loading && !card
+
+    /* Saves run ONE AT A TIME in the background — never block the UI, never storm */
+    const enqueueSave = (vocabId: string, quality: number) => {
+        saveChain.current = saveChain.current.then(async () => {
+            try {
+                if (!tokenRef.current) tokenRef.current = await getToken()
+                const res = await fetch(`${API_URL}/api/v1/flashcards/review`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${tokenRef.current}` },
+                    body: JSON.stringify({ vocabId, quality }),
+                })
+                if (res.status === 401) { // token expired mid-session → refresh once, retry
+                    tokenRef.current = await getToken()
+                    await fetch(`${API_URL}/api/v1/flashcards/review`, {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${tokenRef.current}` },
+                        body: JSON.stringify({ vocabId, quality }),
+                    })
+                }
+            } catch (e) { console.error('review save failed', e) }
+        })
+    }
+
+    const grade = (quality: number) => {
+        if (!card) return
+        const current = card
+        setQueue(q => {
+            const rest = q.slice(1)
+            return quality === 0 ? [...rest, current] : rest
+        })
+        setStats(s => ({
+            reviewed: s.reviewed + 1,
+            good: s.good + (quality >= 3 ? 1 : 0),
+            agains: s.agains + (quality === 0 ? 1 : 0),
+        }))
+        setMood(quality >= 4 ? 'proud' : quality === 3 ? 'idle' : 'dim')
+        setFlipped(false)
+        enqueueSave(current.id, quality)
+    }
+
+    const flip = () => setFlipped(true)
+
+    /* Instant-tap: act on pointer-DOWN (zero tap latency), click only as keyboard fallback */
+    const instant = (fn: () => void) => ({
+        onPointerDown: (e: React.PointerEvent) => {
+            if (e.pointerType === 'mouse' && e.button !== 0) return
+            lastPointer.current = Date.now()
+            fn()
+        },
+        onClick: () => {
+            if (Date.now() - lastPointer.current > 400) fn()
+        },
+    })
 
     useEffect(() => {
-        async function fetchDueCards() {
-            try {
-                const token = await getToken()
-                const res = await fetch(`${API_URL}/api/v1/flashcards/due`, {
-                    headers: { Authorization: `Bearer ${token}` },
-                })
-                const data = await res.json()
-                setCards(data.cards)
-            } catch (e) {
-                console.error(e)
-            } finally {
-                setLoading(false)
-            }
+        const onKey = (e: KeyboardEvent) => {
+            if (loading || finished) return
+            if (!flipped && (e.key === ' ' || e.key === 'Enter')) { e.preventDefault(); flip() }
+            else if (flipped && ['1', '2', '3', '4'].includes(e.key)) grade([0, 3, 4, 5][Number(e.key) - 1])
         }
-        fetchDueCards()
-    }, [getToken])
-
-    const rateCard = async (quality: number) => {
-        const currentCard = cards[currentIndex]
-        try {
-            const token = await getToken()
-            await fetch(`${API_URL}/api/v1/flashcards/review`, {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
-                body: JSON.stringify({ vocabId: currentCard.id, quality }),
-            })
-        } catch (e) {
-            console.error(e)
-        }
-
-        setIsFlipped(false)
-        if (currentIndex < cards.length - 1) {
-            setTimeout(() => setCurrentIndex(i => i + 1), 200)
-        } else {
-            setSessionComplete(true)
-            window.dispatchEvent(new Event('ecla:progress-updated')) // Update dashboard
-        }
-    }
-
-    if (loading) return <main className="min-h-screen bg-zinc-950 flex items-center justify-center"><Loader2 className="w-8 h-8 text-emerald-500 animate-spin" /></main>
-
-    if (cards.length === 0 || sessionComplete) {
-        return (
-            <main className="min-h-screen bg-zinc-950 text-white flex flex-col items-center justify-center p-8">
-                <div className="p-4 rounded-full bg-emerald-500/20 mb-6">
-                    <CheckCircle2 className="w-12 h-12 text-emerald-400" />
-                </div>
-                <h1 className="text-3xl font-bold mb-2">You're all caught up!</h1>
-                <p className="text-zinc-400 mb-8">No flashcards due for review right now.</p>
-                <button onClick={() => router.push('/')} className="px-6 py-3 bg-emerald-600 hover:bg-emerald-500 rounded-xl font-semibold transition-colors">
-                    Back to Dashboard
-                </button>
-            </main>
-        )
-    }
-
-    const currentCard = cards[currentIndex]
+        window.addEventListener('keydown', onKey)
+        return () => window.removeEventListener('keydown', onKey)
+    }, [flipped, loading, finished, queue])
 
     return (
-        <main className="min-h-screen bg-zinc-950 text-white flex flex-col p-6">
-            <header className="flex items-center justify-between mb-8 max-w-2xl mx-auto w-full">
-                <button onClick={() => router.push('/')} className="p-2 hover:bg-zinc-800 rounded-lg transition">
-                    <ArrowLeft className="w-6 h-6 text-zinc-400" />
-                </button>
-                <p className="text-zinc-400 font-medium">{currentIndex + 1} / {cards.length}</p>
+        <main className="min-h-screen font-body">
+            <style>{`
+                @keyframes flip-in { from { opacity: .3; } to { opacity: 1; } }
+                .flip-in { animation: flip-in .12s ease-out; }
+            `}</style>
+            <NightBackground />
+
+            <header className="sticky top-0 z-40 backdrop-blur-md bg-night-950/70 border-b border-white/5">
+                <div className="mx-auto max-w-3xl px-4 h-16 flex items-center justify-between">
+                    <button onClick={() => router.push('/dashboard')} className="flex items-center gap-2 text-cream/60 hover:text-cream transition-colors text-sm font-semibold">
+                        <ArrowLeft className="w-4 h-4" /> Dashboard
+                    </button>
+                    <h1 className="font-display text-xl font-bold text-cream">Review</h1>
+                    <span className="text-xs font-bold text-cream/50">{queue.length} left</span>
+                </div>
             </header>
 
-            <div className="flex-1 flex flex-col items-center justify-center max-w-2xl mx-auto w-full">
-                <div
-                    onClick={() => !isFlipped && setIsFlipped(true)}
-                    className="w-full aspect-[3/2] bg-zinc-900 border border-zinc-800 rounded-3xl shadow-2xl flex flex-col items-center justify-center p-8 cursor-pointer transition-all hover:border-zinc-700 mb-8"
-                >
-                    <p className="text-4xl md:text-5xl font-bold mb-4 text-center">
-                        {isFlipped ? currentCard.translation : currentCard.word}
-                    </p>
-                    {!isFlipped && (
-                        <p className="text-zinc-500 text-sm flex items-center gap-2 mt-4">
-                            <RotateCcw className="w-4 h-4" /> Tap to reveal
-                        </p>
-                    )}
-                </div>
+            <div className="mx-auto max-w-md px-4 py-10">
+                {loading ? (
+                    <div className="flex justify-center py-24"><Firefly mood="thinking" size={120} glow={glowColors} /></div>
+                ) : finished ? (
+                    stats.reviewed === 0 ? (
+                        <div className="text-center py-16">
+                            <div className="flex justify-center mb-6"><Firefly mood="proud" size={140} glow={glowColors} /></div>
+                            <h2 className="font-display text-2xl font-bold text-cream mb-2">All caught up!</h2>
+                            <p className="text-cream/60 mb-8">No cards due right now. Ecla is glowing happily.</p>
+                            <button onClick={() => router.push('/course')} className="w-full py-3.5 rounded-xl bg-glow font-bold text-night-900 hover:bg-glow-bright transition-colors">
+                                Back to the Path
+                            </button>
+                        </div>
+                    ) : (
+                        <div className="text-center py-16">
+                            <div className="flex justify-center mb-6"><Firefly mood="proud" size={140} glow={glowColors} /></div>
+                            <h2 className="font-display text-2xl font-bold text-cream mb-2">Session complete!</h2>
+                            <p className="text-cream/60 mb-8">
+                                {stats.reviewed} reviews · {stats.good} stuck well · {stats.agains} to relearn
+                            </p>
+                            <div className="flex gap-3">
+                                <button onClick={() => { setStats({ reviewed: 0, good: 0, agains: 0 }); setFlipped(false); setLoading(true); fetchDue(); }} className="flex-1 py-3.5 rounded-xl border border-white/10 bg-night-800/60 font-semibold text-cream hover:bg-night-800 transition-colors flex items-center justify-center gap-2">
+                                    <RotateCcw className="w-4 h-4" /> Again
+                                </button>
+                                <button onClick={() => router.push('/dashboard')} className="flex-1 py-3.5 rounded-xl bg-glow font-bold text-night-900 hover:bg-glow-bright transition-colors">
+                                    Done
+                                </button>
+                            </div>
+                        </div>
+                    )
+                ) : (
+                    <>
+                        {/* Flashcard — solid bg, NO backdrop-blur (blur = mobile jank) */}
+                        <button
+                            key={card.id}
+                            {...(!flipped ? instant(flip) : {})}
+                            className={`w-full rounded-card border p-8 md:p-10 text-center shadow-glow-sm flip-in ${flipped ? 'border-immersion/40 bg-night-800' : 'border-white/10 bg-night-800 hover:border-white/25'}`}
+                        >
+                            <p className="text-xs font-bold uppercase tracking-wider text-cream/40 mb-4">{flipped ? 'Translation' : 'Tap to reveal'}</p>
+                            {flipped ? (
+                                <div>
+                                    <p className="font-display text-3xl md:text-4xl font-bold text-cream mb-2">{card.translation}</p>
+                                    <p className="text-cream/50 text-sm">{card.word}</p>
+                                </div>
+                            ) : (
+                                <p className="font-display text-3xl md:text-4xl font-bold text-cream">{card.word}</p>
+                            )}
+                        </button>
 
-                {isFlipped && (
-                    <div className="w-full grid grid-cols-4 gap-3 animate-in fade-in slide-in-from-bottom-4 duration-300">
-                        <button onClick={() => rateCard(1)} className="p-4 bg-rose-500/10 hover:bg-rose-500/20 border border-rose-500/30 rounded-xl transition-colors text-center">
-                            <p className="font-bold text-rose-400">Again</p>
-                            <p className="text-xs text-zinc-500 mt-1">&lt; 1m</p>
-                        </button>
-                        <button onClick={() => rateCard(3)} className="p-4 bg-orange-500/10 hover:bg-orange-500/20 border border-orange-500/30 rounded-xl transition-colors text-center">
-                            <p className="font-bold text-orange-400">Hard</p>
-                            <p className="text-xs text-zinc-500 mt-1">1d</p>
-                        </button>
-                        <button onClick={() => rateCard(4)} className="p-4 bg-emerald-500/10 hover:bg-emerald-500/20 border border-emerald-500/30 rounded-xl transition-colors text-center">
-                            <p className="font-bold text-emerald-400">Good</p>
-                            <p className="text-xs text-zinc-500 mt-1">3d</p>
-                        </button>
-                        <button onClick={() => rateCard(5)} className="p-4 bg-blue-500/10 hover:bg-blue-500/20 border border-blue-500/30 rounded-xl transition-colors text-center">
-                            <p className="font-bold text-blue-400">Easy</p>
-                            <p className="text-xs text-zinc-500 mt-1">7d</p>
-                        </button>
-                    </div>
+                        {/* Grading — fires on pointer-DOWN, instant */}
+                        {flipped ? (
+                            <div className="grid grid-cols-4 gap-2 mt-6 flip-in">
+                                <button {...instant(() => grade(0))} className="py-3 rounded-xl border-2 border-coral/50 bg-coral/10 text-coral font-bold text-sm hover:bg-coral/20">
+                                    Again <span className="block text-[10px] opacity-60 font-semibold mt-0.5">1</span>
+                                </button>
+                                <button {...instant(() => grade(3))} className="py-3 rounded-xl border-2 border-glow/50 bg-glow/10 text-glow font-bold text-sm hover:bg-glow/20">
+                                    Hard <span className="block text-[10px] opacity-60 font-semibold mt-0.5">2</span>
+                                </button>
+                                <button {...instant(() => grade(4))} className="py-3 rounded-xl border-2 border-leaf/50 bg-leaf/10 text-leaf font-bold text-sm hover:bg-leaf/20">
+                                    Good <span className="block text-[10px] opacity-60 font-semibold mt-0.5">3</span>
+                                </button>
+                                <button {...instant(() => grade(5))} className="py-3 rounded-xl border-2 border-drill/50 bg-drill/10 text-drill font-bold text-sm hover:bg-drill/20">
+                                    Easy <span className="block text-[10px] opacity-60 font-semibold mt-0.5">4</span>
+                                </button>
+                            </div>
+                        ) : (
+                            <p className="text-center text-xs text-cream/40 mt-6">
+                                Think of the answer, then tap the card (or press Space)
+                            </p>
+                        )}
+
+                        <div className="flex justify-center mt-8 pointer-events-none">
+                            <Firefly mood={mood} size={72} glow={glowColors} />
+                        </div>
+                    </>
                 )}
             </div>
         </main>

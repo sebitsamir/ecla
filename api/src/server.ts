@@ -138,7 +138,7 @@ app.post('/api/v1/sync-user', async (req: Request, res: Response, next: NextFunc
                 // Reclaim the old account, attach new Clerk ID, AND reset onboarding for testing
                 user = await prisma.user.update({
                     where: { id: ghostUser.id },
-                    data: { 
+                    data: {
                         clerkId: userId,
                         onboardingCompleted: false
                     }
@@ -146,10 +146,10 @@ app.post('/api/v1/sync-user', async (req: Request, res: Response, next: NextFunc
             } else {
                 // 3. Truly new user. Create them with onboarding explicitly set to false
                 user = await prisma.user.create({
-                    data: { 
-                        clerkId: userId, 
+                    data: {
+                        clerkId: userId,
                         email,
-                        onboardingCompleted: false 
+                        onboardingCompleted: false
                     }
                 })
             }
@@ -210,7 +210,7 @@ app.get('/api/v1/dashboard', async (req: Request, res: Response, next: NextFunct
         const userId = requireAuth(req)
         const user = await prisma.user.findUnique({
             where: { clerkId: userId },
-            select: { id: true, preferredMode: true, dailyGoalXp: true, streakDays: true }
+            select: { id: true, preferredMode: true, dailyGoalXp: true, streakDays: true, unlockedCosmetics: true, equippedCosmetic: true }
         })
         if (!user) throw new AppError('User not found', 404)
 
@@ -219,6 +219,59 @@ app.get('/api/v1/dashboard', async (req: Request, res: Response, next: NextFunct
             where: { userId_date: { userId: user.id, date: today } }
         })
         const dailyXp = todayLog?.xpEarned || 0
+
+        // Calculate Combo Streak — consecutive correct answers in recent sessions
+        const recentProgress = await prisma.userProgress.findMany({
+            where: { userId: user.id },
+            orderBy: { completedAt: 'desc' },
+            take: 5,
+        })
+        let comboStreak = 0
+        for (const p of recentProgress) {
+            if (p.score === 0) break
+            comboStreak += p.score
+        }
+
+        // Calculate Glow Tier — based on 30-day consistency
+        const thirtyDaysAgo = new Date()
+        thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30)
+        const activeDays = await prisma.streakLog.count({
+            where: {
+                userId: user.id,
+                date: { gte: thirtyDaysAgo.toISOString().split('T')[0] }
+            }
+        })
+
+        let glowTier = 'Dim'
+        let glowNext = 7
+        if (activeDays >= 21) { glowTier = 'Brilliant'; glowNext = 0 }
+        else if (activeDays >= 14) { glowTier = 'Radiant'; glowNext = 21 - activeDays }
+        else if (activeDays >= 7) { glowTier = 'Warm'; glowNext = 14 - activeDays }
+        else { glowTier = 'Dim'; glowNext = 7 - activeDays }
+
+        // --- Cosmetics: evaluate unlock milestones ---
+        const masteryRows = await prisma.conceptMastery.findMany({ where: { userId: user.id } })
+        const masteredCount = masteryRows.filter(m => {
+            const total = m.correctCount + m.incorrectCount
+            return total >= 2 && m.correctCount / total >= 0.8
+        }).length
+        const lessonsDone = await prisma.userProgress.count({ where: { userId: user.id } })
+
+        const conditions: Record<string, boolean> = {
+            gold: true,
+            coral: user.streakDays >= 3,
+            aurora: masteredCount >= 5,
+            moon: lessonsDone >= 10,
+            violet: activeDays >= 14,
+        }
+
+        const currentUnlocked = user.unlockedCosmetics ?? ['gold']
+        const newUnlocks = Object.keys(conditions).filter(id => conditions[id] && !currentUnlocked.includes(id))
+        let unlockedCosmetics = currentUnlocked
+        if (newUnlocks.length) {
+            unlockedCosmetics = [...currentUnlocked, ...newUnlocks]
+            await prisma.user.update({ where: { clerkId: userId }, data: { unlockedCosmetics } })
+        }
 
         // Fetch ALL concepts to find the true "next" one
         const allConcepts = await prisma.concept.findMany({
@@ -251,8 +304,20 @@ app.get('/api/v1/dashboard', async (req: Request, res: Response, next: NextFunct
 
         if (!nextConcept || nextConcept.variants.length === 0) {
             return res.json({
-                dailyXp, dailyGoalXp: user.dailyGoalXp, streakDays: user.streakDays,
-                preferredMode: user.preferredMode, nextLesson: null, reviewRequired: false, accuracy: 100
+                dailyXp,
+                dailyGoalXp: user.dailyGoalXp,
+                streakDays: user.streakDays,
+                preferredMode: user.preferredMode,
+                nextLesson: null,
+                reviewRequired: false,
+                accuracy: 100,
+                comboStreak,
+                glowTier,
+                glowNext,
+                activeDays,
+                unlockedCosmetics,
+                equippedCosmetic: user.equippedCosmetic ?? 'gold',
+                newUnlocks,
             })
         }
 
@@ -274,11 +339,19 @@ app.get('/api/v1/dashboard', async (req: Request, res: Response, next: NextFunct
             nextLesson: {
                 conceptId: nextConcept.id,
                 conceptName: nextConcept.name,
+                xpReward: nextConcept.xpReward,
                 mode: user.preferredMode,
                 variant: nextConcept.variants[0],
             },
             reviewRequired,
             accuracy: Math.round(accuracy * 100),
+            comboStreak,
+            glowTier,
+            glowNext,
+            activeDays,
+            unlockedCosmetics,
+            equippedCosmetic: user.equippedCosmetic ?? 'gold',
+            newUnlocks,
         })
     } catch (error) {
         next(error)
@@ -293,7 +366,7 @@ app.get('/api/v1/lessons/:conceptId', async (req: Request, res: Response, next: 
 
         const user = await prisma.user.findUnique({
             where: { clerkId: userId },
-            select: { preferredMode: true },
+            select: { preferredMode: true, equippedCosmetic: true },
         })
         if (!user) throw new AppError('User not found', 404)
 
@@ -317,6 +390,7 @@ app.get('/api/v1/lessons/:conceptId', async (req: Request, res: Response, next: 
                 grammarNote: concept.grammarNote,
                 mode: user.preferredMode,
                 variant: concept.variants[0],
+                equippedCosmetic: user.equippedCosmetic ?? 'gold',
             },
         })
     } catch (error) {
@@ -341,7 +415,7 @@ app.get('/api/v1/course/map', async (req: Request, res: Response, next: NextFunc
                             orderBy: { orderIndex: 'asc' },
                             include: {
                                 mastery: { where: { userId: user.id } },
-                                variants: { where: { mode: user.preferredMode }, select: { id: true } },
+                                variants: { select: { mode: true } },
                             },
                         },
                     },
@@ -357,7 +431,7 @@ app.get('/api/v1/course/map', async (req: Request, res: Response, next: NextFunc
             concepts: unit.concepts.map(concept => {
                 const mastery = concept.mastery[0]
                 const totalAttempts = (mastery?.correctCount || 0) + (mastery?.incorrectCount || 0)
-                const accuracy = totalAttempts > 0 ? (mastery!.correctCount / totalAttempts) : 0
+                const accuracy = totalAttempts > 0 ? mastery!.correctCount / totalAttempts : 0
 
                 let status: 'mastered' | 'struggling' | 'in_progress' | 'not_started' = 'not_started'
                 if (totalAttempts === 0) status = 'not_started'
@@ -365,18 +439,22 @@ app.get('/api/v1/course/map', async (req: Request, res: Response, next: NextFunc
                 else if (accuracy < 0.6) status = 'struggling'
                 else status = 'in_progress'
 
+                const modes = concept.variants.map((v: any) => v.mode)
+
                 return {
                     id: concept.id,
                     name: concept.name,
                     xpReward: concept.xpReward,
-                    isAvailable: concept.variants.length > 0,
+                    grammarNote: concept.grammarNote,
+                    modes,
+                    isAvailable: modes.includes(user.preferredMode),
                     status,
                     accuracy: Math.round(accuracy * 100),
                 }
             }),
         }))
 
-        res.json({ units })
+        res.json({ units, preferredMode: user.preferredMode })
     } catch (error) {
         next(error)
     }
@@ -385,7 +463,6 @@ app.get('/api/v1/course/map', async (req: Request, res: Response, next: NextFunc
 // Complete Lesson & Update Mastery 
 app.post('/api/v1/lessons/complete', async (req: Request, res: Response, next: NextFunction) => {
     try {
-        // Added Auth check and Zod parsing
         const userId = requireAuth(req)
         const parsed = lessonCompleteSchema.safeParse(req.body)
         if (!parsed.success) throw new AppError('Invalid completion data', 400)
@@ -420,10 +497,9 @@ app.post('/api/v1/lessons/complete', async (req: Request, res: Response, next: N
         })
 
         // 3. Handle Daily Streak Logic
-        const today = new Date().toISOString().split('T')[0] // "YYYY-MM-DD"
+        const today = new Date().toISOString().split('T')[0]
         const yesterday = new Date(Date.now() - 86400000).toISOString().split('T')[0]
 
-        // Check if today's log exists BEFORE upserting it
         const existingTodayLog = await prisma.streakLog.findUnique({
             where: { userId_date: { userId: user.id, date: today } }
         })
@@ -444,7 +520,6 @@ app.post('/api/v1/lessons/complete', async (req: Request, res: Response, next: N
 
         let newStreakDays = user.streakDays
         if (!existingTodayLog) {
-            // This is the first lesson of the day
             const yesterdayLog = await prisma.streakLog.findUnique({
                 where: { userId_date: { userId: user.id, date: yesterday } }
             })
@@ -466,7 +541,7 @@ app.post('/api/v1/lessons/complete', async (req: Request, res: Response, next: N
     }
 })
 
-// Added the Mode Switcher Route
+// Mode Switcher Route
 app.post('/api/v1/user/mode', async (req: Request, res: Response, next: NextFunction) => {
     try {
         const userId = requireAuth(req)
@@ -484,6 +559,40 @@ app.post('/api/v1/user/mode', async (req: Request, res: Response, next: NextFunc
     }
 })
 
+// Equip Cosmetic
+app.post('/api/v1/user/cosmetics/equip', async (req: Request, res: Response, next: NextFunction) => {
+    try {
+        const userId = requireAuth(req)
+        const { cosmeticId } = req.body
+        if (typeof cosmeticId !== 'string') throw new AppError('Invalid cosmetic', 400)
+
+        const user = await prisma.user.findUnique({ where: { clerkId: userId } })
+        if (!user) throw new AppError('User not found', 404)
+        if (!(user.unlockedCosmetics ?? ['gold']).includes(cosmeticId)) {
+            throw new AppError('Cosmetic not unlocked yet', 403)
+        }
+
+        await prisma.user.update({ where: { clerkId: userId }, data: { equippedCosmetic: cosmeticId } })
+        res.json({ success: true })
+    } catch (error) { next(error) }
+})
+
+// Get Cosmetics (unlocked + equipped)
+app.get('/api/v1/user/cosmetics', async (req: Request, res: Response, next: NextFunction) => {
+    try {
+        const userId = requireAuth(req)
+        const user = await prisma.user.findUnique({
+            where: { clerkId: userId },
+            select: { unlockedCosmetics: true, equippedCosmetic: true },
+        })
+        if (!user) throw new AppError('User not found', 404)
+        res.json({
+            unlockedCosmetics: user.unlockedCosmetics ?? ['gold'],
+            equippedCosmetic: user.equippedCosmetic ?? 'gold',
+        })
+    } catch (error) { next(error) }
+})
+
 // Fetch Due Flashcards
 app.get('/api/v1/flashcards/due', async (req: Request, res: Response, next: NextFunction) => {
     try {
@@ -493,12 +602,10 @@ app.get('/api/v1/flashcards/due', async (req: Request, res: Response, next: Next
 
         const now = new Date()
 
-        // Find all vocab for the course
         const allVocab = await prisma.vocabulary.findMany({
             where: { courseId: 'course-spanish-a1' }
         })
 
-        // Get user's progress on these cards
         const progress = await prisma.userVocabProgress.findMany({
             where: {
                 userId: user.id,
@@ -509,8 +616,6 @@ app.get('/api/v1/flashcards/due', async (req: Request, res: Response, next: Next
         const dueCards = allVocab.map(vocab => {
             const prog = progress.find(p => p.vocabId === vocab.id)
 
-            // If no progress, it's a new card (due immediately)
-            // If progress exists, check if nextReviewAt is in the past
             if (!prog || prog.nextReviewAt <= now) {
                 return {
                     id: vocab.id,
@@ -522,7 +627,7 @@ app.get('/api/v1/flashcards/due', async (req: Request, res: Response, next: Next
             return null
         }).filter(Boolean)
 
-        res.json({ cards: dueCards.slice(0, 20) }) // Cap at 20 cards per session
+        res.json({ cards: dueCards.slice(0, 20) })
     } catch (error) {
         next(error)
     }
@@ -531,7 +636,7 @@ app.get('/api/v1/flashcards/due', async (req: Request, res: Response, next: Next
 // Process Flashcard Review (SM-2 Algorithm)
 const flashcardReviewSchema = z.object({
     vocabId: z.string(),
-    quality: z.number().int().min(0).max(5), // 0=Again, 3=Hard, 4=Good, 5=Easy
+    quality: z.number().int().min(0).max(5),
 })
 
 app.post('/api/v1/flashcards/review', async (req: Request, res: Response, next: NextFunction) => {
@@ -544,7 +649,6 @@ app.post('/api/v1/flashcards/review', async (req: Request, res: Response, next: 
         const user = await prisma.user.findUnique({ where: { clerkId: userId } })
         if (!user) throw new AppError('User not found', 404)
 
-        // Fetch existing progress or create default
         let prog = await prisma.userVocabProgress.findFirst({
             where: { userId: user.id, vocabId }
         })
@@ -553,13 +657,10 @@ app.post('/api/v1/flashcards/review', async (req: Request, res: Response, next: 
         let interval = prog?.interval ?? 1
         let repetitions = prog?.repetitions ?? 0
 
-        // SM-2 Algorithm Math
         if (quality < 3) {
-            // Failed (Again)
             repetitions = 0
             interval = 1
         } else {
-            // Passed
             if (repetitions === 0) interval = 1
             else if (repetitions === 1) interval = 6
             else interval = Math.round(interval * easeFactor)
@@ -567,7 +668,6 @@ app.post('/api/v1/flashcards/review', async (req: Request, res: Response, next: 
             repetitions += 1
         }
 
-        // Update Ease Factor
         easeFactor = easeFactor + (0.1 - (5 - quality) * (0.08 + (5 - quality) * 0.02))
         if (easeFactor < 1.3) easeFactor = 1.3
 
@@ -575,7 +675,7 @@ app.post('/api/v1/flashcards/review', async (req: Request, res: Response, next: 
         nextReviewAt.setDate(nextReviewAt.getDate() + interval)
 
         await prisma.userVocabProgress.upsert({
-            where: { id: prog?.id || 'new-record' }, // Fallback for create
+            where: { id: prog?.id || 'new-record' },
             update: { easeFactor, interval, repetitions, nextReviewAt },
             create: {
                 userId: user.id,
@@ -659,12 +759,12 @@ app.get('/api/v1/admin/concepts', async (req: Request, res: Response, next: Next
 
 // Admin: Create/Update Concept & Variants
 const conceptSchema = z.object({
-    id: z.string().optional(), // If present, update. If absent, create.
+    id: z.string().optional(),
     unitId: z.string(),
     name: z.string().min(1),
     cefrLevel: z.enum(['A1', 'A2', 'B1', 'B2', 'C1']),
     grammarNote: z.string().min(1),
-    vocabItems: z.any(), // JSON array
+    vocabItems: z.any(),
     orderIndex: z.number().int(),
     xpReward: z.number().int(),
     variants: z.array(z.object({
@@ -672,7 +772,7 @@ const conceptSchema = z.object({
         storyBeat: z.string().nullable(),
         culturalRef: z.string().nullable(),
         formalPhrase: z.string().nullable(),
-        exercises: z.any(), // JSON array
+        exercises: z.any(),
     }))
 })
 
@@ -685,7 +785,6 @@ app.post('/api/v1/admin/concepts', async (req: Request, res: Response, next: Nex
         const data = parsed.data
 
         if (data.id) {
-            // Update existing
             await prisma.concept.update({
                 where: { id: data.id },
                 data: {
@@ -694,7 +793,6 @@ app.post('/api/v1/admin/concepts', async (req: Request, res: Response, next: Nex
                     orderIndex: data.orderIndex, xpReward: data.xpReward,
                 },
             })
-            // Update variants
             for (const v of data.variants) {
                 await prisma.lessonVariant.upsert({
                     where: { conceptId_mode: { conceptId: data.id, mode: v.mode } },
@@ -703,10 +801,9 @@ app.post('/api/v1/admin/concepts', async (req: Request, res: Response, next: Nex
                 })
             }
         } else {
-            // Create new
             const concept = await prisma.concept.create({
                 data: {
-                    id: `concept-${Date.now()}`, // Simple ID generation
+                    id: `concept-${Date.now()}`,
                     unitId: data.unitId, name: data.name, cefrLevel: data.cefrLevel,
                     grammarNote: data.grammarNote, vocabItems: data.vocabItems,
                     orderIndex: data.orderIndex, xpReward: data.xpReward,
@@ -741,11 +838,11 @@ app.post('/api/v1/admin/generate-flavor', async (req: Request, res: Response, ne
 
         let prompt = ""
         if (mode === 'STORY') {
-            prompt = `Write a 2-sentence story beat for a language learning app. The concept is "${conceptName}" (${grammarNote}). Use these vocab words: ${vocabItems.map((v: any) => v.word).join(', ')}. Make it engaging and slightly humorous.`
+            prompt = `Write EXACTLY one sentence (max 15 words) of story context for a Spanish lesson about "${conceptName}". Stay in-character. No meta-commentary. No self-reference.`
         } else if (mode === 'IMMERSION') {
-            prompt = `Write a 2-sentence cultural reference or fun fact for a language learning app. The concept is "${conceptName}" (${grammarNote}). Use these vocab words: ${vocabItems.map((v: any) => v.word).join(', ')}. Make it authentic and interesting.`
+            prompt = `Write EXACTLY one sentence (max 15 words) of cultural context for a Spanish lesson about "${conceptName}". Stay in-character. No meta-commentary.`
         } else if (mode === 'PROFESSIONAL') {
-            prompt = `Write a 2-sentence formal-register phrase or professional context example for a language learning app. The concept is "${conceptName}" (${grammarNote}). Use these vocab words: ${vocabItems.map((v: any) => v.word).join(', ')}. Make it suitable for a workplace setting.`
+            prompt = `Write EXACTLY one sentence (max 15 words) of workplace context for a Spanish lesson about "${conceptName}". Stay in-character. No meta-commentary.`
         }
 
         const completion = await groq.chat.completions.create({
@@ -794,10 +891,8 @@ app.post('/api/v1/admin/generate-exercises', async (req: Request, res: Response,
         })
 
         let text = completion.choices[0]?.message?.content ?? '[]'
-        // Clean up markdown backticks if the AI adds them
         text = text.replace(/```json/g, '').replace(/```/g, '').trim()
 
-        // Verify it's valid JSON before sending
         try { JSON.parse(text) } catch { text = '[]' }
 
         res.json({ exercises: JSON.parse(text) })
