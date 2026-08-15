@@ -51,6 +51,8 @@ model Course {
   cefrLevel    String
   title        String
   isPublished  Boolean @default(false)
+  language     String @default("es")  
+  ttsLang      String @default("es-ES")
 
   units      Unit[]
   vocabulary Vocabulary[]
@@ -80,6 +82,7 @@ model Concept {
   variants LessonVariant[]
   progress UserProgress[]
   mastery  ConceptMastery[]
+  subLessons SubLesson[]
 }
 
 model LessonVariant {
@@ -105,6 +108,7 @@ model UserProgress {
   score       Int?
   xpEarned    Int          @default(0)
   completedAt DateTime?
+  subLessonId String?
 
   user    User    @relation(fields: [userId], references: [id], onDelete: Cascade)
   concept Concept @relation(fields: [conceptId], references: [id], onDelete: Cascade)
@@ -161,4 +165,20 @@ model StreakLog {
   user User @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   @@unique([userId, date])
+}
+
+model SubLesson {
+  id         String   @id @default(cuid())
+  conceptId  String
+  concept    Concept  @relation(fields: [conceptId], references: [id], onDelete: Cascade)
+  orderIndex Int      @default(0)
+  title      String
+  icon       String   @default("sparkles")
+  xpReward   Int      @default(10)
+  teach      Json     @default("[]")   // TeachBlock[]
+  exercises  Json     @default("[]")   // ExerciseV2[]
+  realLife   Json?                      // { prompt, chatSeed }
+  createdAt  DateTime @default(now())
+
+  @@unique([conceptId, orderIndex])
 }
