@@ -14,6 +14,7 @@ import NightBackground from '@/components/NightBackground'
 import ModeAmbience from '@/components/ModeAmbience'
 import Firefly from '@/components/Firefly'
 import { COSMETICS, CosmeticId, DEFAULT_GLOW } from '@/lib/cosmetics'
+import { LogoMark } from '@/components/BrandLogo'
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL ?? 'http://localhost:4000'
 
@@ -175,8 +176,10 @@ export default function DashboardPage() {
       <header className="sticky top-0 z-40 backdrop-blur-md bg-night-950/70 border-b border-white/5">
         <div className="mx-auto max-w-3xl px-4 h-16 flex items-center justify-between">
           <div className="flex items-center gap-2">
-            <div className="h-7 w-7 rounded-lg bg-glow flex items-center justify-center"><Sparkles className="h-3.5 w-3.5 text-night-900" /></div>
-            <span className="font-display text-lg font-bold text-cream">Ecla</span>
+            <Link href="/" className="flex items-center gap-2.5">
+              <LogoMark size={30} />
+              <span className="font-display text-lg font-bold text-cream tracking-tight">Ecla</span>
+            </Link>
           </div>
           <UserButton />
         </div>

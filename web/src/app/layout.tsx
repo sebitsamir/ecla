@@ -11,6 +11,7 @@ const nunito = Nunito({ subsets: ['latin'], variable: '--font-body', weight: ['4
 export const metadata: Metadata = {
   title: 'Ecla',
   description: 'One curriculum. Four ways to learn.',
+  icons: [{ url: '/favicon.svg', type: 'image/svg+xml' }],
   viewport: {
     width: 'device-width',
     initialScale: 1,
