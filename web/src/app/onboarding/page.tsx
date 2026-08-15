@@ -19,8 +19,11 @@ import {
     Target,
     TrendingUp,
     Award,
+    ArrowRight,
 } from 'lucide-react'
 import posthog from 'posthog-js'
+import NightBackground from '@/components/NightBackground'
+import Firefly from '@/components/Firefly'
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL ?? 'http://localhost:4000'
 
@@ -31,6 +34,7 @@ interface MotivationOption {
     label: string
     description: string
     icon: React.ComponentType<{ className?: string }>
+    defaultMode?: string
 }
 
 interface ModeOption {
@@ -38,6 +42,7 @@ interface ModeOption {
     label: string
     description: string
     icon: React.ComponentType<{ className?: string }>
+    accent: string
 }
 
 interface GoalOption {
@@ -59,24 +64,28 @@ const motivations: MotivationOption[] = [
         label: 'Travel',
         description: 'Navigate new countries with confidence',
         icon: Plane,
+        defaultMode: 'IMMERSION',
     },
     {
         id: 'HERITAGE',
         label: 'Family & Heritage',
         description: 'Connect with your roots and loved ones',
         icon: Heart,
+        defaultMode: 'STORY',
     },
     {
         id: 'CAREER',
         label: 'Career',
         description: 'Unlock professional opportunities',
         icon: Briefcase,
+        defaultMode: 'PROFESSIONAL',
     },
     {
         id: 'FUN',
         label: 'Personal Growth',
         description: 'Challenge yourself and have fun',
         icon: Sparkles,
+        defaultMode: 'DRILL',
     },
 ]
 
@@ -86,24 +95,28 @@ const modes: ModeOption[] = [
         label: 'Story Mode',
         description: 'Learn through an immersive narrative',
         icon: BookOpen,
+        accent: '#FFB45A',
     },
     {
         id: 'DRILL',
         label: 'Drill Mode',
         description: 'Rapid-fire practice, zero fluff',
         icon: Zap,
+        accent: '#4DD8E6',
     },
     {
         id: 'IMMERSION',
         label: 'Immersion Mode',
         description: 'Real culture, music, and native speech',
         icon: Music,
+        accent: '#B98CF0',
     },
     {
         id: 'PROFESSIONAL',
         label: 'Professional Mode',
         description: 'Formal register for work contexts',
         icon: GraduationCap,
+        accent: '#7FA6FF',
     },
 ]
 
@@ -188,6 +201,11 @@ export default function OnboardingPage() {
 
     const selectMotivation = useCallback((value: string) => {
         setMotivation(value)
+        // Auto-select the default mode for this motivation
+        const selectedMotivation = motivations.find(m => m.id === value)
+        if (selectedMotivation?.defaultMode) {
+            setPreferredMode(selectedMotivation.defaultMode)
+        }
         setTimeout(() => setStep(2), 200)
     }, [])
 
@@ -264,7 +282,6 @@ export default function OnboardingPage() {
                 throw new Error(data.error || `API responded with ${res.status}`)
             }
 
-            // Track successful onboarding completion
             posthog.capture('onboarding_completed', {
                 motivation: motivation,
                 preferred_mode: preferredMode,
@@ -272,7 +289,7 @@ export default function OnboardingPage() {
                 starting_level: currentLevel,
             })
 
-            router.push('/')
+            router.push('/dashboard')
             router.refresh()
         } catch (err) {
             console.error(err)
@@ -288,8 +305,11 @@ export default function OnboardingPage() {
 
     if (!isLoaded || !isSignedIn) {
         return (
-            <main className="min-h-screen bg-zinc-950 flex items-center justify-center">
-                <Loader2 className="w-8 h-8 text-zinc-500 animate-spin" />
+            <main className="min-h-screen font-body">
+                <NightBackground />
+                <div className="flex min-h-screen items-center justify-center">
+                    <Firefly mood="thinking" size={120} />
+                </div>
             </main>
         )
     }
@@ -299,414 +319,428 @@ export default function OnboardingPage() {
             {[1, 2, 3, 4, 5].map(dot => (
                 <div
                     key={dot}
-                    className={`h-1.5 rounded-full transition-all duration-300 ${step === dot
-                            ? 'w-8 bg-emerald-500'
+                    className={`h-1.5 rounded-full transition-all duration-300 ${
+                        step === dot
+                            ? 'w-8 bg-glow'
                             : step > dot
-                                ? 'w-1.5 bg-emerald-600'
-                                : 'w-1.5 bg-zinc-700'
-                        }`}
+                            ? 'w-1.5 bg-glow/60'
+                            : 'w-1.5 bg-white/20'
+                    }`}
                 />
             ))}
         </div>
     )
 
     return (
-        <main className="min-h-screen bg-zinc-950 text-white flex items-center justify-center p-6">
-            <div className="w-full max-w-2xl">
-                <StepIndicator />
+        <main className="min-h-screen font-body text-cream">
+            <NightBackground />
+            <div className="relative z-10 flex min-h-screen items-center justify-center p-6">
+                <div className="w-full max-w-2xl">
+                    <StepIndicator />
 
-                <div className="bg-zinc-900 border border-zinc-800 rounded-2xl p-8 md:p-10 shadow-2xl">
-                    {/* Step 1: Motivation */}
-                    {step === 1 && (
-                        <div className="space-y-6">
-                            <div>
-                                <h1 className="text-2xl md:text-3xl font-bold mb-2">
-                                    Why are you learning Spanish?
-                                </h1>
-                                <p className="text-zinc-400">
-                                    We&apos;ll personalize your entire learning path around your
-                                    goal.
-                                </p>
-                            </div>
-
-                            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                                {motivations.map(item => {
-                                    const Icon = item.icon
-                                    const isSelected = motivation === item.id
-
-                                    return (
-                                        <button
-                                            key={item.id}
-                                            onClick={() => selectMotivation(item.id)}
-                                            className={`p-5 rounded-xl border text-left transition-all duration-200 group ${isSelected
-                                                    ? 'border-emerald-500 bg-emerald-500/10'
-                                                    : 'border-zinc-700 hover:border-zinc-600 hover:bg-zinc-800/50'
-                                                }`}
-                                        >
-                                            <div className="flex items-start gap-4">
-                                                <div
-                                                    className={`p-3 rounded-lg transition-colors ${isSelected
-                                                            ? 'bg-emerald-500/20'
-                                                            : 'bg-zinc-800 group-hover:bg-zinc-700'
-                                                        }`}
-                                                >
-                                                    <Icon
-                                                        className={`w-5 h-5 ${isSelected
-                                                                ? 'text-emerald-400'
-                                                                : 'text-zinc-400'
-                                                            }`}
-                                                    />
-                                                </div>
-                                                <div className="flex-1">
-                                                    <p className="font-semibold mb-1">{item.label}</p>
-                                                    <p className="text-sm text-zinc-400">
-                                                        {item.description}
-                                                    </p>
-                                                </div>
-                                                {isSelected && (
-                                                    <CheckCircle2 className="w-5 h-5 text-emerald-400 flex-shrink-0" />
-                                                )}
-                                            </div>
-                                        </button>
-                                    )
-                                })}
-                            </div>
-                        </div>
-                    )}
-
-                    {/* Step 2: Mode Selection */}
-                    {step === 2 && (
-                        <div className="space-y-6">
-                            <div>
-                                <h1 className="text-2xl md:text-3xl font-bold mb-2">
-                                    How do you learn best?
-                                </h1>
-                                <p className="text-zinc-400">
-                                    All four modes use the same curriculum. Switch anytime without
-                                    losing progress.
-                                </p>
-                            </div>
-
-                            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                                {modes.map(mode => {
-                                    const Icon = mode.icon
-                                    const isSelected = preferredMode === mode.id
-
-                                    return (
-                                        <button
-                                            key={mode.id}
-                                            onClick={() => selectMode(mode.id)}
-                                            className={`p-5 rounded-xl border text-left transition-all duration-200 group ${isSelected
-                                                    ? 'border-emerald-500 bg-emerald-500/10'
-                                                    : 'border-zinc-700 hover:border-zinc-600 hover:bg-zinc-800/50'
-                                                }`}
-                                        >
-                                            <div className="flex items-start gap-4">
-                                                <div
-                                                    className={`p-3 rounded-lg transition-colors ${isSelected
-                                                            ? 'bg-emerald-500/20'
-                                                            : 'bg-zinc-800 group-hover:bg-zinc-700'
-                                                        }`}
-                                                >
-                                                    <Icon
-                                                        className={`w-5 h-5 ${isSelected
-                                                                ? 'text-emerald-400'
-                                                                : 'text-zinc-400'
-                                                            }`}
-                                                    />
-                                                </div>
-                                                <div className="flex-1">
-                                                    <p className="font-semibold mb-1">{mode.label}</p>
-                                                    <p className="text-sm text-zinc-400">
-                                                        {mode.description}
-                                                    </p>
-                                                </div>
-                                                {isSelected && (
-                                                    <CheckCircle2 className="w-5 h-5 text-emerald-400 flex-shrink-0" />
-                                                )}
-                                            </div>
-                                        </button>
-                                    )
-                                })}
-                            </div>
-
-                            <button
-                                onClick={() => setStep(1)}
-                                className="flex items-center gap-2 text-sm text-zinc-500 hover:text-white transition-colors"
-                            >
-                                <ArrowLeft className="w-4 h-4" />
-                                Back
-                            </button>
-                        </div>
-                    )}
-
-                    {/* Step 3: Level Assessment */}
-                    {step === 3 && !showQuiz && (
-                        <div className="space-y-6">
-                            <div>
-                                <h1 className="text-2xl md:text-3xl font-bold mb-2">
-                                    What&apos;s your current level?
-                                </h1>
-                                <p className="text-zinc-400">
-                                    We&apos;ll place you at the right starting point. Complete
-                                    beginners skip the quiz.
-                                </p>
-                            </div>
-
-                            <div className="space-y-3">
-                                <button
-                                    onClick={() => selectExperience('BEGINNER')}
-                                    className="w-full p-5 rounded-xl border border-zinc-700 hover:border-emerald-500 hover:bg-emerald-500/10 text-left transition-all duration-200"
-                                >
-                                    <p className="font-semibold mb-1">Complete Beginner</p>
-                                    <p className="text-sm text-zinc-400">
-                                        I know nothing or only a few words
-                                    </p>
-                                </button>
-
-                                <button
-                                    onClick={() => selectExperience('SOME_BASICS')}
-                                    className="w-full p-5 rounded-xl border border-zinc-700 hover:border-emerald-500 hover:bg-emerald-500/10 text-left transition-all duration-200"
-                                >
-                                    <p className="font-semibold mb-1">Some Basics</p>
-                                    <p className="text-sm text-zinc-400">
-                                        I know a few phrases and common words
-                                    </p>
-                                </button>
-
-                                <button
-                                    onClick={() => selectExperience('INTERMEDIATE_PLUS')}
-                                    className="w-full p-5 rounded-xl border border-zinc-700 hover:border-emerald-500 hover:bg-emerald-500/10 text-left transition-all duration-200"
-                                >
-                                    <p className="font-semibold mb-1">Intermediate or Higher</p>
-                                    <p className="text-sm text-zinc-400">
-                                        I can hold a basic conversation
-                                    </p>
-                                </button>
-                            </div>
-
-                            <button
-                                onClick={() => setStep(2)}
-                                className="flex items-center gap-2 text-sm text-zinc-500 hover:text-white transition-colors"
-                            >
-                                <ArrowLeft className="w-4 h-4" />
-                                Back
-                            </button>
-                        </div>
-                    )}
-
-                    {/* Step 3: Placement Quiz */}
-                    {step === 3 && showQuiz && (
-                        <div className="space-y-6">
-                            <div>
-                                <div className="flex items-center justify-between mb-4">
-                                    <p className="text-sm text-zinc-500">
-                                        Question {quizIndex + 1} of {placementQuiz.length}
-                                    </p>
-                                    <div className="flex gap-1">
-                                        {placementQuiz.map((_, i) => (
-                                            <div
-                                                key={i}
-                                                className={`h-1 w-6 rounded-full ${i < quizIndex
-                                                        ? 'bg-emerald-500'
-                                                        : i === quizIndex
-                                                            ? 'bg-emerald-600'
-                                                            : 'bg-zinc-700'
-                                                    }`}
-                                            />
-                                        ))}
-                                    </div>
-                                </div>
-
-                                <h1 className="text-2xl md:text-3xl font-bold mb-6">
-                                    {placementQuiz[quizIndex].prompt}
-                                </h1>
-                            </div>
-
-                            <div className="space-y-3">
-                                {placementQuiz[quizIndex].options.map(option => (
-                                    <button
-                                        key={option}
-                                        onClick={() => answerQuiz(option)}
-                                        className="w-full p-4 rounded-xl border border-zinc-700 hover:border-emerald-500 hover:bg-emerald-500/10 text-left transition-all duration-200 font-medium"
-                                    >
-                                        {option}
-                                    </button>
-                                ))}
-                            </div>
-
-                            <button
-                                onClick={() => setShowQuiz(false)}
-                                className="flex items-center gap-2 text-sm text-zinc-500 hover:text-white transition-colors"
-                            >
-                                <ArrowLeft className="w-4 h-4" />
-                                Back
-                            </button>
-                        </div>
-                    )}
-
-                    {/* Step 4: Daily Goal */}
-                    {step === 4 && (
-                        <div className="space-y-6">
-                            <div>
-                                <h1 className="text-2xl md:text-3xl font-bold mb-2">
-                                    How much time can you commit?
-                                </h1>
-                                <p className="text-zinc-400">
-                                    This sets your daily XP goal. Consistency beats intensity.
-                                </p>
-                            </div>
-
-                            <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-                                {dailyGoals.map(goal => {
-                                    const Icon = goal.icon
-                                    const isSelected = dailyGoalXp === goal.xp
-
-                                    return (
-                                        <button
-                                            key={goal.xp}
-                                            onClick={() => selectDailyGoal(goal.xp)}
-                                            className={`p-5 rounded-xl border text-center transition-all duration-200 group ${isSelected
-                                                    ? 'border-emerald-500 bg-emerald-500/10'
-                                                    : 'border-zinc-700 hover:border-zinc-600 hover:bg-zinc-800/50'
-                                                }`}
-                                        >
-                                            <div
-                                                className={`inline-flex p-3 rounded-lg mb-3 transition-colors ${isSelected
-                                                        ? 'bg-emerald-500/20'
-                                                        : 'bg-zinc-800 group-hover:bg-zinc-700'
-                                                    }`}
-                                            >
-                                                <Icon
-                                                    className={`w-5 h-5 ${isSelected ? 'text-emerald-400' : 'text-zinc-400'
-                                                        }`}
-                                                />
-                                            </div>
-                                            <p className="font-semibold mb-1">{goal.label}</p>
-                                            <p className="text-sm text-zinc-400">
-                                                {goal.description}
-                                            </p>
-                                            <p className="text-xs text-zinc-500 mt-2">
-                                                {goal.xp} XP/day
-                                            </p>
-                                        </button>
-                                    )
-                                })}
-                            </div>
-
-                            <button
-                                onClick={() => setStep(3)}
-                                className="flex items-center gap-2 text-sm text-zinc-500 hover:text-white transition-colors"
-                            >
-                                <ArrowLeft className="w-4 h-4" />
-                                Back
-                            </button>
-                        </div>
-                    )}
-
-                    {/* Step 5: Review & Submit */}
-                    {step === 5 && (
-                        <div className="space-y-6">
-                            <div>
-                                <div className="flex items-center gap-3 mb-2">
-                                    <div className="p-2 rounded-lg bg-emerald-500/20">
-                                        <Award className="w-6 h-6 text-emerald-400" />
-                                    </div>
-                                    <h1 className="text-2xl md:text-3xl font-bold">
-                                        Your learning path is ready
+                    <div className="rounded-2xl border border-white/10 bg-night-800/80 backdrop-blur-md p-8 md:p-10 shadow-glow-md">
+                        {/* Step 1: Motivation */}
+                        {step === 1 && (
+                            <div className="space-y-6">
+                                <div>
+                                    <h1 className="font-display text-2xl md:text-3xl font-bold mb-2">
+                                        Why are you learning Spanish?
                                     </h1>
-                                </div>
-                                <p className="text-zinc-400">
-                                    Review your preferences. You can change these anytime in
-                                    settings.
-                                </p>
-                            </div>
-
-                            <div className="space-y-3">
-                                <div className="p-4 rounded-xl bg-zinc-950 border border-zinc-800 flex items-center justify-between">
-                                    <div>
-                                        <p className="text-sm text-zinc-500 mb-1">Goal</p>
-                                        <p className="font-semibold">
-                                            {motivations.find(m => m.id === motivation)?.label ??
-                                                'Not selected'}
-                                        </p>
-                                    </div>
-                                    {(() => {
-                                        const found = motivations.find(m => m.id === motivation)
-                                        if (!found) return null
-                                        const Icon = found.icon
-                                        return <Icon className="w-5 h-5 text-zinc-500" />
-                                    })()}
+                                    <p className="text-cream/60">
+                                        We'll personalize your entire learning path around your goal.
+                                    </p>
                                 </div>
 
-                                <div className="p-4 rounded-xl bg-zinc-950 border border-zinc-800 flex items-center justify-between">
-                                    <div>
-                                        <p className="text-sm text-zinc-500 mb-1">Learning Mode</p>
-                                        <p className="font-semibold">
-                                            {modes.find(m => m.id === preferredMode)?.label ??
-                                                'Not selected'}
-                                        </p>
-                                    </div>
-                                    {(() => {
-                                        const found = modes.find(m => m.id === preferredMode)
-                                        if (!found) return null
-                                        const Icon = found.icon
-                                        return <Icon className="w-5 h-5 text-zinc-500" />
-                                    })()}
-                                </div>
+                                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                                    {motivations.map(item => {
+                                        const Icon = item.icon
+                                        const isSelected = motivation === item.id
 
-                                <div className="p-4 rounded-xl bg-zinc-950 border border-zinc-800 flex items-center justify-between">
-                                    <div>
-                                        <p className="text-sm text-zinc-500 mb-1">Starting Level</p>
-                                        <p className="font-semibold">{currentLevel}</p>
-                                    </div>
-                                    <GraduationCap className="w-5 h-5 text-zinc-500" />
-                                </div>
-
-                                <div className="p-4 rounded-xl bg-zinc-950 border border-zinc-800 flex items-center justify-between">
-                                    <div>
-                                        <p className="text-sm text-zinc-500 mb-1">Daily Goal</p>
-                                        <p className="font-semibold">{dailyGoalXp} XP/day</p>
-                                    </div>
-                                    <Target className="w-5 h-5 text-zinc-500" />
+                                        return (
+                                            <button
+                                                key={item.id}
+                                                onClick={() => selectMotivation(item.id)}
+                                                className={`p-5 rounded-xl border text-left transition-all duration-200 group ${
+                                                    isSelected
+                                                        ? 'border-glow/50 bg-glow/10'
+                                                        : 'border-white/10 hover:border-white/25 hover:bg-night-900/60'
+                                                }`}
+                                            >
+                                                <div className="flex items-start gap-4">
+                                                    <div
+                                                        className={`p-3 rounded-lg transition-colors ${
+                                                            isSelected
+                                                                ? 'bg-glow/20'
+                                                                : 'bg-night-900/60 group-hover:bg-night-900'
+                                                        }`}
+                                                    >
+                                                        <Icon
+                                                            className={`w-5 h-5 ${
+                                                                isSelected ? 'text-glow' : 'text-cream/60'
+                                                            }`}
+                                                        />
+                                                    </div>
+                                                    <div className="flex-1">
+                                                        <p className="font-semibold mb-1">{item.label}</p>
+                                                        <p className="text-sm text-cream/50">
+                                                            {item.description}
+                                                        </p>
+                                                    </div>
+                                                    {isSelected && (
+                                                        <CheckCircle2 className="w-5 h-5 text-glow flex-shrink-0" />
+                                                    )}
+                                                </div>
+                                            </button>
+                                        )
+                                    })}
                                 </div>
                             </div>
+                        )}
 
-                            {error && (
-                                <div className="p-3 rounded-lg bg-rose-500/10 border border-rose-500/20">
-                                    <p className="text-sm text-rose-400">{error}</p>
+                        {/* Step 2: Mode Selection */}
+                        {step === 2 && (
+                            <div className="space-y-6">
+                                <div>
+                                    <h1 className="font-display text-2xl md:text-3xl font-bold mb-2">
+                                        How do you learn best?
+                                    </h1>
+                                    <p className="text-cream/60">
+                                        All four modes use the same curriculum. Switch anytime without losing progress.
+                                    </p>
+                                    {motivation === 'CAREER' && preferredMode === 'PROFESSIONAL' && (
+                                        <p className="text-sm text-pro mt-2 flex items-center gap-2">
+                                            <Sparkles className="h-4 w-4" />
+                                            We've pre-selected Professional Mode based on your career goal.
+                                        </p>
+                                    )}
                                 </div>
-                            )}
 
-                            <div className="flex items-center justify-between pt-2">
+                                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                                    {modes.map(mode => {
+                                        const Icon = mode.icon
+                                        const isSelected = preferredMode === mode.id
+
+                                        return (
+                                            <button
+                                                key={mode.id}
+                                                onClick={() => selectMode(mode.id)}
+                                                className={`p-5 rounded-xl border text-left transition-all duration-200 group ${
+                                                    isSelected
+                                                        ? 'border-white/30 bg-night-900'
+                                                        : 'border-white/10 hover:border-white/25 hover:bg-night-900/60'
+                                                }`}
+                                                style={isSelected ? { borderColor: `${mode.accent}60`, boxShadow: `0 0 20px ${mode.accent}25` } : {}}
+                                            >
+                                                <div className="flex items-start gap-4">
+                                                    <div
+                                                        className="p-3 rounded-lg transition-colors"
+                                                        style={{ 
+                                                            backgroundColor: isSelected ? `${mode.accent}20` : 'rgba(8, 16, 32, 0.6)',
+                                                        }}
+                                                    >
+                                                        <Icon
+                                                            className="w-5 h-5"
+                                                            style={{ color: isSelected ? mode.accent : 'rgba(244, 241, 234, 0.6)' }}
+                                                        />
+                                                    </div>
+                                                    <div className="flex-1">
+                                                        <p className="font-semibold mb-1">{mode.label}</p>
+                                                        <p className="text-sm text-cream/50">
+                                                            {mode.description}
+                                                        </p>
+                                                    </div>
+                                                    {isSelected && (
+                                                        <CheckCircle2 
+                                                            className="w-5 h-5 flex-shrink-0" 
+                                                            style={{ color: mode.accent }}
+                                                        />
+                                                    )}
+                                                </div>
+                                            </button>
+                                        )
+                                    })}
+                                </div>
+
                                 <button
-                                    onClick={() => setStep(4)}
-                                    className="flex items-center gap-2 text-sm text-zinc-500 hover:text-white transition-colors"
+                                    onClick={() => setStep(1)}
+                                    className="flex items-center gap-2 text-sm text-cream/50 hover:text-cream transition-colors"
                                 >
                                     <ArrowLeft className="w-4 h-4" />
                                     Back
                                 </button>
+                            </div>
+                        )}
+
+                        {/* Step 3: Level Assessment */}
+                        {step === 3 && !showQuiz && (
+                            <div className="space-y-6">
+                                <div>
+                                    <h1 className="font-display text-2xl md:text-3xl font-bold mb-2">
+                                        What's your current level?
+                                    </h1>
+                                    <p className="text-cream/60">
+                                        We'll place you at the right starting point. Complete beginners skip the quiz.
+                                    </p>
+                                </div>
+
+                                <div className="space-y-3">
+                                    <button
+                                        onClick={() => selectExperience('BEGINNER')}
+                                        className="w-full p-5 rounded-xl border border-white/10 hover:border-glow/50 hover:bg-glow/5 text-left transition-all duration-200"
+                                    >
+                                        <p className="font-semibold mb-1">Complete Beginner</p>
+                                        <p className="text-sm text-cream/50">
+                                            I know nothing or only a few words
+                                        </p>
+                                    </button>
+
+                                    <button
+                                        onClick={() => selectExperience('SOME_BASICS')}
+                                        className="w-full p-5 rounded-xl border border-white/10 hover:border-glow/50 hover:bg-glow/5 text-left transition-all duration-200"
+                                    >
+                                        <p className="font-semibold mb-1">Some Basics</p>
+                                        <p className="text-sm text-cream/50">
+                                            I know a few phrases and common words
+                                        </p>
+                                    </button>
+
+                                    <button
+                                        onClick={() => selectExperience('INTERMEDIATE_PLUS')}
+                                        className="w-full p-5 rounded-xl border border-white/10 hover:border-glow/50 hover:bg-glow/5 text-left transition-all duration-200"
+                                    >
+                                        <p className="font-semibold mb-1">Intermediate or Higher</p>
+                                        <p className="text-sm text-cream/50">
+                                            I can hold a basic conversation
+                                        </p>
+                                    </button>
+                                </div>
 
                                 <button
-                                    onClick={submitOnboarding}
-                                    disabled={saving}
-                                    className="px-8 py-3 bg-emerald-600 hover:bg-emerald-500 rounded-xl font-semibold transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2"
+                                    onClick={() => setStep(2)}
+                                    className="flex items-center gap-2 text-sm text-cream/50 hover:text-cream transition-colors"
                                 >
-                                    {saving ? (
-                                        <>
-                                            <Loader2 className="w-4 h-4 animate-spin" />
-                                            Setting up...
-                                        </>
-                                    ) : (
-                                        <>
-                                            Start Learning
-                                            <ArrowLeft className="w-4 h-4 rotate-180" />
-                                        </>
-                                    )}
+                                    <ArrowLeft className="w-4 h-4" />
+                                    Back
                                 </button>
                             </div>
-                        </div>
-                    )}
+                        )}
+
+                        {/* Step 3: Placement Quiz */}
+                        {step === 3 && showQuiz && (
+                            <div className="space-y-6">
+                                <div>
+                                    <div className="flex items-center justify-between mb-4">
+                                        <p className="text-sm text-cream/50">
+                                            Question {quizIndex + 1} of {placementQuiz.length}
+                                        </p>
+                                        <div className="flex gap-1">
+                                            {placementQuiz.map((_, i) => (
+                                                <div
+                                                    key={i}
+                                                    className={`h-1 w-6 rounded-full ${
+                                                        i < quizIndex
+                                                            ? 'bg-glow'
+                                                            : i === quizIndex
+                                                            ? 'bg-glow/60'
+                                                            : 'bg-white/20'
+                                                    }`}
+                                                />
+                                            ))}
+                                        </div>
+                                    </div>
+
+                                    <h1 className="font-display text-2xl md:text-3xl font-bold mb-6">
+                                        {placementQuiz[quizIndex].prompt}
+                                    </h1>
+                                </div>
+
+                                <div className="space-y-3">
+                                    {placementQuiz[quizIndex].options.map(option => (
+                                        <button
+                                            key={option}
+                                            onClick={() => answerQuiz(option)}
+                                            className="w-full p-4 rounded-xl border border-white/10 hover:border-glow/50 hover:bg-glow/5 text-left transition-all duration-200 font-medium"
+                                        >
+                                            {option}
+                                        </button>
+                                    ))}
+                                </div>
+
+                                <button
+                                    onClick={() => setShowQuiz(false)}
+                                    className="flex items-center gap-2 text-sm text-cream/50 hover:text-cream transition-colors"
+                                >
+                                    <ArrowLeft className="w-4 h-4" />
+                                    Back
+                                </button>
+                            </div>
+                        )}
+
+                        {/* Step 4: Daily Goal */}
+                        {step === 4 && (
+                            <div className="space-y-6">
+                                <div>
+                                    <h1 className="font-display text-2xl md:text-3xl font-bold mb-2">
+                                        How much time can you commit?
+                                    </h1>
+                                    <p className="text-cream/60">
+                                        This sets your daily XP goal. Consistency beats intensity.
+                                    </p>
+                                </div>
+
+                                <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+                                    {dailyGoals.map(goal => {
+                                        const Icon = goal.icon
+                                        const isSelected = dailyGoalXp === goal.xp
+
+                                        return (
+                                            <button
+                                                key={goal.xp}
+                                                onClick={() => selectDailyGoal(goal.xp)}
+                                                className={`p-5 rounded-xl border text-center transition-all duration-200 group ${
+                                                    isSelected
+                                                        ? 'border-glow/50 bg-glow/10'
+                                                        : 'border-white/10 hover:border-white/25 hover:bg-night-900/60'
+                                                }`}
+                                            >
+                                                <div
+                                                    className={`inline-flex p-3 rounded-lg mb-3 transition-colors ${
+                                                        isSelected
+                                                            ? 'bg-glow/20'
+                                                            : 'bg-night-900/60 group-hover:bg-night-900'
+                                                    }`}
+                                                >
+                                                    <Icon
+                                                        className={`w-5 h-5 ${
+                                                            isSelected ? 'text-glow' : 'text-cream/60'
+                                                        }`}
+                                                    />
+                                                </div>
+                                                <p className="font-semibold mb-1">{goal.label}</p>
+                                                <p className="text-sm text-cream/50">
+                                                    {goal.description}
+                                                </p>
+                                                <p className="text-xs text-cream/40 mt-2">
+                                                    {goal.xp} XP/day
+                                                </p>
+                                            </button>
+                                        )
+                                    })}
+                                </div>
+
+                                <button
+                                    onClick={() => setStep(3)}
+                                    className="flex items-center gap-2 text-sm text-cream/50 hover:text-cream transition-colors"
+                                >
+                                    <ArrowLeft className="w-4 h-4" />
+                                    Back
+                                </button>
+                            </div>
+                        )}
+
+                        {/* Step 5: Review & Submit */}
+                        {step === 5 && (
+                            <div className="space-y-6">
+                                <div>
+                                    <div className="flex items-center gap-3 mb-2">
+                                        <div className="p-2 rounded-lg bg-glow/20">
+                                            <Award className="w-6 h-6 text-glow" />
+                                        </div>
+                                        <h1 className="font-display text-2xl md:text-3xl font-bold">
+                                            Your learning path is ready
+                                        </h1>
+                                    </div>
+                                    <p className="text-cream/60">
+                                        Review your preferences. You can change these anytime in settings.
+                                    </p>
+                                </div>
+
+                                <div className="space-y-3">
+                                    <div className="p-4 rounded-xl bg-night-900/60 border border-white/5 flex items-center justify-between">
+                                        <div>
+                                            <p className="text-sm text-cream/50 mb-1">Goal</p>
+                                            <p className="font-semibold">
+                                                {motivations.find(m => m.id === motivation)?.label ??
+                                                    'Not selected'}
+                                            </p>
+                                        </div>
+                                        {(() => {
+                                            const found = motivations.find(m => m.id === motivation)
+                                            if (!found) return null
+                                            const Icon = found.icon
+                                            return <Icon className="w-5 h-5 text-cream/50" />
+                                        })()}
+                                    </div>
+
+                                    <div className="p-4 rounded-xl bg-night-900/60 border border-white/5 flex items-center justify-between">
+                                        <div>
+                                            <p className="text-sm text-cream/50 mb-1">Learning Mode</p>
+                                            <p className="font-semibold">
+                                                {modes.find(m => m.id === preferredMode)?.label ??
+                                                    'Not selected'}
+                                            </p>
+                                        </div>
+                                        {(() => {
+                                            const found = modes.find(m => m.id === preferredMode)
+                                            if (!found) return null
+                                            const Icon = found.icon
+                                            return <Icon className="w-5 h-5 text-cream/50" />
+                                        })()}
+                                    </div>
+
+                                    <div className="p-4 rounded-xl bg-night-900/60 border border-white/5 flex items-center justify-between">
+                                        <div>
+                                            <p className="text-sm text-cream/50 mb-1">Starting Level</p>
+                                            <p className="font-semibold">{currentLevel}</p>
+                                        </div>
+                                        <GraduationCap className="w-5 h-5 text-cream/50" />
+                                    </div>
+
+                                    <div className="p-4 rounded-xl bg-night-900/60 border border-white/5 flex items-center justify-between">
+                                        <div>
+                                            <p className="text-sm text-cream/50 mb-1">Daily Goal</p>
+                                            <p className="font-semibold">{dailyGoalXp} XP/day</p>
+                                        </div>
+                                        <Target className="w-5 h-5 text-cream/50" />
+                                    </div>
+                                </div>
+
+                                {error && (
+                                    <div className="p-3 rounded-lg bg-coral/10 border border-coral/20">
+                                        <p className="text-sm text-coral">{error}</p>
+                                    </div>
+                                )}
+
+                                <div className="flex items-center justify-between pt-2">
+                                    <button
+                                        onClick={() => setStep(4)}
+                                        className="flex items-center gap-2 text-sm text-cream/50 hover:text-cream transition-colors"
+                                    >
+                                        <ArrowLeft className="w-4 h-4" />
+                                        Back
+                                    </button>
+
+                                    <button
+                                        onClick={submitOnboarding}
+                                        disabled={saving}
+                                        className="px-8 py-3 bg-glow hover:bg-glow-bright rounded-xl font-bold text-night-900 transition-all disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2"
+                                    >
+                                        {saving ? (
+                                            <>
+                                                <Loader2 className="w-4 h-4 animate-spin" />
+                                                Setting up...
+                                            </>
+                                        ) : (
+                                            <>
+                                                Start Learning
+                                                <ArrowRight className="w-4 h-4" />
+                                            </>
+                                        )}
+                                    </button>
+                                </div>
+                            </div>
+                        )}
+                    </div>
                 </div>
             </div>
         </main>

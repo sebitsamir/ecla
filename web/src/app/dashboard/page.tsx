@@ -15,6 +15,7 @@ import ModeAmbience from '@/components/ModeAmbience'
 import Firefly from '@/components/Firefly'
 import { COSMETICS, CosmeticId, DEFAULT_GLOW } from '@/lib/cosmetics'
 import { LogoMark } from '@/components/BrandLogo'
+import { useIntensity } from '@/lib/intensity'
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL ?? 'http://localhost:4000'
 
@@ -159,6 +160,7 @@ export default function DashboardPage() {
   const goalSmashed = overflowXp > 0
   const mode = MODE_META[preferredMode]
   const ModeIcon = mode.Icon
+  const intensity = useIntensity(preferredMode)
   const tier = GLOW_TIERS[glowTier] || GLOW_TIERS.Dim
   const tierProgress = glowTier === 'Brilliant' ? 100 : Math.round((activeDays / (activeDays + glowNext)) * 100)
 
@@ -172,7 +174,7 @@ export default function DashboardPage() {
       `}</style>
 
       <NightBackground />
-      <ModeAmbience mode={preferredMode} /> {/*Changes screen atmosphere based on mode */}
+      <ModeAmbience mode={preferredMode} />
 
       {/* Top bar */}
       <header className="sticky top-0 z-40 backdrop-blur-md bg-night-950/70 border-b border-white/5">
@@ -191,20 +193,37 @@ export default function DashboardPage() {
 
         {/* Hero: Firefly Dome + Greeting + Combo */}
         <section className="relative rounded-card border border-white/5 bg-night-800/60 p-6 md:p-8 backdrop-blur-sm overflow-hidden shadow-glow-sm">
-          <div className="pointer-events-none absolute -top-20 left-1/2 -translate-x-1/2 h-48 w-48 rounded-full dome-glow" style={{ background: `radial-gradient(circle, ${glowColors.halo}40 0%, transparent 70%)`, filter: 'blur(10px)' }} />
+          {intensity.showMascot && (
+            <div className="pointer-events-none absolute -top-20 left-1/2 -translate-x-1/2 h-48 w-48 rounded-full dome-glow" style={{ background: `radial-gradient(circle, ${glowColors.halo}40 0%, transparent 70%)`, filter: 'blur(10px)' }} />
+          )}
 
-          <div className="relative flex flex-col items-center text-center mb-6">
-            {/* Tappable firefly wearing the equipped glow */}
-            <div className="mb-3 cursor-pointer" onClick={() => setShowWardrobe(true)} title="Glow Collection">
-              <Firefly mood={tier.mood} size={130} glow={glowColors} />
+          {intensity.playfulCopy ? (
+            <div className="relative flex flex-col items-center text-center mb-6">
+              <div className="mb-3 cursor-pointer" onClick={() => setShowWardrobe(true)} title="Glow Collection">
+                <Firefly mood={tier.mood} size={intensity.largeMascot ? 130 : 96} glow={glowColors} />
+              </div>
+              <h1 className="font-display text-2xl md:text-3xl font-bold text-cream mb-1 flex items-center justify-center gap-2">
+                {getGreeting()} <Moon className="h-6 w-6 text-glow" />
+              </h1>
+              <p className="text-sm text-cream/50">Ecla missed you.</p>
             </div>
-            <h1 className="font-display text-2xl md:text-3xl font-bold text-cream mb-1 flex items-center justify-center gap-2">
-              {getGreeting()} <Moon className="h-6 w-6 text-glow" />
-            </h1>
-            <p className="text-sm text-cream/50">Ecla missed you.</p>
-          </div>
+          ) : (
+            <div className="relative mb-6 flex items-center justify-between">
+              <div>
+                <h1 className="font-display text-2xl md:text-3xl font-bold text-cream mb-1">Welcome back.</h1>
+                <p className="text-sm text-cream/50">Ready when you are.</p>
+              </div>
+              <button
+                onClick={() => setShowWardrobe(true)}
+                title="Glow Collection"
+                className="flex h-10 w-10 items-center justify-center rounded-full border border-white/10 bg-night-900/60 hover:border-white/25 transition-all"
+              >
+                <span className="h-3.5 w-3.5 rounded-full" style={{ background: glowColors.halo, boxShadow: `0 0 10px ${glowColors.halo}80` }} />
+              </button>
+            </div>
+          )}
 
-          {comboStreak >= 3 && (
+          {intensity.showComboBanner && comboStreak >= 3 && (
             <div className="combo-pop mb-4 inline-flex items-center gap-2 rounded-full border border-glow/40 bg-glow/10 px-4 py-2 text-sm font-bold text-glow">
               <Zap className="h-4 w-4" />
               <span>{comboStreak}-answer streak — bonus XP incoming!</span>
@@ -214,23 +233,23 @@ export default function DashboardPage() {
           <div className="grid grid-cols-2 gap-3">
             <div className="rounded-xl border border-white/5 bg-night-900/60 p-4">
               <div className="flex items-center gap-2 mb-2">
-                <Flame className="h-5 w-5 text-glow" />
+                <Flame className={`h-5 w-5 ${intensity.glowEffects ? 'text-glow' : 'text-cream/50'}`} />
                 <span className="text-xs font-bold uppercase tracking-wider text-cream/40">Day Streak</span>
               </div>
-              <p className="font-display text-3xl font-black text-glow">{streakDays}</p>
+              <p className={`font-display text-3xl font-black ${intensity.glowEffects ? 'text-glow' : 'text-cream'}`}>{streakDays}</p>
               <p className="text-xs text-cream/50">{streakDays === 1 ? 'day running' : 'days running'}</p>
             </div>
 
             <div className="rounded-xl border border-white/5 bg-night-900/60 p-4">
               <div className="flex items-center gap-2 mb-2">
-                <Sparkles className="h-5 w-5" style={{ color: tier.color }} />
+                <Sparkles className="h-5 w-5" style={{ color: intensity.glowEffects ? tier.color : '#9aa3b5' }} />
                 <span className="text-xs font-bold uppercase tracking-wider text-cream/40">Glow</span>
               </div>
-              <p className="font-display text-2xl font-black" style={{ color: tier.color }}>{glowTier}</p>
+              <p className="font-display text-2xl font-black" style={{ color: intensity.glowEffects ? tier.color : '#F4F1EA' }}>{glowTier}</p>
               <p className="text-xs text-cream/50">
                 {glowTier === 'Brilliant' ? (
                   <span className="flex items-center gap-1">
-                    Max tier <Sparkles className="h-3 w-3 inline" />
+                    Max tier {intensity.glowEffects && <Sparkles className="h-3 w-3 inline" />}
                   </span>
                 ) : (
                   `${glowNext} days to next tier`
@@ -285,11 +304,11 @@ export default function DashboardPage() {
           )}
         </section>
 
-        {/* Mode switcher */}
+                {/* Mode switcher */}
         <section className="rounded-card border border-white/5 bg-night-800/60 p-6 backdrop-blur-sm shadow-glow-sm">
-          <div className="flex items-center justify-between mb-4">
+          <div className="mb-4">
             <p className="text-xs font-bold uppercase tracking-wider text-cream/40">Learning Mode</p>
-            <button onClick={() => setShowModeSwitcher(true)} className="text-xs font-semibold text-cream/60 hover:text-cream transition-colors">Switch →</button>
+            <p className="text-sm text-cream/60 mt-1">{mode.desc} · tap to switch</p>
           </div>
           <div className="no-scrollbar flex gap-2 overflow-x-auto pb-1">
             {(Object.keys(MODE_META) as ModeId[]).map(id => {
@@ -300,7 +319,11 @@ export default function DashboardPage() {
                 <button
                   key={id}
                   onClick={() => switchMode(id)}
-                  className={`flex flex-shrink-0 items-center gap-2.5 rounded-full border px-4 py-2 transition-all ${active ? `${m.border} ${m.bg}/15 ${m.glow}` : 'border-white/10 bg-night-900/60 hover:border-white/20'}`}
+                  className={`flex flex-shrink-0 items-center gap-2.5 rounded-full border px-4 py-2.5 transition-all ${
+                    active 
+                      ? `${m.border} ${m.bg}/15 ${m.glow}` 
+                      : 'border-white/10 bg-night-900/60 hover:border-white/20 hover:bg-night-900'
+                  }`}
                 >
                   <MIcon className={`h-4 w-4 ${active ? m.text : 'text-cream/70'}`} />
                   <span className={`text-sm font-semibold ${active ? m.text : 'text-cream/70'}`}>{m.label}</span>
@@ -318,9 +341,11 @@ export default function DashboardPage() {
             <div className="relative">
               <div className="flex items-start gap-4">
                 <div className="relative flex-shrink-0">
-                  <div className="pointer-events-none absolute -top-12 left-1/2 -translate-x-1/2 z-10">
-                    <Firefly mood="idle" size={56} glow={glowColors} />
-                  </div>
+                  {intensity.showMascot && (
+                    <div className="pointer-events-none absolute -top-12 left-1/2 -translate-x-1/2 z-10">
+                      <Firefly mood="idle" size={56} glow={glowColors} />
+                    </div>
+                  )}
                   <div className={`flex h-16 w-16 items-center justify-center rounded-2xl border-2 ${mode.border} ${mode.bg}/15 ${mode.glow}`}>
                     <ModeIcon className={`h-7 w-7 ${mode.text}`} />
                   </div>
@@ -342,7 +367,7 @@ export default function DashboardPage() {
             </div>
           ) : (
             <div className="py-8 text-center">
-              <Firefly mood="proud" size={80} className="mx-auto mb-3" glow={glowColors} />
+              {intensity.showMascot && <Firefly mood="proud" size={80} className="mx-auto mb-3" glow={glowColors} />}
               <p className="text-cream/60">You've finished everything! New lessons coming soon.</p>
             </div>
           )}
@@ -373,48 +398,49 @@ export default function DashboardPage() {
           </Link>
         </section>
 
-        {/* Glow Meter progress */}
-        <section className="rounded-card border border-white/5 bg-night-800/60 p-6 backdrop-blur-sm shadow-glow-sm">
-          <div className="flex items-center justify-between mb-3">
-            <div>
-              <p className="text-xs font-bold uppercase tracking-wider text-cream/40 mb-1">Ecla's Glow Meter</p>
-              <p className="font-display text-lg font-bold text-cream">
-                <span style={{ color: tier.color }}>{glowTier}</span>
-                {glowTier !== 'Brilliant' && <span className="text-cream/40"> · {activeDays}/30 active days</span>}
-              </p>
-            </div>
-            <div className="flex items-center gap-3">
-              {/* Collection Chip */}
-              <button
-                onClick={() => setShowWardrobe(true)}
-                className="flex items-center gap-1.5 rounded-full border border-white/10 bg-night-900/60 px-3 py-1.5 text-xs font-bold text-cream/70 hover:text-cream hover:border-white/25 transition-all"
-              >
-                <Palette className="h-3.5 w-3.5" style={{ color: glowColors.halo }} />
-                Collection · {unlockedCosmetics.length}/{Object.keys(COSMETICS).length}
-              </button>
-              <div className="flex gap-1">
-                {['Dim', 'Warm', 'Radiant', 'Brilliant'].map(t => (
-                  <div
-                    key={t}
-                    className={`h-2.5 w-2.5 rounded-full ${GLOW_TIERS[t].color === tier.color ? '' : 'opacity-30'}`}
-                    style={{ background: GLOW_TIERS[t].color }}
-                    title={t}
-                  />
-                ))}
+        {/* Glow Meter progress - hidden in minimal mode */}
+        {intensity.showGlowMeter && (
+          <section className="rounded-card border border-white/5 bg-night-800/60 p-6 backdrop-blur-sm shadow-glow-sm">
+            <div className="flex items-center justify-between mb-3">
+              <div>
+                <p className="text-xs font-bold uppercase tracking-wider text-cream/40 mb-1">Ecla's Glow Meter</p>
+                <p className="font-display text-lg font-bold text-cream">
+                  <span style={{ color: tier.color }}>{glowTier}</span>
+                  {glowTier !== 'Brilliant' && <span className="text-cream/40"> · {activeDays}/30 active days</span>}
+                </p>
+              </div>
+              <div className="flex items-center gap-3">
+                <button
+                  onClick={() => setShowWardrobe(true)}
+                  className="flex items-center gap-1.5 rounded-full border border-white/10 bg-night-900/60 px-3 py-1.5 text-xs font-bold text-cream/70 hover:text-cream hover:border-white/25 transition-all"
+                >
+                  <Palette className="h-3.5 w-3.5" style={{ color: glowColors.halo }} />
+                  Collection · {unlockedCosmetics.length}/{Object.keys(COSMETICS).length}
+                </button>
+                <div className="flex gap-1">
+                  {['Dim', 'Warm', 'Radiant', 'Brilliant'].map(t => (
+                    <div
+                      key={t}
+                      className={`h-2.5 w-2.5 rounded-full ${GLOW_TIERS[t].color === tier.color ? '' : 'opacity-30'}`}
+                      style={{ background: GLOW_TIERS[t].color }}
+                      title={t}
+                    />
+                  ))}
+                </div>
               </div>
             </div>
-          </div>
-          {glowTier !== 'Brilliant' && (
-            <div className="relative h-2 rounded-full bg-white/5 overflow-hidden">
-              <div className="h-full rounded-full transition-all duration-700" style={{ width: `${tierProgress}%`, background: `linear-gradient(90deg, ${tier.color}, #FFF6CF)` }} />
-            </div>
-          )}
-          <p className="mt-3 text-xs text-cream/50">
-            {glowTier === 'Brilliant'
-              ? 'Maximum tier reached. Ecla shines brightest for you.'
-              : `${glowNext} more active day${glowNext === 1 ? '' : 's'} to evolve to ${getTierAfter(glowTier)}. Consistency compounds.`}
-          </p>
-        </section>
+            {glowTier !== 'Brilliant' && (
+              <div className="relative h-2 rounded-full bg-white/5 overflow-hidden">
+                <div className="h-full rounded-full transition-all duration-700" style={{ width: `${tierProgress}%`, background: `linear-gradient(90deg, ${tier.color}, #FFF6CF)` }} />
+              </div>
+            )}
+            <p className="mt-3 text-xs text-cream/50">
+              {glowTier === 'Brilliant'
+                ? 'Maximum tier reached. Ecla shines brightest for you.'
+                : `${glowNext} more active day${glowNext === 1 ? '' : 's'} to evolve to ${getTierAfter(glowTier)}. Consistency compounds.`}
+            </p>
+          </section>
+        )}
       </div>
 
       {/* Wardrobe Modal */}
