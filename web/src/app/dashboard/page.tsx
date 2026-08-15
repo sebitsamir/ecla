@@ -155,6 +155,8 @@ export default function DashboardPage() {
   }
 
   const progressPercent = Math.min((dailyXp / dailyGoalXp) * 100, 100)
+  const overflowXp = Math.max(0, dailyXp - dailyGoalXp)
+  const goalSmashed = overflowXp > 0
   const mode = MODE_META[preferredMode]
   const ModeIcon = mode.Icon
   const tier = GLOW_TIERS[glowTier] || GLOW_TIERS.Dim
@@ -243,26 +245,40 @@ export default function DashboardPage() {
           <div className="flex items-center justify-between mb-4">
             <div>
               <p className="text-xs font-bold uppercase tracking-wider text-cream/40 mb-1">Today's Goal</p>
-              <p className="font-display text-2xl font-bold text-cream">{dailyXp} <span className="text-cream/40 text-lg">/ {dailyGoalXp} XP</span></p>
+              <div className="flex flex-wrap items-center gap-2">
+                <p className="font-display text-2xl font-bold text-cream">
+                  {goalSmashed ? dailyGoalXp : dailyXp} <span className="text-cream/40 text-lg">/ {dailyGoalXp} XP</span>
+                </p>
+                {goalSmashed && (
+                  <span className="inline-flex items-center gap-1 rounded-full border border-glow/40 bg-glow/10 px-2.5 py-1 text-xs font-bold text-glow">
+                    <Sparkles className="h-3 w-3" /> +{overflowXp} bonus XP
+                  </span>
+                )}
+              </div>
             </div>
             <div className="relative h-20 w-20">
               <svg className="h-full w-full -rotate-90" viewBox="0 0 100 100">
                 <circle cx="50" cy="50" r="42" stroke="rgba(244,241,234,0.1)" strokeWidth="8" fill="transparent" />
+                {goalSmashed && (
+                  <circle cx="50" cy="50" r="48" stroke="#FFC857" strokeWidth="2" fill="transparent" opacity="0.7" style={{ filter: 'drop-shadow(0 0 6px #FFC857)' }} />
+                )}
                 <circle
                   cx="50" cy="50" r="42"
-                  stroke={tier.color} strokeWidth="8" fill="transparent"
+                  stroke={goalSmashed ? '#FFC857' : tier.color} strokeWidth="8" fill="transparent"
                   strokeDasharray={`${2 * Math.PI * 42}`}
                   strokeDashoffset={`${2 * Math.PI * 42 * (1 - progressPercent / 100)}`}
                   strokeLinecap="round"
-                  style={{ filter: `drop-shadow(0 0 6px ${tier.color})`, transition: 'stroke-dashoffset .6s ease-out' }}
+                  style={{ filter: `drop-shadow(0 0 6px ${goalSmashed ? '#FFC857' : tier.color})`, transition: 'stroke-dashoffset .6s ease-out' }}
                 />
               </svg>
               <div className="absolute inset-0 flex items-center justify-center">
-                <Target className="h-5 w-5 text-cream/70" />
+                {goalSmashed ? <CheckCircle2 className="h-6 w-6 text-glow" /> : <Target className="h-5 w-5 text-cream/70" />}
               </div>
             </div>
           </div>
-          {progressPercent >= 100 ? (
+          {goalSmashed ? (
+            <p className="text-sm font-semibold text-glow flex items-center gap-2"><Sparkles className="h-4 w-4" /> Goal smashed — bonus XP earned. Ecla is radiant!</p>
+          ) : progressPercent >= 100 ? (
             <p className="text-sm font-semibold text-leaf flex items-center gap-2"><CheckCircle2 className="h-4 w-4" /> Daily goal complete — Ecla is shining!</p>
           ) : (
             <p className="text-sm text-cream/50">{dailyGoalXp - dailyXp} XP left today. One more lesson?</p>
