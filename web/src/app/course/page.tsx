@@ -4,9 +4,9 @@ import { useEffect, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { useAuth } from '@clerk/nextjs'
 import {
-    ArrowLeft, Briefcase, ChevronDown, ChevronRight, Clock, Crown, Gift, Hash, Heart,
-    Lock, MapPin, PenLine, RefreshCw, Sparkles, User, Users, UtensilsCrossed, X,
-    CheckCircle2, BookOpen, Zap, Music, GraduationCap
+    ArrowLeft, ChevronDown, ChevronRight, Crown, Gift,
+    Lock, X, CheckCircle2,
+    BookOpen, Zap, Music, GraduationCap, type LucideIcon
 } from 'lucide-react'
 import posthog from 'posthog-js'
 import NightBackground from '@/components/NightBackground'
@@ -14,6 +14,7 @@ import ModeAmbience from '@/components/ModeAmbience'
 import Moon from '@/components/Moon'
 import Firefly from '@/components/Firefly'
 import { useEquippedGlow } from '@/lib/useEquippedGlow'
+import { categoryFor} from '@/lib/categories'
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL ?? 'http://localhost:4000'
 
@@ -24,50 +25,39 @@ const JOKES = [
     "What did Ecla say after dinner? That was light food!",
 ]
 
-/* Mode identity — used by the global switcher AND the concept launcher */
-const MODE_META: Record<string, {
-    id: string; label: string; desc: string;
-    dot: string; bg: string; text: string; border: string; glow: string; Icon: any
+type ModeId = 'STORY' | 'DRILL' | 'IMMERSION' | 'PROFESSIONAL'
+
+const MODE_META: Record<ModeId, {
+    id: ModeId; label: string; desc: string;
+    dot: string; bg: string; text: string; border: string; glow: string; borderColor: string; Icon: LucideIcon
 }> = {
     STORY: {
         id: 'STORY', label: 'Story', desc: 'Learn through narrative',
         dot: 'bg-story', bg: 'bg-story', text: 'text-night-900', border: 'border-story',
+        borderColor: 'rgba(255,180,90,0.4)',
         glow: 'shadow-[0_0_24px_rgba(255,180,90,0.35)]', Icon: BookOpen,
     },
     DRILL: {
         id: 'DRILL', label: 'Drill', desc: 'Rapid-fire practice',
         dot: 'bg-drill', bg: 'bg-drill', text: 'text-night-900', border: 'border-drill',
+        borderColor: 'rgba(77,216,230,0.4)',
         glow: 'shadow-[0_0_24px_rgba(77,216,230,0.35)]', Icon: Zap,
     },
     IMMERSION: {
         id: 'IMMERSION', label: 'Immersion', desc: 'Culture & native speech',
         dot: 'bg-immersion', bg: 'bg-immersion', text: 'text-night-900', border: 'border-immersion',
+        borderColor: 'rgba(185,140,240,0.4)',
         glow: 'shadow-[0_0_24px_rgba(185,140,240,0.35)]', Icon: Music,
     },
     PROFESSIONAL: {
         id: 'PROFESSIONAL', label: 'Professional', desc: 'Formal & workplace',
         dot: 'bg-pro', bg: 'bg-pro', text: 'text-night-900', border: 'border-pro',
+        borderColor: 'rgba(127,166,255,0.4)',
         glow: 'shadow-[0_0_24px_rgba(127,166,255,0.35)]', Icon: GraduationCap,
     },
 }
 
-/* Meaningful icon per concept */
-function conceptIcon(name: string) {
-    const n = name.toLowerCase()
-    if (/(identity|name|self|who|intro)/.test(n)) return User
-    if (/(emotion|feel|estar|ser|mood|being)/.test(n)) return Heart
-    if (/(place|location|where|city|direction)/.test(n)) return MapPin
-    if (/(number|count|how many|age)/.test(n)) return Hash
-    if (/(food|eat|restaurant|meal|drink)/.test(n)) return UtensilsCrossed
-    if (/(family|friend|people|relationship)/.test(n)) return Users
-    if (/(time|date|when|clock|daily)/.test(n)) return Clock
-    if (/(work|job|office|business)/.test(n)) return Briefcase
-    if (/(describ|adjective|color|appearance)/.test(n)) return PenLine
-    return Sparkles
-}
-
 type NodeState = 'mastered' | 'struggling' | 'in_progress' | 'current' | 'locked'
-type ModeId = keyof typeof MODE_META
 
 const TOP = 110
 const SPACING = 175
@@ -100,7 +90,7 @@ export default function CourseMapPage() {
             const res = await fetch(`${API_URL}/api/v1/course/map`, { headers: { Authorization: `Bearer ${token}` } })
             const data = await res.json()
             setUnits(data.units)
-            if (data.preferredMode && MODE_META[data.preferredMode]) {
+            if (data.preferredMode && MODE_META[data.preferredMode as ModeId]) {
                 setPreferredMode(data.preferredMode as ModeId)
             }
         } catch (e) { console.error(e) } finally { setLoading(false) }
@@ -111,7 +101,6 @@ export default function CourseMapPage() {
     const switchMode = async (mode: ModeId) => {
         if (mode === preferredMode) { setShowModePicker(false); return }
 
-        // OPTIMISTIC UPDATE
         const previousMode = preferredMode
         setPreferredMode(mode)
         setShowModePicker(false)
@@ -124,7 +113,6 @@ export default function CourseMapPage() {
                 body: JSON.stringify({ mode }),
             })
             posthog.capture('mode_switched', { new_mode: mode, source: 'course_map' })
-            // Background refresh
             fetchMap()
         } catch (e) {
             console.error(e)
@@ -132,7 +120,6 @@ export default function CourseMapPage() {
         }
     }
 
-    /* Node states across the whole path */
     const states: Record<string, NodeState> = {}
     let currentFound = false
     for (const u of units) for (const c of u.concepts) {
@@ -157,11 +144,26 @@ export default function CourseMapPage() {
 
     const nodeFor = (state: NodeState) => {
         switch (state) {
-            case 'mastered': return { ring: 'border-glow-deep bg-glow shadow-glow-md', icon: 'text-night-900', sub: 'Mastered', subCls: 'text-glow' }
-            case 'current': return { ring: 'border-glow bg-night-800 shadow-glow-md', icon: 'text-glow', sub: 'Start here', subCls: 'text-glow' }
-            case 'in_progress': return { ring: 'border-drill/70 bg-night-800', icon: 'text-drill', sub: 'In progress', subCls: 'text-drill' }
-            case 'struggling': return { ring: 'border-coral/70 bg-night-800', icon: 'text-cream/80', sub: 'Needs review', subCls: 'text-coral' }
-            default: return { ring: 'border-white/10 bg-night-800/60', icon: 'text-cream/25', sub: 'Locked', subCls: 'text-cream/25' }
+            case 'mastered': return {
+                ring: 'border-glow bg-glow shadow-[0_0_20px_rgba(255,200,87,0.5)]',
+                sub: 'Mastered', subCls: 'text-glow'
+            }
+            case 'current': return {
+                ring: 'border-glow bg-night-800 shadow-[0_0_24px_rgba(255,200,87,0.4)]',
+                sub: 'Start here', subCls: 'text-glow'
+            }
+            case 'in_progress': return {
+                ring: 'border-drill/60 bg-night-800 shadow-[0_0_16px_rgba(77,216,230,0.25)]',
+                sub: 'In progress', subCls: 'text-drill'
+            }
+            case 'struggling': return {
+                ring: 'border-coral/60 bg-night-800 shadow-[0_0_16px_rgba(255,107,107,0.25)]',
+                sub: 'Needs review', subCls: 'text-coral'
+            }
+            default: return {
+                ring: 'border-white/10 bg-night-800/60',
+                sub: 'Locked', subCls: 'text-cream/25'
+            }
         }
     }
 
@@ -170,16 +172,17 @@ export default function CourseMapPage() {
     return (
         <main className="min-h-screen font-body relative overflow-x-clip">
             <style>{`
-        @keyframes node-in { from { opacity: 0; transform: translate(-50%,-50%) scale(.5); } to { opacity: 1; transform: translate(-50%,-50%) scale(1); } }
-        .node-in { animation: node-in .55s cubic-bezier(.34,1.56,.64,1) both; }
-        @keyframes chest-float { 0%,100% { transform: translate(-50%,-50%) translateY(0); } 50% { transform: translate(-50%,-50%) translateY(-7px); } }
-        .chest-float { animation: chest-float 4s ease-in-out infinite; }
-      `}</style>
+                @keyframes node-in { from { opacity: 0; transform: translate(-50%,-50%) scale(.5); } to { opacity: 1; transform: translate(-50%,-50%) scale(1); } }
+                .node-in { animation: node-in .55s cubic-bezier(.34,1.56,.64,1) both; }
+                @keyframes chest-float { 0%,100% { transform: translate(-50%,-50%) translateY(0); } 50% { transform: translate(-50%,-50%) translateY(-7px); } }
+                .chest-float { animation: chest-float 4s ease-in-out infinite; }
+                @keyframes firefly-bob { 0%,100% { transform: translate(-50%, 0); } 50% { transform: translate(-50%, -6px); } }
+                .firefly-bob { animation: firefly-bob 2.5s ease-in-out infinite; }
+            `}</style>
 
             <NightBackground />
             <ModeAmbience mode={preferredMode} />
-            
-            {/* Professional Moon component */}
+
             <Moon phase="full" size="lg" position="top-right" />
 
             <header className="sticky top-0 z-40 backdrop-blur-md bg-night-950/70 border-b border-white/5">
@@ -189,10 +192,10 @@ export default function CourseMapPage() {
                     </button>
                     <h1 className="font-display text-xl font-bold text-cream">The Path</h1>
 
-                    {/* Global Mode Switcher — always visible, one tap away */}
                     <button
                         onClick={() => setShowModePicker(true)}
-                        className={`flex items-center gap-2 rounded-full border ${currentMode.border}/40 bg-night-800/80 pl-2.5 pr-3.5 py-1.5 backdrop-blur-sm hover:bg-night-800 transition-all ${currentMode.glow}`}
+                        className="flex items-center gap-2 rounded-full border bg-night-800/80 pl-2.5 pr-3.5 py-1.5 backdrop-blur-sm hover:bg-night-800 transition-all"
+                        style={{ borderColor: currentMode.borderColor, boxShadow: `0 0 24px ${currentMode.borderColor}` }}
                     >
                         <span className={`h-2.5 w-2.5 rounded-full ${currentMode.dot}`} />
                         <span className="text-sm font-semibold text-cream">{currentMode.label}</span>
@@ -234,7 +237,7 @@ export default function CourseMapPage() {
                                 </div>
                                 <div className="w-28">
                                     <div className="h-2 rounded-full bg-white/5 overflow-hidden">
-                                        <div className="h-full rounded-full bg-gradient-to-r from-glow-deep to-glow" style={{ width: `${pct}%` }} />
+                                        <div className="h-full rounded-full bg-gradient-to-r from-glow to-glow-bright" style={{ width: `${pct}%` }} />
                                     </div>
                                     <p className="mt-1 text-right text-xs font-bold text-glow">{pct}%</p>
                                 </div>
@@ -269,40 +272,49 @@ export default function CourseMapPage() {
 
                                     const concept = item.concept
                                     const state = states[concept.id]
-                                    const { ring, icon, sub, subCls } = nodeFor(state)
+                                    const { ring, sub, subCls } = nodeFor(state)
                                     const locked = state === 'locked'
-                                    const Icon = conceptIcon(concept.name)
+                                    const cat = categoryFor(concept.name)
+                                    const Icon = cat.icon
 
                                     return (
                                         <div key={concept.id} className="node-in absolute z-10" style={{ left, top: p.y, animationDelay: `${k * 80}ms` }}>
                                             <div className="relative">
+                                                {/* Firefly perches naturally above current node */}
                                                 {state === 'current' && (
-                                                    <div className="pointer-events-none absolute -top-[84px] left-1/2 z-20 -translate-x-1/2">
-                                                        <Firefly mood="idle" size={92} glow={glowColors} />
+                                                    <div className="pointer-events-none absolute -top-16 left-1/2 z-20 firefly-bob">
+                                                        <Firefly mood="idle" size={72} glow={glowColors} />
                                                     </div>
                                                 )}
 
                                                 <button
                                                     onClick={() => !locked && openSheet(concept)}
                                                     disabled={locked}
-                                                    className={`relative flex h-24 w-24 items-center justify-center rounded-full border-2 transition-transform duration-200 ${ring} ${locked ? 'cursor-not-allowed' : 'cursor-pointer hover:scale-110 active:scale-95'}`}
+                                                    className={`relative flex h-24 w-24 items-center justify-center rounded-full border-[3px] transition-transform duration-200 ${ring} ${locked ? 'cursor-not-allowed' : 'cursor-pointer hover:scale-110 active:scale-95'}`}
                                                 >
-                                                    {state === 'current' && <span className="absolute inset-0 animate-pulse rounded-full border-2 border-glow" />}
-                                                    <Icon className={`h-9 w-9 ${icon}`} />
+                                                    {state === 'current' && (
+                                                        <span className="absolute inset-0 animate-pulse rounded-full border-[3px] border-glow/40" />
+                                                    )}
 
-                                                    {state === 'mastered' && (
-                                                        <span className="absolute -top-1 -right-1 flex h-7 w-7 items-center justify-center rounded-full border-2 border-night-950 bg-glow text-night-900"><Crown className="h-3.5 w-3.5" /></span>
-                                                    )}
-                                                    {state === 'struggling' && (
-                                                        <span className="absolute -top-1 -right-1 flex h-7 w-7 items-center justify-center rounded-full border-2 border-night-950 bg-coral text-night-950"><RefreshCw className="h-3.5 w-3.5" /></span>
-                                                    )}
-                                                    {locked && (
-                                                        <span className="absolute -top-1 -right-1 flex h-7 w-7 items-center justify-center rounded-full border-2 border-night-950 bg-night-700 text-cream/40"><Lock className="h-3.5 w-3.5" /></span>
+                                                    {/* Locked: show lock inside instead of category icon */}
+                                                    {locked ? (
+                                                        <Lock className="h-8 w-8 text-cream/25" />
+                                                    ) : (
+                                                        <Icon
+                                                            className={`h-10 w-10 ${state === 'mastered' ? 'text-night-900' : ''}`}
+                                                            style={state !== 'mastered' ? { color: cat.color } : undefined}
+                                                        />
                                                     )}
                                                 </button>
 
-                                                <div className="absolute left-1/2 top-full mt-3 w-max max-w-[160px] -translate-x-1/2 text-center">
-                                                    <p className={`text-sm font-bold leading-snug ${locked ? 'text-cream/30' : 'text-cream'}`}>{concept.name}</p>
+                                                {/* Label below — category name shown subtly on hover via title, state text always visible */}
+                                                <div className="absolute left-1/2 top-full mt-3 w-max max-w-[180px] -translate-x-1/2 text-center">
+                                                    <p
+                                                        className={`text-sm font-bold leading-snug mb-0.5 ${locked ? 'text-cream/30' : 'text-cream'}`}
+                                                        title={`${cat.label}: ${concept.name}`}
+                                                    >
+                                                        {concept.name}
+                                                    </p>
                                                     <p className={`text-xs font-semibold ${subCls}`}>{sub}</p>
                                                 </div>
                                             </div>
@@ -315,18 +327,23 @@ export default function CourseMapPage() {
                 })}
             </div>
 
-            {/* Concept sheet — simplified, uses the global mode */}
+            {/* Concept sheet */}
             {openConcept && (
                 <div className="fixed inset-0 z-50 flex items-end justify-center bg-black/60 backdrop-blur-sm sm:items-center sm:p-4" onClick={() => setOpenConcept(null)}>
                     <div className="w-full max-w-md rounded-t-3xl border border-white/10 bg-night-800 p-6 shadow-glow-md sm:rounded-card sm:p-8" onClick={e => e.stopPropagation()}>
                         <div className="mb-5 flex items-start justify-between">
                             <div className="flex items-center gap-4">
                                 {(() => {
-                                    const Icon = conceptIcon(openConcept.name); return (
-                                        <div className="flex h-14 w-14 items-center justify-center rounded-full border-2 border-glow/40 bg-night-900 text-glow shadow-glow-sm"><Icon className="h-6 w-6" /></div>
+                                    const cat = categoryFor(openConcept.name); const Icon = cat.icon; return (
+                                        <div className="flex h-14 w-14 items-center justify-center rounded-full border-2 border-white/10 bg-night-900 shadow-glow-sm" style={{ color: cat.color }}>
+                                            <Icon className="h-6 w-6" />
+                                        </div>
                                     )
                                 })()}
                                 <div>
+                                    <p className="text-xs font-bold uppercase tracking-wider mb-0.5" style={{ color: categoryFor(openConcept.name).color }}>
+                                        {categoryFor(openConcept.name).label}
+                                    </p>
                                     <h3 className="font-display text-xl font-bold text-cream">{openConcept.name}</h3>
                                     <p className="text-xs font-semibold text-cream/50">+{openConcept.xpReward} XP · {openConcept.accuracy}% accuracy</p>
                                 </div>
@@ -338,7 +355,6 @@ export default function CourseMapPage() {
                             {openConcept.grammarNote}
                         </p>
 
-                        {/* Mode context line — reminds them which mode this lesson will launch in */}
                         <div className="mb-4 flex items-center gap-2 text-xs font-bold uppercase tracking-wider text-cream/40">
                             <span className={`h-2 w-2 rounded-full ${currentMode.dot}`} />
                             Continue in {currentMode.label} Mode
@@ -351,7 +367,7 @@ export default function CourseMapPage() {
                                 return (
                                     <div className="rounded-xl border border-white/10 bg-night-900/40 p-5 text-center">
                                         <Lock className="h-5 w-5 text-cream/40 mx-auto mb-2" />
-                                        <p className="text-sm font-semibold text-cream/60">This concept isn't available in {currentMode.label} mode yet.</p>
+                                        <p className="text-sm font-semibold text-cream/60">This concept isn&apos;t available in {currentMode.label} mode yet.</p>
                                         <p className="text-xs text-cream/40 mt-1">Switch modes above to try a different approach.</p>
                                     </div>
                                 )
@@ -394,10 +410,11 @@ export default function CourseMapPage() {
                                     <button
                                         key={id}
                                         onClick={() => switchMode(id)}
-                                        className={`flex w-full items-center gap-4 rounded-xl border px-4 py-3 transition-all ${active ? `border-white/25 bg-night-900 ${m.glow}` : 'border-white/10 bg-night-900/60 hover:border-white/25'}`}
+                                        className={`flex w-full items-center gap-4 rounded-xl border px-4 py-3 transition-all ${active ? 'border-white/25 bg-night-900' : 'border-white/10 bg-night-900/60 hover:border-white/25'}`}
+                                        style={active ? { boxShadow: `0 0 24px ${m.borderColor}` } : undefined}
                                     >
                                         <span className={`flex h-9 w-9 items-center justify-center rounded-lg ${m.bg} ${m.text}`}>
-                                            <MIcon className="h-4.5 w-4.5" />
+                                            <MIcon className="h-5 w-5" />
                                         </span>
                                         <span className="flex-1 text-left">
                                             <span className="block font-display text-sm font-bold text-cream">{m.label}</span>
