@@ -12,6 +12,7 @@ import NightBackground from '@/components/NightBackground'
 import ModeAmbience, { MODE_BEHAVIOR } from '@/components/ModeAmbience'
 import Firefly from '@/components/Firefly'
 import { COSMETICS, CosmeticId, DEFAULT_GLOW } from '@/lib/cosmetics'
+import { useIntensity } from '@/lib/intensity'
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL ?? 'http://localhost:4000'
 
@@ -23,7 +24,6 @@ type Exercise = {
     hint?: string
 }
 
-// Added `dot` property to each mode
 const MODE_META = {
     STORY: { label: 'Story', color: 'text-story', border: 'border-story', bg: 'bg-story', glow: 'shadow-[0_0_24px_rgba(255,180,90,0.4)]', Icon: BookOpen, dot: 'bg-story' },
     DRILL: { label: 'Drill', color: 'text-drill', border: 'border-drill', bg: 'bg-drill', glow: 'shadow-[0_0_24px_rgba(77,216,230,0.4)]', Icon: Zap, dot: 'bg-drill' },
@@ -183,6 +183,7 @@ export default function LessonPage() {
     const total = exercises.length
     const progressPercent = total ? ((currentIndex + (isRevealed ? 1 : 0)) / total) * 100 : 0
     const meta = MODE_META[lesson.mode as keyof typeof MODE_META]
+    const intensity = useIntensity(lesson.mode)
     const Icon = meta?.Icon || Sparkles
     const xpEarned = Math.round((correctCount / Math.max(1, total)) * (lesson.xpReward || 20))
 
@@ -196,7 +197,7 @@ export default function LessonPage() {
             `}</style>
 
             <NightBackground />
-            <ModeAmbience mode={lesson.mode} /> {/* Changes screen atmosphere based on mode */}
+            <ModeAmbience mode={lesson.mode} />
 
             {/* Top bar */}
             <header className={`sticky top-0 z-40 backdrop-blur-md bg-night-950/80 border-b ${meta?.border || 'border-white/5'}/20`}>
@@ -205,16 +206,19 @@ export default function LessonPage() {
                         <X className="h-5 w-5" />
                     </button>
 
-                    {/* Glowing progress trail with firefly rider */}
+                    {/* Progress trail — firefly rider hidden in minimal mode */}
                     <div className="flex-1 relative h-4">
                         <div className="absolute inset-0 rounded-full bg-white/5 overflow-hidden">
                             <div
-                                className={`h-full rounded-full ${meta?.bg || 'bg-glow'} transition-all ease-out ${meta?.glow || ''} ${lesson.mode === 'DRILL' ? 'duration-200' : 'duration-500'}`}
-                                style={{ width: `${progressPercent}%` }}
+                                className={`h-full rounded-full ${meta?.bg || 'bg-glow'} transition-all ease-out ${lesson.mode === 'DRILL' ? 'duration-200' : 'duration-500'}`}
+                                style={{ 
+                                    width: `${progressPercent}%`,
+                                    boxShadow: intensity.glowEffects ? undefined : 'none'
+                                }}
                             />
                         </div>
-                        {/* Firefly rider — slides with progress & adopts mode behavior */}
-                        {!isFinished && (
+                        {/* Firefly rider — only in full/high modes */}
+                        {!isFinished && intensity.showMascot && (
                             <div
                                 className={`absolute top-1/2 -translate-y-1/2 pointer-events-none transition-all ease-out ${MODE_BEHAVIOR[lesson.mode] ?? ''} ${lesson.mode === 'DRILL' ? 'duration-200' : 'duration-500'}`}
                                 style={{ left: `calc(${progressPercent}% - 14px)` }}
@@ -224,10 +228,19 @@ export default function LessonPage() {
                         )}
                     </div>
 
-                    {/* Hearts */}
+                    {/* Hearts — cleaner in minimal mode */}
                     <div className="flex items-center gap-0.5">
                         {Array.from({ length: 5 }).map((_, i) => (
-                            <Heart key={i} className={`h-5 w-5 transition-all duration-300 ${i < hearts ? 'fill-coral text-coral' : 'text-cream/15'}`} />
+                            <Heart 
+                                key={i} 
+                                className={`h-5 w-5 transition-all duration-300 ${
+                                    i < hearts 
+                                        ? intensity.glowEffects 
+                                            ? 'fill-coral text-coral' 
+                                            : 'fill-cream/70 text-cream/70' 
+                                        : 'text-cream/15'
+                                }`} 
+                            />
                         ))}
                     </div>
                 </div>
@@ -256,8 +269,8 @@ export default function LessonPage() {
 
                     {/* Question card */}
                     <div className={`relative ${shakeCard ? 'card-shake' : ''}`}>
-                        {/* Floating +XP */}
-                        {showXpFloat && (
+                        {/* Floating +XP — suppressed in minimal mode */}
+                        {intensity.showComboBanner && showXpFloat && (
                             <div className="pointer-events-none absolute left-1/2 -top-4 z-10 xp-float">
                                 <div className="inline-flex items-center gap-1.5 rounded-full bg-glow px-3 py-1 text-sm font-black text-night-900 shadow-glow-md">
                                     <Sparkles className="h-3.5 w-3.5" /> +{Math.round((lesson.xpReward || 20) / total)} XP
@@ -338,21 +351,34 @@ export default function LessonPage() {
                             {isRevealed && (
                                 <div className="mt-6">
                                     {isCorrect ? (
-                                        <div className="flex items-center gap-3 rounded-xl border border-leaf/30 bg-leaf/10 p-4">
-                                            <Firefly mood="proud" size={48} glow={glowColors} />
-                                            <p className="font-semibold text-leaf">Perfect! Keep going.</p>
-                                        </div>
+                                        intensity.playfulCopy ? (
+                                            <div className="flex items-center gap-3 rounded-xl border border-leaf/30 bg-leaf/10 p-4">
+                                                <Firefly mood="proud" size={48} glow={glowColors} />
+                                                <p className="font-semibold text-leaf">Perfect! Keep going.</p>
+                                            </div>
+                                        ) : (
+                                            <div className="flex items-center gap-3 rounded-xl border border-leaf/30 bg-leaf/10 p-4">
+                                                <CheckCircle2 className="h-6 w-6 text-leaf flex-shrink-0" />
+                                                <p className="font-semibold text-leaf">Correct.</p>
+                                            </div>
+                                        )
                                     ) : (
                                         <div className="rounded-xl border border-coral/30 bg-coral/10 p-4 space-y-2">
                                             <div className="flex items-center gap-3">
-                                                <Firefly mood="sad" size={48} glow={glowColors} />
-                                                <p className="font-semibold text-coral">Not quite right.</p>
+                                                {intensity.playfulCopy ? (
+                                                    <Firefly mood="sad" size={48} glow={glowColors} />
+                                                ) : (
+                                                    <XCircle className="h-6 w-6 text-coral flex-shrink-0" />
+                                                )}
+                                                <p className="font-semibold text-coral">{intensity.playfulCopy ? 'Not quite right.' : 'Incorrect.'}</p>
                                             </div>
-                                            <p className="text-sm text-cream/80 pl-[60px]">
+                                            <p className={`text-sm text-cream/80 ${intensity.playfulCopy ? 'pl-[60px]' : 'pl-[36px]'}`}>
                                                 Correct answer: <span className="font-bold text-cream">{currentExercise.answer}</span>
                                             </p>
                                             {currentExercise.hint && (
-                                                <p className="text-xs text-cream/60 pl-[60px] italic">💡 {currentExercise.hint}</p>
+                                                <p className={`text-xs text-cream/60 italic ${intensity.playfulCopy ? 'pl-[60px]' : 'pl-[36px]'}`}>
+                                                    {intensity.playfulCopy ? '💡' : '—'} {currentExercise.hint}
+                                                </p>
                                             )}
                                         </div>
                                     )}
@@ -370,17 +396,34 @@ export default function LessonPage() {
                     </div>
                 </div>
             ) : (
-                /* Celebration screen */
+                /* Celebration screen — intensity-aware */
                 <div className="mx-auto max-w-md px-4 py-16 text-center relative">
-                    <ModeAmbience mode={lesson.mode} /> {/* Also applied to celebration screen */}
-                    <div className="mb-8 flex justify-center relative z-10"><Firefly mood="proud" size={180} glow={glowColors} /></div>
-                    <h1 className="font-display text-4xl md:text-5xl font-black text-cream mb-3 relative z-10">Radiant!</h1>
-                    <p className="text-cream/60 text-lg mb-8 relative z-10">Ecla lit up the whole path for you today.</p>
+                    <ModeAmbience mode={lesson.mode} />
+
+                    {intensity.fullCelebration ? (
+                        /* Full celebration: firefly hero + "Radiant!" */
+                        <>
+                            <div className="mb-8 flex justify-center relative z-10"><Firefly mood="proud" size={180} glow={glowColors} /></div>
+                            <h1 className="font-display text-4xl md:text-5xl font-black text-cream mb-3 relative z-10">Radiant!</h1>
+                            <p className="text-cream/60 text-lg mb-8 relative z-10">Ecla lit up the whole path for you today.</p>
+                        </>
+                    ) : (
+                        /* Minimal celebration: clean checkmark + "Lesson complete" */
+                        <>
+                            <div className="mb-8 flex justify-center relative z-10">
+                                <div className="flex h-24 w-24 items-center justify-center rounded-full bg-leaf/15 border-2 border-leaf/40">
+                                    <CheckCircle2 className="h-12 w-12 text-leaf" />
+                                </div>
+                            </div>
+                            <h1 className="font-display text-3xl md:text-4xl font-black text-cream mb-3 relative z-10">Lesson complete.</h1>
+                            <p className="text-cream/60 text-lg mb-8 relative z-10">Here's how you did.</p>
+                        </>
+                    )}
 
                     <div className="grid grid-cols-3 gap-3 mb-8 relative z-10">
-                        <div className="rounded-card border border-glow/30 bg-night-800/70 p-4">
+                        <div className={`rounded-card border ${intensity.glowEffects ? 'border-glow/30' : 'border-white/10'} bg-night-800/70 p-4`}>
                             <p className="text-xs font-bold uppercase tracking-wider text-cream/40 mb-1">Earned</p>
-                            <p className="font-display text-2xl font-bold text-glow">+{xpEarned}</p>
+                            <p className={`font-display text-2xl font-bold ${intensity.glowEffects ? 'text-glow' : 'text-cream'}`}>+{xpEarned}</p>
                             <p className="text-xs text-cream/50">XP</p>
                         </div>
                         <div className="rounded-card border border-leaf/30 bg-night-800/70 p-4">
