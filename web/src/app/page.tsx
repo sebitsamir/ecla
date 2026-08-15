@@ -8,12 +8,11 @@ import {
     CheckCircle2, ArrowRight, Sparkles, ArrowUpRight,
     Heart, Flame, Shield
 } from 'lucide-react'
+import Link from 'next/link'
 import NightBackground from '@/components/NightBackground'
 import Moon from '@/components/Moon'
 import Firefly from '@/components/Firefly'
-import Link from 'next/link'
-import { LogoMark } from '@/components/BrandLogo'
-import { Logo } from '@/components/BrandLogo'
+import { Logo, LogoMark } from '@/components/BrandLogo'
 
 export default function LandingPage() {
     const router = useRouter()
@@ -98,12 +97,10 @@ export default function LandingPage() {
             {/* Navigation */}
             <header className="sticky top-0 z-50 bg-night-950/80 backdrop-blur-md border-b border-white/5">
                 <div className="max-w-6xl mx-auto px-4 sm:px-6 h-16 flex items-center justify-between">
-                    <div className="flex items-center gap-2.5">
-                        <Link href="/" className="flex items-center gap-2.5">
-                            <LogoMark size={30} />
-                            <span className="font-display text-lg font-bold text-cream tracking-tight">Ecla</span>
-                        </Link>
-                    </div>
+                    <Link href="/" className="flex items-center gap-2.5">
+                        <LogoMark size={30} />
+                        <span className="font-display text-lg font-bold text-cream tracking-tight">Ecla</span>
+                    </Link>
 
                     <div className="flex items-center gap-2 sm:gap-3">
                         <SignInButton mode="modal">

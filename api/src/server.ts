@@ -5,6 +5,7 @@ import { clerkMiddleware, getAuth } from '@clerk/express'
 import { PrismaClient } from '@prisma/client'
 import { z } from 'zod'
 import Groq from 'groq-sdk'
+
 // Prisma Client 
 const prisma = new PrismaClient({
     log: process.env.NODE_ENV === 'development' ? ['query', 'warn', 'error'] : ['error'],
@@ -96,6 +97,38 @@ function requireAdmin(req: Request): string {
     return userId
 }
 
+// ---------- AI Content Safety ----------
+const CONTENT_SYSTEM_PROMPT = `You are a content generator for a Spanish learning app. Output ONLY the requested content. Never describe what you are about to write. Never use phrases like "Here's a..." or "This is a...". Never include meta-commentary, explanations of your approach, or quotation marks wrapping the whole output.
+Rules:
+- Output raw text only, nothing else
+- Max 15 words per sentence
+- Natural, real-world register matching the requested mode
+- If asked for a Professional Mode phrase: 1 sentence only, workplace-appropriate
+- If asked for a Story Mode beat: 1-2 sentences, in-character, references the ongoing story
+- Never output your reasoning, framing, or any wrapper text`
+
+function sanitizeAIOutput(text: string | null): string | null {
+    if (!text) return text
+    let t = text.trim()
+    // "Here's a ...:" style prefix (with colon)
+    t = t.replace(/^(here'?s|this is|i'?ll (write|generate|provide|create))[^:\n]*:\s*/i, '')
+    // Colon-less framing sentence mentioning meta words
+    t = t.replace(/^(here'?s|this is)\b[^.!?]*\b(phrase|sentence|beat|context|example|register|setting|app|mode)\b[^.!?]*[.!?]?\s*/i, '')
+    // Wrapping quotes
+    t = t.replace(/^["'\u201C\u201D]+|["'\u201C\u201D]+$/g, '')
+    return t.trim()
+}
+
+function cleanVariant(v: any) {
+    if (!v) return v
+    return {
+        ...v,
+        storyBeat: sanitizeAIOutput(v.storyBeat ?? null),
+        culturalRef: sanitizeAIOutput(v.culturalRef ?? null),
+        formalPhrase: sanitizeAIOutput(v.formalPhrase ?? null),
+    }
+}
+
 // Routes
 
 // Health check (public)
@@ -122,20 +155,16 @@ app.post('/api/v1/sync-user', async (req: Request, res: Response, next: NextFunc
         const userId = requireAuth(req)
         const email = (req.auth?.sessionClaims?.email as string) || 'unknown'
 
-        // 1. Try to find user by the current Clerk ID
         let user = await prisma.user.findUnique({ where: { clerkId: userId } })
 
         if (user) {
-            // User exists. Just ensure the email is up to date
             if (user.email !== email) {
                 user = await prisma.user.update({ where: { id: user.id }, data: { email } })
             }
         } else {
-            // 2. Clerk ID not found. Check if a "ghost" user exists with this email
             const ghostUser = await prisma.user.findUnique({ where: { email } })
 
             if (ghostUser) {
-                // Reclaim the old account, attach new Clerk ID, AND reset onboarding for testing
                 user = await prisma.user.update({
                     where: { id: ghostUser.id },
                     data: {
@@ -144,7 +173,6 @@ app.post('/api/v1/sync-user', async (req: Request, res: Response, next: NextFunc
                     }
                 })
             } else {
-                // 3. Truly new user. Create them with onboarding explicitly set to false
                 user = await prisma.user.create({
                     data: {
                         clerkId: userId,
@@ -220,7 +248,6 @@ app.get('/api/v1/dashboard', async (req: Request, res: Response, next: NextFunct
         })
         const dailyXp = todayLog?.xpEarned || 0
 
-        // Calculate Combo Streak — consecutive correct answers in recent sessions
         const recentProgress = await prisma.userProgress.findMany({
             where: { userId: user.id },
             orderBy: { completedAt: 'desc' },
@@ -232,7 +259,6 @@ app.get('/api/v1/dashboard', async (req: Request, res: Response, next: NextFunct
             comboStreak += p.score
         }
 
-        // Calculate Glow Tier — based on 30-day consistency
         const thirtyDaysAgo = new Date()
         thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30)
         const activeDays = await prisma.streakLog.count({
@@ -249,7 +275,6 @@ app.get('/api/v1/dashboard', async (req: Request, res: Response, next: NextFunct
         else if (activeDays >= 7) { glowTier = 'Warm'; glowNext = 14 - activeDays }
         else { glowTier = 'Dim'; glowNext = 7 - activeDays }
 
-        // --- Cosmetics: evaluate unlock milestones ---
         const masteryRows = await prisma.conceptMastery.findMany({ where: { userId: user.id } })
         const masteredCount = masteryRows.filter(m => {
             const total = m.correctCount + m.incorrectCount
@@ -273,7 +298,6 @@ app.get('/api/v1/dashboard', async (req: Request, res: Response, next: NextFunct
             await prisma.user.update({ where: { clerkId: userId }, data: { unlockedCosmetics } })
         }
 
-        // Fetch ALL concepts to find the true "next" one
         const allConcepts = await prisma.concept.findMany({
             where: { unit: { course: { isPublished: true } } },
             orderBy: { orderIndex: 'asc' },
@@ -284,10 +308,8 @@ app.get('/api/v1/dashboard', async (req: Request, res: Response, next: NextFunct
             },
         })
 
-        // 1. Find first uncompleted concept
         let nextConcept = allConcepts.find(c => c.progress.length === 0)
 
-        // 2. If all are completed, find one that is struggling (accuracy < 80%)
         if (!nextConcept) {
             nextConcept = allConcepts.find(c => {
                 const m = c.mastery[0]
@@ -297,7 +319,6 @@ app.get('/api/v1/dashboard', async (req: Request, res: Response, next: NextFunct
             })
         }
 
-        // 3. Fallback to first concept if everything is mastered
         if (!nextConcept && allConcepts.length > 0) {
             nextConcept = allConcepts[0]
         }
@@ -321,7 +342,6 @@ app.get('/api/v1/dashboard', async (req: Request, res: Response, next: NextFunct
             })
         }
 
-        // Calculate Review Required (Adaptive Engine)
         const mastery = nextConcept.mastery[0]
         const totalAttempts = (mastery?.correctCount || 0) + (mastery?.incorrectCount || 0)
         const accuracy = totalAttempts > 0 ? (mastery!.correctCount / totalAttempts) : 1
@@ -341,7 +361,7 @@ app.get('/api/v1/dashboard', async (req: Request, res: Response, next: NextFunct
                 conceptName: nextConcept.name,
                 xpReward: nextConcept.xpReward,
                 mode: user.preferredMode,
-                variant: nextConcept.variants[0],
+                variant: cleanVariant(nextConcept.variants[0]),
             },
             reviewRequired,
             accuracy: Math.round(accuracy * 100),
@@ -389,7 +409,7 @@ app.get('/api/v1/lessons/:conceptId', async (req: Request, res: Response, next: 
                 conceptName: concept.name,
                 grammarNote: concept.grammarNote,
                 mode: user.preferredMode,
-                variant: concept.variants[0],
+                variant: cleanVariant(concept.variants[0]),
                 equippedCosmetic: user.equippedCosmetic ?? 'gold',
             },
         })
@@ -472,7 +492,6 @@ app.post('/api/v1/lessons/complete', async (req: Request, res: Response, next: N
         const user = await prisma.user.findUnique({ where: { clerkId: userId } })
         if (!user) throw new AppError('User not found', 404)
 
-        // 1. Record the session progress
         await prisma.userProgress.create({
             data: {
                 userId: user.id,
@@ -485,7 +504,6 @@ app.post('/api/v1/lessons/complete', async (req: Request, res: Response, next: N
             },
         })
 
-        // 2. Update Concept Mastery
         await prisma.conceptMastery.upsert({
             where: { userId_conceptId: { userId: user.id, conceptId } },
             update: {
@@ -496,7 +514,6 @@ app.post('/api/v1/lessons/complete', async (req: Request, res: Response, next: N
             create: { userId: user.id, conceptId, correctCount, incorrectCount },
         })
 
-        // 3. Handle Daily Streak Logic
         const today = new Date().toISOString().split('T')[0]
         const yesterday = new Date(Date.now() - 86400000).toISOString().split('T')[0]
 
@@ -784,6 +801,14 @@ app.post('/api/v1/admin/concepts', async (req: Request, res: Response, next: Nex
 
         const data = parsed.data
 
+        // Sanitize variants before saving
+        const cleanVariants = data.variants.map(v => ({
+            ...v,
+            storyBeat: sanitizeAIOutput(v.storyBeat),
+            culturalRef: sanitizeAIOutput(v.culturalRef),
+            formalPhrase: sanitizeAIOutput(v.formalPhrase),
+        }))
+
         if (data.id) {
             await prisma.concept.update({
                 where: { id: data.id },
@@ -793,7 +818,7 @@ app.post('/api/v1/admin/concepts', async (req: Request, res: Response, next: Nex
                     orderIndex: data.orderIndex, xpReward: data.xpReward,
                 },
             })
-            for (const v of data.variants) {
+            for (const v of cleanVariants) {
                 await prisma.lessonVariant.upsert({
                     where: { conceptId_mode: { conceptId: data.id, mode: v.mode } },
                     update: { storyBeat: v.storyBeat, culturalRef: v.culturalRef, formalPhrase: v.formalPhrase, exercises: v.exercises },
@@ -809,7 +834,7 @@ app.post('/api/v1/admin/concepts', async (req: Request, res: Response, next: Nex
                     orderIndex: data.orderIndex, xpReward: data.xpReward,
                 },
             })
-            for (const v of data.variants) {
+            for (const v of cleanVariants) {
                 await prisma.lessonVariant.create({
                     data: { conceptId: concept.id, mode: v.mode, storyBeat: v.storyBeat, culturalRef: v.culturalRef, formalPhrase: v.formalPhrase, exercises: v.exercises },
                 })
@@ -847,12 +872,15 @@ app.post('/api/v1/admin/generate-flavor', async (req: Request, res: Response, ne
 
         const completion = await groq.chat.completions.create({
             model: 'llama-3.1-8b-instant',
-            messages: [{ role: 'user', content: prompt }],
+            messages: [
+                { role: 'system', content: CONTENT_SYSTEM_PROMPT },
+                { role: 'user', content: prompt },
+            ],
             temperature: 0.7,
             max_tokens: 150,
         })
 
-        res.json({ text: completion.choices[0]?.message?.content ?? '' })
+        res.json({ text: sanitizeAIOutput(completion.choices[0]?.message?.content ?? '') })
     } catch (error) { next(error) }
 })
 
@@ -885,7 +913,10 @@ app.post('/api/v1/admin/generate-exercises', async (req: Request, res: Response,
 
         const completion = await groq.chat.completions.create({
             model: 'llama-3.1-8b-instant',
-            messages: [{ role: 'user', content: prompt }],
+            messages: [
+                { role: 'system', content: CONTENT_SYSTEM_PROMPT },
+                { role: 'user', content: prompt },
+            ],
             temperature: 0.7,
             max_tokens: 500,
         })
@@ -893,9 +924,13 @@ app.post('/api/v1/admin/generate-exercises', async (req: Request, res: Response,
         let text = completion.choices[0]?.message?.content ?? '[]'
         text = text.replace(/```json/g, '').replace(/```/g, '').trim()
 
-        try { JSON.parse(text) } catch { text = '[]' }
+        let exercises: any[] = []
+        try { exercises = JSON.parse(text) } catch { exercises = [] }
+        if (Array.isArray(exercises)) {
+            exercises = exercises.map((ex: any) => ({ ...ex, prompt: sanitizeAIOutput(ex.prompt ?? '') }))
+        }
 
-        res.json({ exercises: JSON.parse(text) })
+        res.json({ exercises })
     } catch (error) { next(error) }
 })
 
