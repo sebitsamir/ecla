@@ -4,9 +4,11 @@ import { useEffect, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { useAuth } from '@clerk/nextjs'
 import {
-    ArrowLeft, ChevronDown, ChevronRight, Crown, Gift,
+    ArrowLeft, ChevronDown, Gift,
     Lock, X, CheckCircle2,
-    BookOpen, Zap, Music, GraduationCap, type LucideIcon
+    BookOpen, Zap, Music, GraduationCap, type LucideIcon,
+    BookOpenCheck, Ear, MessageCircle, Puzzle, Lightbulb, Sparkles,
+    ArrowRight, AlertTriangle
 } from 'lucide-react'
 import posthog from 'posthog-js'
 import NightBackground from '@/components/NightBackground'
@@ -14,7 +16,8 @@ import ModeAmbience from '@/components/ModeAmbience'
 import Moon from '@/components/Moon'
 import Firefly from '@/components/Firefly'
 import { useEquippedGlow } from '@/lib/useEquippedGlow'
-import { categoryFor} from '@/lib/categories'
+import { categoryFor } from '@/lib/categories'
+import type { SubLessonData } from '@/lib/lessonTypes'
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL ?? 'http://localhost:4000'
 
@@ -62,6 +65,16 @@ type NodeState = 'mastered' | 'struggling' | 'in_progress' | 'current' | 'locked
 const TOP = 110
 const SPACING = 175
 
+const ICON_MAP: Record<string, any> = {
+    'book-open': BookOpenCheck,
+    'ear': Ear,
+    'message-circle': MessageCircle,
+    'puzzle': Puzzle,
+    'lightbulb': Lightbulb,
+    'sparkles': Sparkles,
+    'alert-triangle': AlertTriangle,
+}
+
 function smoothPath(pts: { x: number; y: number }[]) {
     if (!pts.length) return ''
     let d = `M ${pts[0].x} ${pts[0].y}`
@@ -76,13 +89,25 @@ export default function CourseMapPage() {
     const router = useRouter()
     const { getToken } = useAuth()
     const [units, setUnits] = useState<any[]>([])
-    const [preferredMode, setPreferredMode] = useState<ModeId>('DRILL')
+    const [preferredMode, setPreferredMode] = useState<ModeId>('DRILL') // Default value
+    const [mounted, setMounted] = useState(false) // Track hydration completion
     const [showModePicker, setShowModePicker] = useState(false)
     const [loading, setLoading] = useState(true)
     const [openConcept, setOpenConcept] = useState<any>(null)
+    const [subLessons, setSubLessons] = useState<SubLessonData[]>([])
+    const [loadingSubs, setLoadingSubs] = useState(false)
     const [chestOpen, setChestOpen] = useState(false)
     const [joke, setJoke] = useState('')
     const glowColors = useEquippedGlow()
+
+    // Read from localStorage AFTER hydration to avoid mismatch
+    useEffect(() => {
+        setMounted(true)
+        const stored = localStorage.getItem('ecla-preferred-mode') as ModeId | null
+        if (stored && MODE_META[stored]) {
+            setPreferredMode(stored)
+        }
+    }, [])
 
     async function fetchMap() {
         try {
@@ -91,7 +116,9 @@ export default function CourseMapPage() {
             const data = await res.json()
             setUnits(data.units)
             if (data.preferredMode && MODE_META[data.preferredMode as ModeId]) {
-                setPreferredMode(data.preferredMode as ModeId)
+                const mode = data.preferredMode as ModeId
+                setPreferredMode(mode)
+                localStorage.setItem('ecla-preferred-mode', mode)
             }
         } catch (e) { console.error(e) } finally { setLoading(false) }
     }
@@ -104,6 +131,7 @@ export default function CourseMapPage() {
         const previousMode = preferredMode
         setPreferredMode(mode)
         setShowModePicker(false)
+        localStorage.setItem('ecla-preferred-mode', mode)
 
         try {
             const token = await getToken()
@@ -117,6 +145,24 @@ export default function CourseMapPage() {
         } catch (e) {
             console.error(e)
             setPreferredMode(previousMode)
+            localStorage.setItem('ecla-preferred-mode', previousMode)
+        }
+    }
+
+    const fetchSubLessons = async (conceptId: string) => {
+        setLoadingSubs(true)
+        try {
+            const token = await getToken()
+            const res = await fetch(`${API_URL}/api/v1/lessons/${conceptId}?mode=${preferredMode}`, {
+                headers: { Authorization: `Bearer ${token}` }
+            })
+            const data = await res.json()
+            setSubLessons(data.lesson.subLessons || [])
+        } catch (e) {
+            console.error(e)
+            setSubLessons([])
+        } finally {
+            setLoadingSubs(false)
         }
     }
 
@@ -139,6 +185,8 @@ export default function CourseMapPage() {
 
     const openSheet = (concept: any) => {
         setOpenConcept(concept)
+        setSubLessons([])
+        fetchSubLessons(concept.id)
         posthog.capture('concept_opened', { concept_id: concept.id })
     }
 
@@ -169,6 +217,20 @@ export default function CourseMapPage() {
 
     const currentMode = MODE_META[preferredMode]
 
+    const totalSubLessonXP = subLessons.reduce((sum, sub) => sum + (sub.xpReward || 0), 0)
+
+    // Show loading state until hydration is complete to avoid mismatch
+    if (!mounted) {
+        return (
+            <main className="min-h-screen font-body relative overflow-x-clip">
+                <NightBackground />
+                <div className="flex min-h-screen items-center justify-center">
+                    <Firefly mood="thinking" size={100} glow={glowColors} />
+                </div>
+            </main>
+        )
+    }
+
     return (
         <main className="min-h-screen font-body relative overflow-x-clip">
             <style>{`
@@ -186,27 +248,27 @@ export default function CourseMapPage() {
             <Moon phase="full" size="lg" position="top-right" />
 
             <header className="sticky top-0 z-40 backdrop-blur-md bg-night-950/70 border-b border-white/5">
-                <div className="max-w-3xl mx-auto px-4 h-16 flex items-center justify-between gap-3">
-                    <button onClick={() => router.push('/dashboard')} className="flex items-center gap-2 text-cream/60 hover:text-cream transition-colors text-sm font-semibold">
+                <div className="max-w-3xl mx-auto px-3 sm:px-4 h-14 sm:h-16 flex items-center justify-between gap-2 sm:gap-3">
+                    <button onClick={() => router.push('/dashboard')} className="flex items-center gap-1.5 sm:gap-2 text-cream/60 hover:text-cream transition-colors text-xs sm:text-sm font-semibold">
                         <ArrowLeft className="w-4 h-4" /> <span className="hidden sm:inline">Dashboard</span>
                     </button>
-                    <h1 className="font-display text-xl font-bold text-cream">The Path</h1>
+                    <h1 className="font-display text-lg sm:text-xl font-bold text-cream">The Path</h1>
 
                     <button
                         onClick={() => setShowModePicker(true)}
-                        className="flex items-center gap-2 rounded-full border bg-night-800/80 pl-2.5 pr-3.5 py-1.5 backdrop-blur-sm hover:bg-night-800 transition-all"
+                        className="flex items-center gap-1.5 sm:gap-2 rounded-full border bg-night-800/80 pl-2 pr-2.5 sm:pl-2.5 sm:pr-3.5 py-1 sm:py-1.5 backdrop-blur-sm hover:bg-night-800 transition-all"
                         style={{ borderColor: currentMode.borderColor, boxShadow: `0 0 24px ${currentMode.borderColor}` }}
                     >
-                        <span className={`h-2.5 w-2.5 rounded-full ${currentMode.dot}`} />
-                        <span className="text-sm font-semibold text-cream">{currentMode.label}</span>
-                        <ChevronDown className="h-3.5 w-3.5 text-cream/50" />
+                        <span className={`h-2 w-2 sm:h-2.5 sm:w-2.5 rounded-full ${currentMode.dot}`} />
+                        <span className="text-xs sm:text-sm font-semibold text-cream">{currentMode.label}</span>
+                        <ChevronDown className="h-3 w-3 sm:h-3.5 sm:w-3.5 text-cream/50" />
                     </button>
                 </div>
             </header>
 
-            <div className="max-w-3xl mx-auto px-4 py-10">
+            <div className="max-w-3xl mx-auto px-3 sm:px-4 py-6 sm:py-10">
                 {loading ? (
-                    <div className="flex justify-center py-24"><Firefly mood="thinking" size={120} glow={glowColors} /></div>
+                    <div className="flex justify-center py-20 sm:py-24"><Firefly mood="thinking" size={100} glow={glowColors} /></div>
                 ) : units.map((unit: any, unitIndex: number) => {
                     const mastered = unit.concepts.filter((c: any) => c.status === 'mastered').length
                     const pct = unit.concepts.length ? Math.round((mastered / unit.concepts.length) * 100) : 0
@@ -226,20 +288,20 @@ export default function CourseMapPage() {
                     const lit = idxCurrent === -1 ? 100 : Math.max(3, (idxCurrent / Math.max(1, items.length - 1)) * 100)
 
                     return (
-                        <section key={unit.id} className="mb-20">
-                            <div className="mb-6 flex items-center justify-between rounded-card bg-night-800/60 border border-white/5 px-6 py-5 backdrop-blur-sm shadow-glow-sm">
-                                <div className="flex items-center gap-4">
-                                    <div className="h-10 w-10 rounded-xl bg-glow/10 border border-glow/20 flex items-center justify-center font-display font-bold text-glow">{unitIndex + 1}</div>
+                        <section key={unit.id} className="mb-16 sm:mb-20">
+                            <div className="mb-5 sm:mb-6 flex items-center justify-between rounded-card bg-night-800/60 border border-white/5 px-4 sm:px-6 py-4 sm:py-5 backdrop-blur-sm shadow-glow-sm">
+                                <div className="flex items-center gap-3 sm:gap-4">
+                                    <div className="h-9 w-9 sm:h-10 sm:w-10 rounded-xl bg-glow/10 border border-glow/20 flex items-center justify-center font-display font-bold text-glow text-sm sm:text-base">{unitIndex + 1}</div>
                                     <div>
-                                        <h2 className="font-display text-xl font-bold text-cream">{unit.title}</h2>
-                                        <p className="text-xs font-semibold text-cream/50">{mastered}/{unit.concepts.length} mastered</p>
+                                        <h2 className="font-display text-base sm:text-xl font-bold text-cream">{unit.title}</h2>
+                                        <p className="text-[11px] sm:text-xs font-semibold text-cream/50">{mastered}/{unit.concepts.length} mastered</p>
                                     </div>
                                 </div>
-                                <div className="w-28">
-                                    <div className="h-2 rounded-full bg-white/5 overflow-hidden">
+                                <div className="w-24 sm:w-28">
+                                    <div className="h-1.5 sm:h-2 rounded-full bg-white/5 overflow-hidden">
                                         <div className="h-full rounded-full bg-gradient-to-r from-glow to-glow-bright" style={{ width: `${pct}%` }} />
                                     </div>
-                                    <p className="mt-1 text-right text-xs font-bold text-glow">{pct}%</p>
+                                    <p className="mt-1 text-right text-[11px] sm:text-xs font-bold text-glow">{pct}%</p>
                                 </div>
                             </div>
 
@@ -263,8 +325,8 @@ export default function CourseMapPage() {
                                         return (
                                             <div key={`chest-${k}`} className="absolute z-10 chest-float" style={{ left, top: p.y }}>
                                                 <button onClick={openChest}
-                                                    className="flex h-14 w-14 items-center justify-center rounded-2xl border-2 border-dashed border-immersion bg-night-800/70 text-immersion shadow-[0_0_18px_rgba(185,140,240,0.3)] transition-transform hover:scale-110 active:scale-95">
-                                                    <Gift className="h-6 w-6" />
+                                                    className="flex h-12 w-12 sm:h-14 sm:w-14 items-center justify-center rounded-2xl border-2 border-dashed border-immersion bg-night-800/70 text-immersion shadow-[0_0_18px_rgba(185,140,240,0.3)] transition-transform hover:scale-110 active:scale-95">
+                                                    <Gift className="h-5 w-5 sm:h-6 sm:w-6" />
                                                 </button>
                                             </div>
                                         )
@@ -280,42 +342,39 @@ export default function CourseMapPage() {
                                     return (
                                         <div key={concept.id} className="node-in absolute z-10" style={{ left, top: p.y, animationDelay: `${k * 80}ms` }}>
                                             <div className="relative">
-                                                {/* Firefly perches naturally above current node */}
                                                 {state === 'current' && (
-                                                    <div className="pointer-events-none absolute -top-16 left-1/2 z-20 firefly-bob">
-                                                        <Firefly mood="idle" size={72} glow={glowColors} />
+                                                    <div className="pointer-events-none absolute -top-12 sm:-top-16 left-1/2 z-20 firefly-bob">
+                                                        <Firefly mood="idle" size={56} glow={glowColors} />
                                                     </div>
                                                 )}
 
                                                 <button
                                                     onClick={() => !locked && openSheet(concept)}
                                                     disabled={locked}
-                                                    className={`relative flex h-24 w-24 items-center justify-center rounded-full border-[3px] transition-transform duration-200 ${ring} ${locked ? 'cursor-not-allowed' : 'cursor-pointer hover:scale-110 active:scale-95'}`}
+                                                    className={`relative flex h-20 w-20 sm:h-24 sm:w-24 items-center justify-center rounded-full border-[3px] transition-transform duration-200 ${ring} ${locked ? 'cursor-not-allowed' : 'cursor-pointer hover:scale-110 active:scale-95'}`}
                                                 >
                                                     {state === 'current' && (
                                                         <span className="absolute inset-0 animate-pulse rounded-full border-[3px] border-glow/40" />
                                                     )}
 
-                                                    {/* Locked: show lock inside instead of category icon */}
                                                     {locked ? (
-                                                        <Lock className="h-8 w-8 text-cream/25" />
+                                                        <Lock className="h-7 w-7 sm:h-8 sm:w-8 text-cream/25" />
                                                     ) : (
                                                         <Icon
-                                                            className={`h-10 w-10 ${state === 'mastered' ? 'text-night-900' : ''}`}
+                                                            className={`h-8 w-8 sm:h-10 sm:w-10 ${state === 'mastered' ? 'text-night-900' : ''}`}
                                                             style={state !== 'mastered' ? { color: cat.color } : undefined}
                                                         />
                                                     )}
                                                 </button>
 
-                                                {/* Label below — category name shown subtly on hover via title, state text always visible */}
-                                                <div className="absolute left-1/2 top-full mt-3 w-max max-w-[180px] -translate-x-1/2 text-center">
+                                                <div className="absolute left-1/2 top-full mt-2 sm:mt-3 w-max max-w-[160px] sm:max-w-[180px] -translate-x-1/2 text-center">
                                                     <p
-                                                        className={`text-sm font-bold leading-snug mb-0.5 ${locked ? 'text-cream/30' : 'text-cream'}`}
+                                                        className={`text-xs sm:text-sm font-bold leading-snug mb-0.5 ${locked ? 'text-cream/30' : 'text-cream'}`}
                                                         title={`${cat.label}: ${concept.name}`}
                                                     >
                                                         {concept.name}
                                                     </p>
-                                                    <p className={`text-xs font-semibold ${subCls}`}>{sub}</p>
+                                                    <p className={`text-[11px] sm:text-xs font-semibold ${subCls}`}>{sub}</p>
                                                 </div>
                                             </div>
                                         </div>
@@ -327,37 +386,106 @@ export default function CourseMapPage() {
                 })}
             </div>
 
-            {/* Concept sheet */}
             {openConcept && (
                 <div className="fixed inset-0 z-50 flex items-end justify-center bg-black/60 backdrop-blur-sm sm:items-center sm:p-4" onClick={() => setOpenConcept(null)}>
-                    <div className="w-full max-w-md rounded-t-3xl border border-white/10 bg-night-800 p-6 shadow-glow-md sm:rounded-card sm:p-8" onClick={e => e.stopPropagation()}>
-                        <div className="mb-5 flex items-start justify-between">
-                            <div className="flex items-center gap-4">
+                    <div
+                        className="w-full max-w-lg max-h-[90vh] overflow-y-auto rounded-t-3xl border border-white/10 bg-night-800 p-4 sm:p-6 shadow-glow-md sm:rounded-3xl sm:p-8"
+                        onClick={e => e.stopPropagation()}
+                    >
+                        <div className="flex items-start justify-between mb-4 sm:mb-6">
+                            <div className="flex items-start gap-3 sm:gap-4 flex-1 min-w-0">
                                 {(() => {
                                     const cat = categoryFor(openConcept.name); const Icon = cat.icon; return (
-                                        <div className="flex h-14 w-14 items-center justify-center rounded-full border-2 border-white/10 bg-night-900 shadow-glow-sm" style={{ color: cat.color }}>
-                                            <Icon className="h-6 w-6" />
+                                        <div className="flex h-12 w-12 sm:h-14 sm:w-14 items-center justify-center rounded-2xl border-2 border-white/10 bg-night-900 flex-shrink-0" style={{ color: cat.color }}>
+                                            <Icon className="h-6 w-6 sm:h-7 sm:w-7" />
                                         </div>
                                     )
                                 })()}
-                                <div>
-                                    <p className="text-xs font-bold uppercase tracking-wider mb-0.5" style={{ color: categoryFor(openConcept.name).color }}>
+                                <div className="flex-1 min-w-0">
+                                    <p className="text-[11px] sm:text-xs font-bold uppercase tracking-wider mb-1" style={{ color: categoryFor(openConcept.name).color }}>
                                         {categoryFor(openConcept.name).label}
                                     </p>
-                                    <h3 className="font-display text-xl font-bold text-cream">{openConcept.name}</h3>
-                                    <p className="text-xs font-semibold text-cream/50">+{openConcept.xpReward} XP · {openConcept.accuracy}% accuracy</p>
+                                    <h3 className="font-display text-base sm:text-xl font-bold text-cream mb-1 leading-tight">
+                                        {openConcept.name}
+                                    </h3>
+                                    <div className="flex items-center gap-2 text-[11px] sm:text-xs">
+                                        {loadingSubs ? (
+                                            <span className="text-cream/40">Loading...</span>
+                                        ) : subLessons.length > 0 ? (
+                                            <span className="font-bold text-glow">+{totalSubLessonXP} XP total</span>
+                                        ) : (
+                                            <span className="text-cream/40">Legacy format</span>
+                                        )}
+                                        {openConcept.accuracy > 0 && (
+                                            <>
+                                                <span className="text-cream/40">•</span>
+                                                <span className="text-cream/60">{openConcept.accuracy}% accuracy</span>
+                                            </>
+                                        )}
+                                    </div>
                                 </div>
                             </div>
-                            <button onClick={() => setOpenConcept(null)} className="rounded-lg p-1.5 text-cream/50 hover:bg-night-700 hover:text-cream transition-colors"><X className="h-5 w-5" /></button>
+                            <button onClick={() => setOpenConcept(null)} className="rounded-lg p-1.5 sm:p-2 text-cream/50 hover:bg-night-700 hover:text-cream transition-colors flex-shrink-0">
+                                <X className="h-4 w-4 sm:h-5 sm:w-5" />
+                            </button>
                         </div>
 
-                        <p className="mb-6 rounded-xl border border-white/5 bg-night-900/60 p-4 text-sm leading-relaxed text-cream/60">
-                            {openConcept.grammarNote}
-                        </p>
+                        <div className="rounded-xl border border-white/10 bg-night-900/60 p-3 sm:p-4 mb-4 sm:mb-6">
+                            <div className="flex items-start gap-2 sm:gap-3">
+                                <Lightbulb className="h-3.5 w-3.5 sm:h-4 sm:w-4 text-glow flex-shrink-0 mt-0.5" />
+                                <p className="text-xs sm:text-sm leading-relaxed text-cream/80">
+                                    {openConcept.grammarNote}
+                                </p>
+                            </div>
+                        </div>
 
-                        <div className="mb-4 flex items-center gap-2 text-xs font-bold uppercase tracking-wider text-cream/40">
-                            <span className={`h-2 w-2 rounded-full ${currentMode.dot}`} />
-                            Continue in {currentMode.label} Mode
+                        <div className="mb-4 sm:mb-6">
+                            <p className="text-[11px] sm:text-xs font-bold uppercase tracking-wider text-cream/40 mb-2 sm:mb-3">
+                                {loadingSubs ? 'Loading...' : subLessons.length > 0 ? `${subLessons.length} part${subLessons.length !== 1 ? 's' : ''}` : 'Legacy lesson format'}
+                            </p>
+                            <div className="space-y-2">
+                                {loadingSubs ? (
+                                    <div className="flex items-center justify-center py-3 sm:py-4">
+                                        <div className="h-3.5 w-3.5 sm:h-4 sm:w-4 border-2 border-glow border-t-transparent rounded-full animate-spin" />
+                                    </div>
+                                ) : subLessons.length > 0 ? (
+                                    subLessons.map((sub) => {
+                                        const SubIcon = ICON_MAP[sub.icon] || BookOpenCheck
+                                        return (
+                                            <div
+                                                key={sub.id}
+                                                className="flex items-center gap-2.5 sm:gap-3 rounded-xl border border-white/10 bg-night-900/40 p-2.5 sm:p-3"
+                                            >
+                                                <div className="h-7 w-7 sm:h-8 sm:w-8 rounded-lg bg-night-800 border border-white/10 flex items-center justify-center flex-shrink-0">
+                                                    <SubIcon className="h-3.5 w-3.5 sm:h-4 sm:w-4 text-cream/70" />
+                                                </div>
+                                                <div className="flex-1 min-w-0">
+                                                    <p className="text-xs sm:text-sm font-semibold text-cream truncate">{sub.title}</p>
+                                                    <p className="text-[11px] sm:text-xs text-cream/50">
+                                                        {sub.teach.length > 0 && `${sub.teach.length} lessons`}
+                                                        {sub.teach.length > 0 && sub.exercises.length > 0 && ' • '}
+                                                        {sub.exercises.length > 0 && `${sub.exercises.length} exercises`}
+                                                        {sub.exercises.length > 0 && sub.realLife && ' • '}
+                                                        {sub.realLife && 'Real chat'}
+                                                    </p>
+                                                </div>
+                                                <div className="text-[11px] sm:text-xs font-bold text-glow flex-shrink-0">
+                                                    +{sub.xpReward} XP
+                                                </div>
+                                            </div>
+                                        )
+                                    })
+                                ) : (
+                                    <div className="text-center py-3 sm:py-4">
+                                        <p className="text-[11px] sm:text-xs text-cream/40">This lesson uses the legacy format. Start it to begin learning.</p>
+                                    </div>
+                                )}
+                            </div>
+                        </div>
+
+                        <div className="mb-3 sm:mb-4 flex items-center gap-2 text-[11px] sm:text-xs text-cream/50">
+                            <span className={`h-1.5 w-1.5 sm:h-2 sm:w-2 rounded-full ${currentMode.dot}`} />
+                            <span>Continue in <span className="font-semibold text-cream/70">{currentMode.label}</span> Mode</span>
                         </div>
 
                         {(() => {
@@ -365,21 +493,20 @@ export default function CourseMapPage() {
                             const ModeIcon = currentMode.Icon
                             if (!available) {
                                 return (
-                                    <div className="rounded-xl border border-white/10 bg-night-900/40 p-5 text-center">
-                                        <Lock className="h-5 w-5 text-cream/40 mx-auto mb-2" />
-                                        <p className="text-sm font-semibold text-cream/60">This concept isn&apos;t available in {currentMode.label} mode yet.</p>
-                                        <p className="text-xs text-cream/40 mt-1">Switch modes above to try a different approach.</p>
+                                    <div className="rounded-xl border border-white/10 bg-night-900/40 p-3 sm:p-4 text-center">
+                                        <Lock className="h-4 w-4 sm:h-5 sm:w-5 text-cream/40 mx-auto mb-2" />
+                                        <p className="text-xs sm:text-sm text-cream/60">Not available in {currentMode.label} mode yet.</p>
                                     </div>
                                 )
                             }
                             return (
                                 <button
                                     onClick={() => router.push(`/learn/${openConcept.id}?mode=${preferredMode}`)}
-                                    className={`w-full py-4 rounded-xl ${currentMode.bg} ${currentMode.text} font-display font-bold text-lg transition-all hover:brightness-110 active:scale-[0.98] flex items-center justify-center gap-2 ${currentMode.glow}`}
+                                    className={`w-full py-3 sm:py-4 rounded-xl ${currentMode.bg} ${currentMode.text} font-bold text-sm sm:text-base transition-all hover:brightness-110 active:scale-[0.98] flex items-center justify-center gap-2 ${currentMode.glow}`}
                                 >
-                                    <ModeIcon className="h-5 w-5" />
-                                    Start Lesson
-                                    <ChevronRight className="h-5 w-5" />
+                                    <ModeIcon className="h-4 w-4 sm:h-5 sm:w-5" />
+                                    Start Learning
+                                    <ArrowRight className="h-4 w-4 sm:h-5 sm:w-5" />
                                 </button>
                             )
                         })()}
@@ -387,21 +514,20 @@ export default function CourseMapPage() {
                 </div>
             )}
 
-            {/* Global Mode Picker */}
             {showModePicker && (
                 <div className="fixed inset-0 z-50 flex items-end justify-center bg-black/60 backdrop-blur-sm sm:items-center sm:p-4" onClick={() => setShowModePicker(false)}>
-                    <div className="w-full max-w-sm rounded-t-3xl border border-white/10 bg-night-800 p-6 shadow-glow-md sm:rounded-card sm:p-8" onClick={e => e.stopPropagation()}>
-                        <div className="mb-5 flex items-center justify-between">
+                    <div className="w-full max-w-sm rounded-t-3xl border border-white/10 bg-night-800 p-4 sm:p-6 shadow-glow-md sm:rounded-card sm:p-8" onClick={e => e.stopPropagation()}>
+                        <div className="mb-4 sm:mb-5 flex items-center justify-between">
                             <div>
-                                <h3 className="font-display text-xl font-bold text-cream">Switch Mode</h3>
-                                <p className="text-xs text-cream/50 mt-0.5">Your whole journey reshapes.</p>
+                                <h3 className="font-display text-base sm:text-xl font-bold text-cream">Switch Mode</h3>
+                                <p className="text-[11px] sm:text-xs text-cream/50 mt-0.5">Your whole journey reshapes.</p>
                             </div>
-                            <button onClick={() => setShowModePicker(false)} className="rounded-lg p-1.5 text-cream/50 hover:bg-night-700 hover:text-cream transition-colors">
-                                <X className="h-5 w-5" />
+                            <button onClick={() => setShowModePicker(false)} className="rounded-lg p-1 sm:p-1.5 text-cream/50 hover:bg-night-700 hover:text-cream transition-colors">
+                                <X className="h-4 w-4 sm:h-5 sm:w-5" />
                             </button>
                         </div>
 
-                        <div className="space-y-2.5">
+                        <div className="space-y-2 sm:space-y-2.5">
                             {(Object.keys(MODE_META) as ModeId[]).map(id => {
                                 const m = MODE_META[id]
                                 const active = id === preferredMode
@@ -410,17 +536,17 @@ export default function CourseMapPage() {
                                     <button
                                         key={id}
                                         onClick={() => switchMode(id)}
-                                        className={`flex w-full items-center gap-4 rounded-xl border px-4 py-3 transition-all ${active ? 'border-white/25 bg-night-900' : 'border-white/10 bg-night-900/60 hover:border-white/25'}`}
+                                        className={`flex w-full items-center gap-3 sm:gap-4 rounded-xl border px-3 sm:px-4 py-2.5 sm:py-3 transition-all ${active ? 'border-white/25 bg-night-900' : 'border-white/10 bg-night-900/60 hover:border-white/25'}`}
                                         style={active ? { boxShadow: `0 0 24px ${m.borderColor}` } : undefined}
                                     >
-                                        <span className={`flex h-9 w-9 items-center justify-center rounded-lg ${m.bg} ${m.text}`}>
-                                            <MIcon className="h-5 w-5" />
+                                        <span className={`flex h-8 w-8 sm:h-9 sm:w-9 items-center justify-center rounded-lg ${m.bg} ${m.text}`}>
+                                            <MIcon className="h-4 w-4 sm:h-5 sm:w-5" />
                                         </span>
                                         <span className="flex-1 text-left">
-                                            <span className="block font-display text-sm font-bold text-cream">{m.label}</span>
-                                            <span className="block text-xs text-cream/50">{m.desc}</span>
+                                            <span className="block font-display text-xs sm:text-sm font-bold text-cream">{m.label}</span>
+                                            <span className="block text-[11px] sm:text-xs text-cream/50">{m.desc}</span>
                                         </span>
-                                        {active && <CheckCircle2 className="h-4 w-4 text-glow" />}
+                                        {active && <CheckCircle2 className="h-3.5 w-3.5 sm:h-4 sm:w-4 text-glow" />}
                                     </button>
                                 )
                             })}
@@ -429,16 +555,15 @@ export default function CourseMapPage() {
                 </div>
             )}
 
-            {/* Bonus chest modal */}
             {chestOpen && (
-                <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4 backdrop-blur-sm">
-                    <div className="w-full max-w-sm rounded-card border border-white/10 bg-night-800 p-8 text-center shadow-glow-md">
-                        <div className="mb-4 flex justify-center"><Firefly mood="proud" size={110} glow={glowColors}/></div>
-                        <h3 className="font-display mb-2 text-2xl font-bold text-cream">Bonus Chest!</h3>
-                        <p className="mb-6 text-sm leading-relaxed text-cream/70">{joke}</p>
-                        <div className="mb-6 inline-flex items-center gap-2 rounded-full border border-glow/30 bg-glow/10 px-4 py-2 text-sm font-bold text-glow">+15 XP</div>
-                        <button onClick={() => setChestOpen(false)} className="flex w-full items-center justify-center gap-2 rounded-xl bg-glow py-3 font-bold text-night-900 transition-colors hover:bg-glow-bright">
-                            <X className="h-4 w-4" /> Keep going
+                <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-3 sm:p-4 backdrop-blur-sm">
+                    <div className="w-full max-w-sm rounded-card border border-white/10 bg-night-800 p-5 sm:p-8 text-center shadow-glow-md">
+                        <div className="mb-3 sm:mb-4 flex justify-center"><Firefly mood="proud" size={90} glow={glowColors}/></div>
+                        <h3 className="font-display mb-2 text-xl sm:text-2xl font-bold text-cream">Bonus Chest!</h3>
+                        <p className="mb-4 sm:mb-6 text-xs sm:text-sm leading-relaxed text-cream/70">{joke}</p>
+                        <div className="mb-4 sm:mb-6 inline-flex items-center gap-2 rounded-full border border-glow/30 bg-glow/10 px-3 sm:px-4 py-1.5 sm:py-2 text-xs sm:text-sm font-bold text-glow">+15 XP</div>
+                        <button onClick={() => setChestOpen(false)} className="flex w-full items-center justify-center gap-2 rounded-xl bg-glow py-2.5 sm:py-3 font-bold text-night-900 text-sm sm:text-base transition-colors hover:bg-glow-bright">
+                            <X className="h-3.5 w-3.5 sm:h-4 sm:w-4" /> Keep going
                         </button>
                     </div>
                 </div>

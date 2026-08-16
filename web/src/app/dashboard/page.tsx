@@ -150,7 +150,7 @@ export default function DashboardPage() {
     return (
       <main className="min-h-screen font-body">
         <NightBackground />
-        <div className="flex min-h-screen items-center justify-center"><Firefly mood="thinking" size={120} /></div>
+        <div className="flex min-h-screen items-center justify-center"><Firefly mood="thinking" size={100} /></div>
       </main>
     )
   }
@@ -176,106 +176,106 @@ export default function DashboardPage() {
       <NightBackground />
       <ModeAmbience mode={preferredMode} />
 
-      {/* Top bar */}
+      {/* Top bar - more compact on mobile */}
       <header className="sticky top-0 z-40 backdrop-blur-md bg-night-950/70 border-b border-white/5">
-        <div className="mx-auto max-w-3xl px-4 h-16 flex items-center justify-between">
+        <div className="mx-auto max-w-3xl px-3 sm:px-4 h-14 sm:h-16 flex items-center justify-between">
           <div className="flex items-center gap-2">
-            <Link href="/" className="flex items-center gap-2.5">
-              <LogoMark size={30} />
-              <span className="font-display text-lg font-bold text-cream tracking-tight">Ecla</span>
+            <Link href="/" className="flex items-center gap-2">
+              <LogoMark size={26} />
+              <span className="font-display text-base sm:text-lg font-bold text-cream tracking-tight">Ecla</span>
             </Link>
           </div>
           <UserButton />
         </div>
       </header>
 
-      <div className="mx-auto max-w-3xl px-4 py-8 space-y-6">
+      <div className="mx-auto max-w-3xl px-3 sm:px-4 py-5 sm:py-8 space-y-4 sm:space-y-6">
 
-        {/* Hero: Firefly Dome + Greeting + Combo */}
-        <section className="relative rounded-card border border-white/5 bg-night-800/60 p-6 md:p-8 backdrop-blur-sm overflow-hidden shadow-glow-sm">
+        {/* Hero: Firefly Dome + Greeting + Combo - more compact */}
+        <section className="relative rounded-card border border-white/5 bg-night-800/60 p-4 sm:p-6 backdrop-blur-sm overflow-hidden shadow-glow-sm">
           {intensity.showMascot && (
-            <div className="pointer-events-none absolute -top-20 left-1/2 -translate-x-1/2 h-48 w-48 rounded-full dome-glow" style={{ background: `radial-gradient(circle, ${glowColors.halo}40 0%, transparent 70%)`, filter: 'blur(10px)' }} />
+            <div className="pointer-events-none absolute -top-16 sm:-top-20 left-1/2 -translate-x-1/2 h-40 w-40 sm:h-48 sm:w-48 rounded-full dome-glow" style={{ background: `radial-gradient(circle, ${glowColors.halo}40 0%, transparent 70%)`, filter: 'blur(10px)' }} />
           )}
 
           {intensity.playfulCopy ? (
-            <div className="relative flex flex-col items-center text-center mb-6">
-              <div className="mb-3 cursor-pointer" onClick={() => setShowWardrobe(true)} title="Glow Collection">
-                <Firefly mood={tier.mood} size={intensity.largeMascot ? 130 : 96} glow={glowColors} />
+            <div className="relative flex flex-col items-center text-center mb-4 sm:mb-6">
+              <div className="mb-2 sm:mb-3 cursor-pointer" onClick={() => setShowWardrobe(true)} title="Glow Collection">
+                <Firefly mood={tier.mood} size={intensity.largeMascot ? 110 : 80} glow={glowColors} />
               </div>
-              <h1 className="font-display text-2xl md:text-3xl font-bold text-cream mb-1 flex items-center justify-center gap-2">
-                {getGreeting()} <Moon className="h-6 w-6 text-glow" />
+              <h1 className="font-display text-xl sm:text-2xl font-bold text-cream mb-1 flex items-center justify-center gap-2">
+                {getGreeting()} <Moon className="h-5 w-5 text-glow" />
               </h1>
-              <p className="text-sm text-cream/50">Ecla missed you.</p>
+              <p className="text-xs sm:text-sm text-cream/50">Ecla missed you.</p>
             </div>
           ) : (
-            <div className="relative mb-6 flex items-center justify-between">
+            <div className="relative mb-4 sm:mb-6 flex items-center justify-between">
               <div>
-                <h1 className="font-display text-2xl md:text-3xl font-bold text-cream mb-1">Welcome back.</h1>
-                <p className="text-sm text-cream/50">Ready when you are.</p>
+                <h1 className="font-display text-xl sm:text-2xl font-bold text-cream mb-1">Welcome back.</h1>
+                <p className="text-xs sm:text-sm text-cream/50">Ready when you are.</p>
               </div>
               <button
                 onClick={() => setShowWardrobe(true)}
                 title="Glow Collection"
-                className="flex h-10 w-10 items-center justify-center rounded-full border border-white/10 bg-night-900/60 hover:border-white/25 transition-all"
+                className="flex h-9 w-9 sm:h-10 sm:w-10 items-center justify-center rounded-full border border-white/10 bg-night-900/60 hover:border-white/25 transition-all"
               >
-                <span className="h-3.5 w-3.5 rounded-full" style={{ background: glowColors.halo, boxShadow: `0 0 10px ${glowColors.halo}80` }} />
+                <span className="h-3 w-3 rounded-full" style={{ background: glowColors.halo, boxShadow: `0 0 10px ${glowColors.halo}80` }} />
               </button>
             </div>
           )}
 
           {intensity.showComboBanner && comboStreak >= 3 && (
-            <div className="combo-pop mb-4 inline-flex items-center gap-2 rounded-full border border-glow/40 bg-glow/10 px-4 py-2 text-sm font-bold text-glow">
-              <Zap className="h-4 w-4" />
-              <span>{comboStreak}-answer streak — bonus XP incoming!</span>
+            <div className="combo-pop mb-3 sm:mb-4 inline-flex items-center gap-1.5 sm:gap-2 rounded-full border border-glow/40 bg-glow/10 px-3 sm:px-4 py-1.5 sm:py-2 text-xs sm:text-sm font-bold text-glow">
+              <Zap className="h-3.5 w-3.5 sm:h-4 sm:w-4" />
+              <span>{comboStreak}-answer streak — bonus XP!</span>
             </div>
           )}
 
-          <div className="grid grid-cols-2 gap-3">
-            <div className="rounded-xl border border-white/5 bg-night-900/60 p-4">
-              <div className="flex items-center gap-2 mb-2">
-                <Flame className={`h-5 w-5 ${intensity.glowEffects ? 'text-glow' : 'text-cream/50'}`} />
-                <span className="text-xs font-bold uppercase tracking-wider text-cream/40">Day Streak</span>
+          <div className="grid grid-cols-2 gap-2 sm:gap-3">
+            <div className="rounded-xl border border-white/5 bg-night-900/60 p-3 sm:p-4">
+              <div className="flex items-center gap-1.5 sm:gap-2 mb-1.5 sm:mb-2">
+                <Flame className={`h-4 w-4 sm:h-5 sm:w-5 ${intensity.glowEffects ? 'text-glow' : 'text-cream/50'}`} />
+                <span className="text-[10px] sm:text-xs font-bold uppercase tracking-wider text-cream/40">Day Streak</span>
               </div>
-              <p className={`font-display text-3xl font-black ${intensity.glowEffects ? 'text-glow' : 'text-cream'}`}>{streakDays}</p>
-              <p className="text-xs text-cream/50">{streakDays === 1 ? 'day running' : 'days running'}</p>
+              <p className={`font-display text-2xl sm:text-3xl font-black ${intensity.glowEffects ? 'text-glow' : 'text-cream'}`}>{streakDays}</p>
+              <p className="text-[11px] sm:text-xs text-cream/50">{streakDays === 1 ? 'day running' : 'days running'}</p>
             </div>
 
-            <div className="rounded-xl border border-white/5 bg-night-900/60 p-4">
-              <div className="flex items-center gap-2 mb-2">
-                <Sparkles className="h-5 w-5" style={{ color: intensity.glowEffects ? tier.color : '#9aa3b5' }} />
-                <span className="text-xs font-bold uppercase tracking-wider text-cream/40">Glow</span>
+            <div className="rounded-xl border border-white/5 bg-night-900/60 p-3 sm:p-4">
+              <div className="flex items-center gap-1.5 sm:gap-2 mb-1.5 sm:mb-2">
+                <Sparkles className="h-4 w-4 sm:h-5 sm:w-5" style={{ color: intensity.glowEffects ? tier.color : '#9aa3b5' }} />
+                <span className="text-[10px] sm:text-xs font-bold uppercase tracking-wider text-cream/40">Glow</span>
               </div>
-              <p className="font-display text-2xl font-black" style={{ color: intensity.glowEffects ? tier.color : '#F4F1EA' }}>{glowTier}</p>
-              <p className="text-xs text-cream/50">
+              <p className="font-display text-xl sm:text-2xl font-black" style={{ color: intensity.glowEffects ? tier.color : '#F4F1EA' }}>{glowTier}</p>
+              <p className="text-[11px] sm:text-xs text-cream/50">
                 {glowTier === 'Brilliant' ? (
                   <span className="flex items-center gap-1">
-                    Max tier {intensity.glowEffects && <Sparkles className="h-3 w-3 inline" />}
+                    Max tier {intensity.glowEffects && <Sparkles className="h-2.5 w-2.5 sm:h-3 sm:w-3 inline" />}
                   </span>
                 ) : (
-                  `${glowNext} days to next tier`
+                  `${glowNext} days to next`
                 )}
               </p>
             </div>
           </div>
         </section>
 
-        {/* Daily XP Goal Ring */}
-        <section className="rounded-card border border-white/5 bg-night-800/60 p-6 backdrop-blur-sm shadow-glow-sm">
-          <div className="flex items-center justify-between mb-4">
-            <div>
-              <p className="text-xs font-bold uppercase tracking-wider text-cream/40 mb-1">Today's Goal</p>
-              <div className="flex flex-wrap items-center gap-2">
-                <p className="font-display text-2xl font-bold text-cream">
-                  {goalSmashed ? dailyGoalXp : dailyXp} <span className="text-cream/40 text-lg">/ {dailyGoalXp} XP</span>
+        {/* Daily XP Goal Ring - more compact */}
+        <section className="rounded-card border border-white/5 bg-night-800/60 p-4 sm:p-6 backdrop-blur-sm shadow-glow-sm">
+          <div className="flex items-center justify-between mb-3 sm:mb-4">
+            <div className="flex-1 min-w-0 mr-3">
+              <p className="text-[10px] sm:text-xs font-bold uppercase tracking-wider text-cream/40 mb-1">Today's Goal</p>
+              <div className="flex flex-wrap items-center gap-1.5 sm:gap-2">
+                <p className="font-display text-xl sm:text-2xl font-bold text-cream">
+                  {goalSmashed ? dailyGoalXp : dailyXp} <span className="text-cream/40 text-base sm:text-lg">/ {dailyGoalXp} XP</span>
                 </p>
                 {goalSmashed && (
-                  <span className="inline-flex items-center gap-1 rounded-full border border-glow/40 bg-glow/10 px-2.5 py-1 text-xs font-bold text-glow">
-                    <Sparkles className="h-3 w-3" /> +{overflowXp} bonus XP
+                  <span className="inline-flex items-center gap-1 rounded-full border border-glow/40 bg-glow/10 px-2 py-0.5 sm:px-2.5 sm:py-1 text-[10px] sm:text-xs font-bold text-glow">
+                    <Sparkles className="h-2.5 w-2.5 sm:h-3 sm:w-3" /> +{overflowXp} XP
                   </span>
                 )}
               </div>
             </div>
-            <div className="relative h-20 w-20">
+            <div className="relative h-16 w-16 sm:h-20 sm:w-20 flex-shrink-0">
               <svg className="h-full w-full -rotate-90" viewBox="0 0 100 100">
                 <circle cx="50" cy="50" r="42" stroke="rgba(244,241,234,0.1)" strokeWidth="8" fill="transparent" />
                 {goalSmashed && (
@@ -291,24 +291,24 @@ export default function DashboardPage() {
                 />
               </svg>
               <div className="absolute inset-0 flex items-center justify-center">
-                {goalSmashed ? <CheckCircle2 className="h-6 w-6 text-glow" /> : <Target className="h-5 w-5 text-cream/70" />}
+                {goalSmashed ? <CheckCircle2 className="h-5 w-5 sm:h-6 sm:w-6 text-glow" /> : <Target className="h-4 w-4 sm:h-5 sm:w-5 text-cream/70" />}
               </div>
             </div>
           </div>
           {goalSmashed ? (
-            <p className="text-sm font-semibold text-glow flex items-center gap-2"><Sparkles className="h-4 w-4" /> Goal smashed — bonus XP earned. Ecla is radiant!</p>
+            <p className="text-xs sm:text-sm font-semibold text-glow flex items-center gap-1.5 sm:gap-2"><Sparkles className="h-3.5 w-3.5 sm:h-4 sm:w-4" /> Goal smashed! Ecla is radiant!</p>
           ) : progressPercent >= 100 ? (
-            <p className="text-sm font-semibold text-leaf flex items-center gap-2"><CheckCircle2 className="h-4 w-4" /> Daily goal complete — Ecla is shining!</p>
+            <p className="text-xs sm:text-sm font-semibold text-leaf flex items-center gap-1.5 sm:gap-2"><CheckCircle2 className="h-3.5 w-3.5 sm:h-4 sm:w-4" /> Daily goal complete!</p>
           ) : (
-            <p className="text-sm text-cream/50">{dailyGoalXp - dailyXp} XP left today. One more lesson?</p>
+            <p className="text-xs sm:text-sm text-cream/50">{dailyGoalXp - dailyXp} XP left today.</p>
           )}
         </section>
 
-                {/* Mode switcher */}
-        <section className="rounded-card border border-white/5 bg-night-800/60 p-6 backdrop-blur-sm shadow-glow-sm">
-          <div className="mb-4">
-            <p className="text-xs font-bold uppercase tracking-wider text-cream/40">Learning Mode</p>
-            <p className="text-sm text-cream/60 mt-1">{mode.desc} · tap to switch</p>
+        {/* Mode switcher - more compact */}
+        <section className="rounded-card border border-white/5 bg-night-800/60 p-4 sm:p-6 backdrop-blur-sm shadow-glow-sm">
+          <div className="mb-3 sm:mb-4">
+            <p className="text-[10px] sm:text-xs font-bold uppercase tracking-wider text-cream/40">Learning Mode</p>
+            <p className="text-xs sm:text-sm text-cream/60 mt-0.5 sm:mt-1">{mode.desc} · tap to switch</p>
           </div>
           <div className="no-scrollbar flex gap-2 overflow-x-auto pb-1">
             {(Object.keys(MODE_META) as ModeId[]).map(id => {
@@ -319,109 +319,109 @@ export default function DashboardPage() {
                 <button
                   key={id}
                   onClick={() => switchMode(id)}
-                  className={`flex flex-shrink-0 items-center gap-2.5 rounded-full border px-4 py-2.5 transition-all ${
+                  className={`flex flex-shrink-0 items-center gap-2 sm:gap-2.5 rounded-full border px-3 sm:px-4 py-2 sm:py-2.5 transition-all ${
                     active 
                       ? `${m.border} ${m.bg}/15 ${m.glow}` 
                       : 'border-white/10 bg-night-900/60 hover:border-white/20 hover:bg-night-900'
                   }`}
                 >
-                  <MIcon className={`h-4 w-4 ${active ? m.text : 'text-cream/70'}`} />
-                  <span className={`text-sm font-semibold ${active ? m.text : 'text-cream/70'}`}>{m.label}</span>
-                  <span className={`h-1.5 w-1.5 rounded-full ${m.dot}`} />
+                  <MIcon className={`h-3.5 w-3.5 sm:h-4 sm:w-4 ${active ? m.text : 'text-cream/70'}`} />
+                  <span className={`text-xs sm:text-sm font-semibold ${active ? m.text : 'text-cream/70'}`}>{m.label}</span>
+                  <span className={`h-1 w-1 sm:h-1.5 sm:w-1.5 rounded-full ${m.dot}`} />
                 </button>
               )
             })}
           </div>
         </section>
 
-        {/* Continue Learning */}
-        <section className="rounded-card border border-white/5 bg-night-800/60 p-6 backdrop-blur-sm shadow-glow-sm">
-          <p className="text-xs font-bold uppercase tracking-wider text-cream/40 mb-4">Continue Learning</p>
+        {/* Continue Learning - more compact */}
+        <section className="rounded-card border border-white/5 bg-night-800/60 p-4 sm:p-6 backdrop-blur-sm shadow-glow-sm">
+          <p className="text-[10px] sm:text-xs font-bold uppercase tracking-wider text-cream/40 mb-3 sm:mb-4">Continue Learning</p>
           {nextLesson ? (
             <div className="relative">
-              <div className="flex items-start gap-4">
+              <div className="flex items-start gap-3 sm:gap-4">
                 <div className="relative flex-shrink-0">
                   {intensity.showMascot && (
-                    <div className="pointer-events-none absolute -top-12 left-1/2 -translate-x-1/2 z-10">
-                      <Firefly mood="idle" size={56} glow={glowColors} />
+                    <div className="pointer-events-none absolute -top-10 sm:-top-12 left-1/2 -translate-x-1/2 z-10">
+                      <Firefly mood="idle" size={44} glow={glowColors} />
                     </div>
                   )}
-                  <div className={`flex h-16 w-16 items-center justify-center rounded-2xl border-2 ${mode.border} ${mode.bg}/15 ${mode.glow}`}>
-                    <ModeIcon className={`h-7 w-7 ${mode.text}`} />
+                  <div className={`flex h-14 w-14 sm:h-16 sm:w-16 items-center justify-center rounded-xl sm:rounded-2xl border-2 ${mode.border} ${mode.bg}/15 ${mode.glow}`}>
+                    <ModeIcon className={`h-6 w-6 sm:h-7 sm:w-7 ${mode.text}`} />
                   </div>
                 </div>
-                <div className="flex-1 min-w-0 pt-1">
-                  <p className={`text-xs font-bold uppercase tracking-wider ${mode.text} mb-1`}>{mode.label} Mode · +{nextLesson.xpReward} XP</p>
-                  <h3 className="font-display text-lg font-bold text-cream truncate">{nextLesson.conceptName}</h3>
-                  {nextLesson.variant?.storyBeat && <p className="mt-1 text-xs text-cream/50 italic truncate">&ldquo;{nextLesson.variant.storyBeat}&rdquo;</p>}
-                  {nextLesson.variant?.culturalRef && <p className="mt-1 text-xs text-cream/50 italic truncate">&ldquo;{nextLesson.variant.culturalRef}&rdquo;</p>}
-                  {nextLesson.variant?.formalPhrase && <p className="mt-1 text-xs text-cream/50 italic truncate">&ldquo;{nextLesson.variant.formalPhrase}&rdquo;</p>}
+                <div className="flex-1 min-w-0 pt-0.5 sm:pt-1">
+                  <p className={`text-[10px] sm:text-xs font-bold uppercase tracking-wider ${mode.text} mb-0.5 sm:mb-1`}>{mode.label} Mode · +{nextLesson.xpReward} XP</p>
+                  <h3 className="font-display text-base sm:text-lg font-bold text-cream truncate">{nextLesson.conceptName}</h3>
+                  {nextLesson.variant?.storyBeat && <p className="mt-0.5 sm:mt-1 text-[11px] sm:text-xs text-cream/50 italic truncate">&ldquo;{nextLesson.variant.storyBeat}&rdquo;</p>}
+                  {nextLesson.variant?.culturalRef && <p className="mt-0.5 sm:mt-1 text-[11px] sm:text-xs text-cream/50 italic truncate">&ldquo;{nextLesson.variant.culturalRef}&rdquo;</p>}
+                  {nextLesson.variant?.formalPhrase && <p className="mt-0.5 sm:mt-1 text-[11px] sm:text-xs text-cream/50 italic truncate">&ldquo;{nextLesson.variant.formalPhrase}&rdquo;</p>}
                 </div>
               </div>
               <button
                 onClick={() => router.push(`/learn/${nextLesson.conceptId}?mode=${preferredMode}`)}
-                className={`mt-5 w-full py-3.5 rounded-xl ${mode.bg} ${mode.text} font-display font-bold transition-all hover:brightness-110 active:scale-[0.98] flex items-center justify-center gap-2 ${mode.glow}`}
+                className={`mt-4 sm:mt-5 w-full py-3 sm:py-3.5 rounded-xl ${mode.bg} ${mode.text} font-display font-bold text-sm sm:text-base transition-all hover:brightness-110 active:scale-[0.98] flex items-center justify-center gap-2 ${mode.glow}`}
               >
                 Start Lesson <ArrowRight className="h-4 w-4" />
               </button>
             </div>
           ) : (
-            <div className="py-8 text-center">
-              {intensity.showMascot && <Firefly mood="proud" size={80} className="mx-auto mb-3" glow={glowColors} />}
-              <p className="text-cream/60">You've finished everything! New lessons coming soon.</p>
+            <div className="py-6 sm:py-8 text-center">
+              {intensity.showMascot && <Firefly mood="proud" size={64} className="mx-auto mb-3" glow={glowColors} />}
+              <p className="text-xs sm:text-sm text-cream/60">You've finished everything!</p>
             </div>
           )}
         </section>
 
-        {/* Quick Actions Grid */}
-        <section className="grid grid-cols-2 md:grid-cols-3 gap-3">
-          <Link href="/review" className="group rounded-card border border-white/5 bg-night-800/60 p-5 backdrop-blur-sm hover:border-immersion/50 hover:bg-night-800 transition-all">
-            <div className="h-11 w-11 rounded-xl bg-immersion/10 flex items-center justify-center mb-3 group-hover:bg-immersion/20 transition-colors">
-              <RotateCcw className="h-5 w-5 text-immersion" />
+        {/* Quick Actions Grid - more compact */}
+        <section className="grid grid-cols-2 sm:grid-cols-3 gap-2 sm:gap-3">
+          <Link href="/review" className="group rounded-card border border-white/5 bg-night-800/60 p-3 sm:p-5 backdrop-blur-sm hover:border-immersion/50 hover:bg-night-800 transition-all">
+            <div className="h-9 w-9 sm:h-11 sm:w-11 rounded-lg sm:rounded-xl bg-immersion/10 flex items-center justify-center mb-2 sm:mb-3 group-hover:bg-immersion/20 transition-colors">
+              <RotateCcw className="h-4 w-4 sm:h-5 sm:w-5 text-immersion" />
             </div>
-            <p className="font-display font-bold text-cream">Review</p>
-            <p className="text-xs text-cream/50 mt-0.5">Spaced repetition</p>
+            <p className="font-display text-sm sm:text-base font-bold text-cream">Review</p>
+            <p className="text-[11px] sm:text-xs text-cream/50 mt-0.5">Spaced repetition</p>
           </Link>
-          <Link href="/course" className="group rounded-card border border-white/5 bg-night-800/60 p-5 backdrop-blur-sm hover:border-glow/50 hover:bg-night-800 transition-all">
-            <div className="h-11 w-11 rounded-xl bg-glow/10 flex items-center justify-center mb-3 group-hover:bg-glow/20 transition-colors">
-              <Map className="h-5 w-5 text-glow" />
+          <Link href="/course" className="group rounded-card border border-white/5 bg-night-800/60 p-3 sm:p-5 backdrop-blur-sm hover:border-glow/50 hover:bg-night-800 transition-all">
+            <div className="h-9 w-9 sm:h-11 sm:w-11 rounded-lg sm:rounded-xl bg-glow/10 flex items-center justify-center mb-2 sm:mb-3 group-hover:bg-glow/20 transition-colors">
+              <Map className="h-4 w-4 sm:h-5 sm:w-5 text-glow" />
             </div>
-            <p className="font-display font-bold text-cream">The Path</p>
-            <p className="text-xs text-cream/50 mt-0.5">Full course map</p>
+            <p className="font-display text-sm sm:text-base font-bold text-cream">The Path</p>
+            <p className="text-[11px] sm:text-xs text-cream/50 mt-0.5">Full course map</p>
           </Link>
-          <Link href="/chat" className="group rounded-card border border-white/5 bg-night-800/60 p-5 backdrop-blur-sm hover:border-pro/50 hover:bg-night-800 transition-all col-span-2 md:col-span-1">
-            <div className="h-11 w-11 rounded-xl bg-pro/10 flex items-center justify-center mb-3 group-hover:bg-pro/20 transition-colors">
-              <MessageCircle className="h-5 w-5 text-pro" />
+          <Link href="/chat" className="group rounded-card border border-white/5 bg-night-800/60 p-3 sm:p-5 backdrop-blur-sm hover:border-pro/50 hover:bg-night-800 transition-all col-span-2 sm:col-span-1">
+            <div className="h-9 w-9 sm:h-11 sm:w-11 rounded-lg sm:rounded-xl bg-pro/10 flex items-center justify-center mb-2 sm:mb-3 group-hover:bg-pro/20 transition-colors">
+              <MessageCircle className="h-4 w-4 sm:h-5 sm:w-5 text-pro" />
             </div>
-            <p className="font-display font-bold text-cream">AI Tutor</p>
-            <p className="text-xs text-cream/50 mt-0.5">Chat in Spanish</p>
+            <p className="font-display text-sm sm:text-base font-bold text-cream">AI Tutor</p>
+            <p className="text-[11px] sm:text-xs text-cream/50 mt-0.5">Chat in Spanish</p>
           </Link>
         </section>
 
-        {/* Glow Meter progress - hidden in minimal mode */}
+        {/* Glow Meter progress - more compact */}
         {intensity.showGlowMeter && (
-          <section className="rounded-card border border-white/5 bg-night-800/60 p-6 backdrop-blur-sm shadow-glow-sm">
-            <div className="flex items-center justify-between mb-3">
-              <div>
-                <p className="text-xs font-bold uppercase tracking-wider text-cream/40 mb-1">Ecla's Glow Meter</p>
-                <p className="font-display text-lg font-bold text-cream">
+          <section className="rounded-card border border-white/5 bg-night-800/60 p-4 sm:p-6 backdrop-blur-sm shadow-glow-sm">
+            <div className="flex items-center justify-between mb-2 sm:mb-3">
+              <div className="flex-1 min-w-0 mr-2">
+                <p className="text-[10px] sm:text-xs font-bold uppercase tracking-wider text-cream/40 mb-0.5 sm:mb-1">Ecla's Glow</p>
+                <p className="font-display text-base sm:text-lg font-bold text-cream truncate">
                   <span style={{ color: tier.color }}>{glowTier}</span>
-                  {glowTier !== 'Brilliant' && <span className="text-cream/40"> · {activeDays}/30 active days</span>}
+                  {glowTier !== 'Brilliant' && <span className="text-cream/40 text-sm sm:text-base"> · {activeDays}/30</span>}
                 </p>
               </div>
-              <div className="flex items-center gap-3">
+              <div className="flex items-center gap-2 sm:gap-3 flex-shrink-0">
                 <button
                   onClick={() => setShowWardrobe(true)}
-                  className="flex items-center gap-1.5 rounded-full border border-white/10 bg-night-900/60 px-3 py-1.5 text-xs font-bold text-cream/70 hover:text-cream hover:border-white/25 transition-all"
+                  className="flex items-center gap-1 sm:gap-1.5 rounded-full border border-white/10 bg-night-900/60 px-2 sm:px-3 py-1 sm:py-1.5 text-[10px] sm:text-xs font-bold text-cream/70 hover:text-cream hover:border-white/25 transition-all"
                 >
-                  <Palette className="h-3.5 w-3.5" style={{ color: glowColors.halo }} />
-                  Collection · {unlockedCosmetics.length}/{Object.keys(COSMETICS).length}
+                  <Palette className="h-3 w-3 sm:h-3.5 sm:w-3.5" style={{ color: glowColors.halo }} />
+                  <span className="hidden sm:inline">Collection</span> · {unlockedCosmetics.length}/{Object.keys(COSMETICS).length}
                 </button>
-                <div className="flex gap-1">
+                <div className="flex gap-0.5 sm:gap-1">
                   {['Dim', 'Warm', 'Radiant', 'Brilliant'].map(t => (
                     <div
                       key={t}
-                      className={`h-2.5 w-2.5 rounded-full ${GLOW_TIERS[t].color === tier.color ? '' : 'opacity-30'}`}
+                      className={`h-2 w-2 sm:h-2.5 sm:w-2.5 rounded-full ${GLOW_TIERS[t].color === tier.color ? '' : 'opacity-30'}`}
                       style={{ background: GLOW_TIERS[t].color }}
                       title={t}
                     />
@@ -430,31 +430,31 @@ export default function DashboardPage() {
               </div>
             </div>
             {glowTier !== 'Brilliant' && (
-              <div className="relative h-2 rounded-full bg-white/5 overflow-hidden">
+              <div className="relative h-1.5 sm:h-2 rounded-full bg-white/5 overflow-hidden">
                 <div className="h-full rounded-full transition-all duration-700" style={{ width: `${tierProgress}%`, background: `linear-gradient(90deg, ${tier.color}, #FFF6CF)` }} />
               </div>
             )}
-            <p className="mt-3 text-xs text-cream/50">
+            <p className="mt-2 sm:mt-3 text-[11px] sm:text-xs text-cream/50">
               {glowTier === 'Brilliant'
-                ? 'Maximum tier reached. Ecla shines brightest for you.'
-                : `${glowNext} more active day${glowNext === 1 ? '' : 's'} to evolve to ${getTierAfter(glowTier)}. Consistency compounds.`}
+                ? 'Maximum tier reached.'
+                : `${glowNext} more day${glowNext === 1 ? '' : 's'} to ${getTierAfter(glowTier)}.`}
             </p>
           </section>
         )}
       </div>
 
-      {/* Wardrobe Modal */}
+      {/* Wardrobe Modal - more compact */}
       {showWardrobe && (
         <div className="fixed inset-0 z-50 flex items-end justify-center bg-black/60 backdrop-blur-sm sm:items-center sm:p-4" onClick={() => setShowWardrobe(false)}>
-          <div className="w-full max-w-md rounded-t-3xl border border-white/10 bg-night-800 p-6 shadow-glow-md sm:rounded-card sm:p-8" onClick={e => e.stopPropagation()}>
-            <div className="mb-5 flex items-center justify-between">
+          <div className="w-full max-w-md max-h-[85vh] overflow-y-auto rounded-t-3xl border border-white/10 bg-night-800 p-4 sm:p-6 shadow-glow-md sm:rounded-card sm:p-8" onClick={e => e.stopPropagation()}>
+            <div className="mb-4 sm:mb-5 flex items-center justify-between">
               <div>
-                <h3 className="font-display text-xl font-bold text-cream">Glow Collection</h3>
-                <p className="text-xs text-cream/50 mt-0.5">Ecla's light, your style.</p>
+                <h3 className="font-display text-lg sm:text-xl font-bold text-cream">Glow Collection</h3>
+                <p className="text-[11px] sm:text-xs text-cream/50 mt-0.5">Ecla's light, your style.</p>
               </div>
               <button onClick={() => setShowWardrobe(false)} className="rounded-lg p-1.5 text-cream/50 hover:bg-night-700 hover:text-cream"><X className="h-5 w-5" /></button>
             </div>
-            <div className="grid grid-cols-2 gap-3">
+            <div className="grid grid-cols-2 gap-2 sm:gap-3">
               {(Object.values(COSMETICS)).map(c => {
                 const unlocked = unlockedCosmetics.includes(c.id)
                 const equipped = equippedCosmetic === c.id
@@ -463,24 +463,24 @@ export default function DashboardPage() {
                     key={c.id}
                     disabled={!unlocked}
                     onClick={() => { equipCosmetic(c.id); setShowWardrobe(false); }}
-                    className={`relative rounded-xl border p-4 text-left transition-all ${equipped ? 'border-white/30 bg-night-900' : unlocked ? 'border-white/10 bg-night-900/60 hover:border-white/25' : 'border-white/5 bg-night-900/30 opacity-60'
+                    className={`relative rounded-lg sm:rounded-xl border p-3 sm:p-4 text-left transition-all ${equipped ? 'border-white/30 bg-night-900' : unlocked ? 'border-white/10 bg-night-900/60 hover:border-white/25' : 'border-white/5 bg-night-900/30 opacity-60'
                       }`}
                   >
                     <div
-                      className="mb-3 h-12 w-12 rounded-full"
+                      className="mb-2 sm:mb-3 h-10 w-10 sm:h-12 sm:w-12 rounded-full"
                       style={{
                         background: `radial-gradient(circle at 40% 35%, ${c.colors.core} 0%, ${c.colors.mid} 50%, ${c.colors.deep} 100%)`,
                         boxShadow: unlocked ? `0 0 18px ${c.colors.halo}66` : 'none',
                         filter: unlocked ? 'none' : 'grayscale(0.8) brightness(0.5)',
                       }}
                     />
-                    <p className="font-display text-sm font-bold text-cream">{c.name}</p>
+                    <p className="font-display text-xs sm:text-sm font-bold text-cream">{c.name}</p>
                     {equipped ? (
-                      <p className="text-xs font-semibold text-glow mt-0.5">Equipped</p>
+                      <p className="text-[10px] sm:text-xs font-semibold text-glow mt-0.5">Equipped</p>
                     ) : unlocked ? (
-                      <p className="text-xs text-cream/50 mt-0.5">Tap to equip</p>
+                      <p className="text-[10px] sm:text-xs text-cream/50 mt-0.5">Tap to equip</p>
                     ) : (
-                      <p className="text-xs text-cream/40 mt-0.5 flex items-center gap-1"><Lock className="h-3 w-3" /> {c.unlockText}</p>
+                      <p className="text-[10px] sm:text-xs text-cream/40 mt-0.5 flex items-center gap-1"><Lock className="h-2.5 w-2.5 sm:h-3 sm:w-3" /> {c.unlockText}</p>
                     )}
                   </button>
                 )
@@ -490,27 +490,27 @@ export default function DashboardPage() {
         </div>
       )}
 
-      {/* Unlock Celebration Modal */}
+      {/* Unlock Celebration Modal - more compact */}
       {unlockCelebration && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 backdrop-blur-sm p-4">
-          <div className="w-full max-w-sm rounded-card border border-white/10 bg-night-800 p-8 text-center shadow-glow-md">
-            <div className="mb-4 flex justify-center">
-              <Firefly mood="proud" size={120} glow={COSMETICS[unlockCelebration].colors} />
+          <div className="w-full max-w-sm rounded-card border border-white/10 bg-night-800 p-5 sm:p-8 text-center shadow-glow-md">
+            <div className="mb-3 sm:mb-4 flex justify-center">
+              <Firefly mood="proud" size={100} glow={COSMETICS[unlockCelebration].colors} />
             </div>
-            <p className="text-xs font-bold uppercase tracking-wider text-cream/40 mb-1">New Glow Unlocked</p>
-            <h3 className="font-display text-2xl font-bold mb-2" style={{ color: COSMETICS[unlockCelebration].colors.halo }}>
+            <p className="text-[10px] sm:text-xs font-bold uppercase tracking-wider text-cream/40 mb-1">New Glow Unlocked</p>
+            <h3 className="font-display text-xl sm:text-2xl font-bold mb-2" style={{ color: COSMETICS[unlockCelebration].colors.halo }}>
               {COSMETICS[unlockCelebration].name}
             </h3>
-            <p className="text-sm text-cream/60 mb-6">{COSMETICS[unlockCelebration].desc}</p>
-            <div className="flex gap-3">
+            <p className="text-xs sm:text-sm text-cream/60 mb-4 sm:mb-6">{COSMETICS[unlockCelebration].desc}</p>
+            <div className="flex gap-2 sm:gap-3">
               <button
                 onClick={() => { equipCosmetic(unlockCelebration); setUnlockCelebration(null) }}
-                className="flex-1 rounded-xl py-3 font-bold text-night-900 transition-all hover:brightness-110"
+                className="flex-1 rounded-xl py-2.5 sm:py-3 text-sm sm:text-base font-bold text-night-900 transition-all hover:brightness-110"
                 style={{ background: COSMETICS[unlockCelebration].colors.halo }}
               >
                 Equip Now
               </button>
-              <button onClick={() => setUnlockCelebration(null)} className="flex-1 rounded-xl border border-white/10 bg-night-900/60 py-3 font-semibold text-cream/70 hover:text-cream">
+              <button onClick={() => setUnlockCelebration(null)} className="flex-1 rounded-xl border border-white/10 bg-night-900/60 py-2.5 sm:py-3 text-sm sm:text-base font-semibold text-cream/70 hover:text-cream">
                 Later
               </button>
             </div>
