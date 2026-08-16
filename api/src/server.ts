@@ -1,8 +1,8 @@
 import 'dotenv/config'
 import express, { Request, Response, NextFunction } from 'express'
 import cors from 'cors'
-import { clerkMiddleware, getAuth } from '@clerk/express'
-import { PrismaClient } from '@prisma/client'
+import { clerkMiddleware, clerkClient, getAuth } from '@clerk/express'
+import { PrismaClient, type Concept } from '@prisma/client'
 import { z } from 'zod'
 import Groq from 'groq-sdk'
 
@@ -49,6 +49,7 @@ const onboardingSchema = z.object({
 
 const lessonCompleteSchema = z.object({
     conceptId: z.string(),
+    subLessonId: z.string().optional(),
     mode: z.enum(['STORY', 'DRILL', 'IMMERSION', 'PROFESSIONAL']),
     correctCount: z.number().int().min(0),
     incorrectCount: z.number().int().min(0),
@@ -95,6 +96,49 @@ function requireAdmin(req: Request): string {
         throw new AppError('Forbidden: Admin access only', 403)
     }
     return userId
+}
+
+// ---------- Real email lookup from Clerk (sessionClaims does NOT include
+// email unless you've configured a custom JWT template — fetch it from
+// Clerk's backend API instead, so ghost-user email matching actually works) ----------
+async function getClerkEmail(userId: string): Promise<string> {
+    try {
+        const clerkUser = await clerkClient.users.getUser(userId)
+        const email =
+            clerkUser.primaryEmailAddress?.emailAddress ??
+            clerkUser.emailAddresses?.[0]?.emailAddress ??
+            null
+        return email ?? `${userId}@unknown.local`
+    } catch {
+        return `${userId}@unknown.local`
+    }
+}
+
+// ---------- Self-healing user lookup ----------
+// Fixes "User not found" errors after a DB reset (or any case where Clerk
+// still has a valid session but our DB has no matching row). Instead of
+// requiring the frontend to call /sync-user at exactly the right moment,
+// every authenticated route can just call this and always get a real user.
+async function getOrSyncUser(req: Request) {
+    const userId = requireAuth(req)
+    let user = await prisma.user.findUnique({ where: { clerkId: userId } })
+    if (user) return user
+
+    const email = await getClerkEmail(userId)
+    const ghostUser = await prisma.user.findUnique({ where: { email } })
+
+    if (ghostUser) {
+        user = await prisma.user.update({
+            where: { id: ghostUser.id },
+            data: { clerkId: userId, onboardingCompleted: false },
+        })
+    } else {
+        user = await prisma.user.create({
+            data: { clerkId: userId, email, onboardingCompleted: false },
+        })
+    }
+
+    return user
 }
 
 // ---------- AI Content Safety ----------
@@ -152,41 +196,11 @@ app.get('/api/v1/health', async (_req: Request, res: Response) => {
 // Sync user from Clerk to database (Handles Ghost Users & Provider Switching)
 app.post('/api/v1/sync-user', async (req: Request, res: Response, next: NextFunction) => {
     try {
-        const userId = requireAuth(req)
-        const email = (req.auth?.sessionClaims?.email as string) || 'unknown'
-
-        let user = await prisma.user.findUnique({ where: { clerkId: userId } })
-
-        if (user) {
-            if (user.email !== email) {
-                user = await prisma.user.update({ where: { id: user.id }, data: { email } })
-            }
-        } else {
-            const ghostUser = await prisma.user.findUnique({ where: { email } })
-
-            if (ghostUser) {
-                user = await prisma.user.update({
-                    where: { id: ghostUser.id },
-                    data: {
-                        clerkId: userId,
-                        onboardingCompleted: false
-                    }
-                })
-            } else {
-                user = await prisma.user.create({
-                    data: {
-                        clerkId: userId,
-                        email,
-                        onboardingCompleted: false
-                    }
-                })
-            }
-        }
-
+        const user = await getOrSyncUser(req)
         res.json({
             synced: true,
             user,
-            onboardingCompleted: user.onboardingCompleted
+            onboardingCompleted: user.onboardingCompleted,
         })
     } catch (error) {
         next(error)
@@ -197,6 +211,7 @@ app.post('/api/v1/sync-user', async (req: Request, res: Response, next: NextFunc
 app.post('/api/v1/onboarding/complete', async (req: Request, res: Response, next: NextFunction) => {
     try {
         const userId = requireAuth(req)
+        await getOrSyncUser(req) // ensure the row exists before updating it
 
         const parsed = onboardingSchema.safeParse(req.body)
         if (!parsed.success) {
@@ -235,12 +250,7 @@ app.post('/api/v1/onboarding/complete', async (req: Request, res: Response, next
 // Dashboard
 app.get('/api/v1/dashboard', async (req: Request, res: Response, next: NextFunction) => {
     try {
-        const userId = requireAuth(req)
-        const user = await prisma.user.findUnique({
-            where: { clerkId: userId },
-            select: { id: true, preferredMode: true, dailyGoalXp: true, streakDays: true, unlockedCosmetics: true, equippedCosmetic: true }
-        })
-        if (!user) throw new AppError('User not found', 404)
+        const user = await getOrSyncUser(req)
 
         const today = new Date().toISOString().split('T')[0]
         const todayLog = await prisma.streakLog.findUnique({
@@ -295,7 +305,7 @@ app.get('/api/v1/dashboard', async (req: Request, res: Response, next: NextFunct
         let unlockedCosmetics = currentUnlocked
         if (newUnlocks.length) {
             unlockedCosmetics = [...currentUnlocked, ...newUnlocks]
-            await prisma.user.update({ where: { clerkId: userId }, data: { unlockedCosmetics } })
+            await prisma.user.update({ where: { id: user.id }, data: { unlockedCosmetics } })
         }
 
         const allConcepts = await prisma.concept.findMany({
@@ -381,14 +391,8 @@ app.get('/api/v1/dashboard', async (req: Request, res: Response, next: NextFunct
 // Fetch Specific Lesson
 app.get('/api/v1/lessons/:conceptId', async (req: Request, res: Response, next: NextFunction) => {
     try {
-        const userId = requireAuth(req)
+        const user = await getOrSyncUser(req)
         const { conceptId } = req.params
-
-        const user = await prisma.user.findUnique({
-            where: { clerkId: userId },
-            select: { preferredMode: true, equippedCosmetic: true },
-        })
-        if (!user) throw new AppError('User not found', 404)
 
         const concept = await prisma.concept.findUnique({
             where: { id: conceptId },
@@ -396,6 +400,7 @@ app.get('/api/v1/lessons/:conceptId', async (req: Request, res: Response, next: 
                 variants: {
                     where: { mode: user.preferredMode },
                 },
+                subLessons: { orderBy: { orderIndex: 'asc' } },
             },
         })
 
@@ -410,6 +415,7 @@ app.get('/api/v1/lessons/:conceptId', async (req: Request, res: Response, next: 
                 grammarNote: concept.grammarNote,
                 mode: user.preferredMode,
                 variant: cleanVariant(concept.variants[0]),
+                subLessons: concept.subLessons,
                 equippedCosmetic: user.equippedCosmetic ?? 'gold',
             },
         })
@@ -421,9 +427,7 @@ app.get('/api/v1/lessons/:conceptId', async (req: Request, res: Response, next: 
 // Curriculum Map 
 app.get('/api/v1/course/map', async (req: Request, res: Response, next: NextFunction) => {
     try {
-        const userId = requireAuth(req)
-        const user = await prisma.user.findUnique({ where: { clerkId: userId } })
-        if (!user) throw new AppError('User not found', 404)
+        const user = await getOrSyncUser(req)
 
         const course = await prisma.course.findFirst({
             where: { isPublished: true },
@@ -483,19 +487,18 @@ app.get('/api/v1/course/map', async (req: Request, res: Response, next: NextFunc
 // Complete Lesson & Update Mastery 
 app.post('/api/v1/lessons/complete', async (req: Request, res: Response, next: NextFunction) => {
     try {
-        const userId = requireAuth(req)
         const parsed = lessonCompleteSchema.safeParse(req.body)
         if (!parsed.success) throw new AppError('Invalid completion data', 400)
 
-        const { conceptId, mode, correctCount, incorrectCount, xpEarned } = parsed.data
+        const { conceptId, subLessonId, mode, correctCount, incorrectCount, xpEarned } = parsed.data
 
-        const user = await prisma.user.findUnique({ where: { clerkId: userId } })
-        if (!user) throw new AppError('User not found', 404)
+        const user = await getOrSyncUser(req)
 
         await prisma.userProgress.create({
             data: {
                 userId: user.id,
                 conceptId,
+                subLessonId: subLessonId ?? null,
                 modeUsed: mode,
                 status: 'completed',
                 score: correctCount,
@@ -544,7 +547,7 @@ app.post('/api/v1/lessons/complete', async (req: Request, res: Response, next: N
         }
 
         const updatedUser = await prisma.user.update({
-            where: { clerkId: userId },
+            where: { id: user.id },
             data: {
                 xpTotal: { increment: xpEarned },
                 streakDays: newStreakDays,
@@ -561,12 +564,13 @@ app.post('/api/v1/lessons/complete', async (req: Request, res: Response, next: N
 // Mode Switcher Route
 app.post('/api/v1/user/mode', async (req: Request, res: Response, next: NextFunction) => {
     try {
-        const userId = requireAuth(req)
         const parsed = modeSchema.safeParse(req.body)
         if (!parsed.success) throw new AppError('Invalid mode', 400)
 
+        const user = await getOrSyncUser(req)
+
         await prisma.user.update({
-            where: { clerkId: userId },
+            where: { id: user.id },
             data: { preferredMode: parsed.data.mode },
         })
 
@@ -579,17 +583,15 @@ app.post('/api/v1/user/mode', async (req: Request, res: Response, next: NextFunc
 // Equip Cosmetic
 app.post('/api/v1/user/cosmetics/equip', async (req: Request, res: Response, next: NextFunction) => {
     try {
-        const userId = requireAuth(req)
         const { cosmeticId } = req.body
         if (typeof cosmeticId !== 'string') throw new AppError('Invalid cosmetic', 400)
 
-        const user = await prisma.user.findUnique({ where: { clerkId: userId } })
-        if (!user) throw new AppError('User not found', 404)
+        const user = await getOrSyncUser(req)
         if (!(user.unlockedCosmetics ?? ['gold']).includes(cosmeticId)) {
             throw new AppError('Cosmetic not unlocked yet', 403)
         }
 
-        await prisma.user.update({ where: { clerkId: userId }, data: { equippedCosmetic: cosmeticId } })
+        await prisma.user.update({ where: { id: user.id }, data: { equippedCosmetic: cosmeticId } })
         res.json({ success: true })
     } catch (error) { next(error) }
 })
@@ -597,12 +599,7 @@ app.post('/api/v1/user/cosmetics/equip', async (req: Request, res: Response, nex
 // Get Cosmetics (unlocked + equipped)
 app.get('/api/v1/user/cosmetics', async (req: Request, res: Response, next: NextFunction) => {
     try {
-        const userId = requireAuth(req)
-        const user = await prisma.user.findUnique({
-            where: { clerkId: userId },
-            select: { unlockedCosmetics: true, equippedCosmetic: true },
-        })
-        if (!user) throw new AppError('User not found', 404)
+        const user = await getOrSyncUser(req)
         res.json({
             unlockedCosmetics: user.unlockedCosmetics ?? ['gold'],
             equippedCosmetic: user.equippedCosmetic ?? 'gold',
@@ -613,10 +610,7 @@ app.get('/api/v1/user/cosmetics', async (req: Request, res: Response, next: Next
 // Fetch Due Flashcards
 app.get('/api/v1/flashcards/due', async (req: Request, res: Response, next: NextFunction) => {
     try {
-        const userId = requireAuth(req)
-        const user = await prisma.user.findUnique({ where: { clerkId: userId } })
-        if (!user) throw new AppError('User not found', 404)
-
+        const user = await getOrSyncUser(req)
         const now = new Date()
 
         const allVocab = await prisma.vocabulary.findMany({
@@ -658,13 +652,11 @@ const flashcardReviewSchema = z.object({
 
 app.post('/api/v1/flashcards/review', async (req: Request, res: Response, next: NextFunction) => {
     try {
-        const userId = requireAuth(req)
         const parsed = flashcardReviewSchema.safeParse(req.body)
         if (!parsed.success) throw new AppError('Invalid review data', 400)
 
         const { vocabId, quality } = parsed.data
-        const user = await prisma.user.findUnique({ where: { clerkId: userId } })
-        if (!user) throw new AppError('User not found', 404)
+        const user = await getOrSyncUser(req)
 
         let prog = await prisma.userVocabProgress.findFirst({
             where: { userId: user.id, vocabId }
@@ -691,18 +683,30 @@ app.post('/api/v1/flashcards/review', async (req: Request, res: Response, next: 
         const nextReviewAt = new Date()
         nextReviewAt.setDate(nextReviewAt.getDate() + interval)
 
-        await prisma.userVocabProgress.upsert({
-            where: { id: prog?.id || 'new-record' },
-            update: { easeFactor, interval, repetitions, nextReviewAt },
-            create: {
-                userId: user.id,
-                vocabId,
-                easeFactor,
-                interval,
-                repetitions,
-                nextReviewAt,
-            },
-        })
+        // NOTE: this upserts on `id`, which only works "by luck" because a
+        // brand-new record has no id yet. The correct fix is a compound
+        // unique constraint in schema.prisma:
+        //   @@unique([userId, vocabId])
+        // then upsert on `where: { userId_vocabId: { userId: user.id, vocabId } }`.
+        // Left as a plain create/update pair below so it works correctly
+        // RIGHT NOW without requiring a schema migration first.
+        if (prog) {
+            await prisma.userVocabProgress.update({
+                where: { id: prog.id },
+                data: { easeFactor, interval, repetitions, nextReviewAt },
+            })
+        } else {
+            await prisma.userVocabProgress.create({
+                data: {
+                    userId: user.id,
+                    vocabId,
+                    easeFactor,
+                    interval,
+                    repetitions,
+                    nextReviewAt,
+                },
+            })
+        }
 
         res.json({ success: true, nextReviewInDays: interval })
     } catch (error) {
@@ -727,12 +731,10 @@ const motivationHints: Record<string, string> = {
 
 app.post('/api/v1/chat', async (req: Request, res: Response, next: NextFunction) => {
     try {
-        const userId = requireAuth(req)
         const parsed = chatSchema.safeParse(req.body)
         if (!parsed.success) throw new AppError('Invalid chat data', 400)
 
-        const user = await prisma.user.findUnique({ where: { clerkId: userId } })
-        if (!user) throw new AppError('User not found', 404)
+        const user = await getOrSyncUser(req)
 
         const level = user.currentLevel ?? 'A1'
         const motivation = user.motivation ?? 'FUN'
