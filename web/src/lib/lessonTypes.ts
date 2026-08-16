@@ -8,11 +8,11 @@ export type TeachBlock =
     | { type: 'alphabet'; text: string }
 
 export type ExerciseV2 =
-    | { type: 'mcq'; prompt: string; options: string[]; answer: string; hint?: string }
-    | { type: 'fill_blank'; prompt: string; answer: string; hint?: string }
-    | { type: 'translate'; prompt: string; answer: string; hint?: string }
-    | { type: 'listen_choose'; audio: string; options: string[]; answer: string; hint?: string }
-    | { type: 'listen_type'; audio: string; answer: string; hint?: string }
+    | { type: 'mcq'; prompt: string; options: string[]; answer: string; hint?: string; whyExplanation?: string }
+    | { type: 'fill_blank'; prompt: string; answer: string; hint?: string; whyExplanation?: string }
+    | { type: 'translate'; prompt: string; answer: string; hint?: string; whyExplanation?: string }
+    | { type: 'listen_choose'; audio: string; options: string[]; answer: string; hint?: string; whyExplanation?: string }
+    | { type: 'listen_type'; audio: string; answer: string; hint?: string; whyExplanation?: string }
     | { type: 'match'; pairs: { a: string; b: string }[] }
 
 export type RealLife = { prompt: string; chatSeed?: string }

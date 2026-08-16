@@ -33,7 +33,7 @@ interface MotivationOption {
     id: string
     label: string
     description: string
-    icon: React.ComponentType<{ className?: string }>
+    icon: React.ComponentType<{ className?: string; style?: React.CSSProperties }>
     defaultMode?: string
 }
 
@@ -41,7 +41,7 @@ interface ModeOption {
     id: string
     label: string
     description: string
-    icon: React.ComponentType<{ className?: string }>
+    icon: React.ComponentType<{ className?: string; style?: React.CSSProperties }>
     accent: string
 }
 
@@ -49,7 +49,7 @@ interface GoalOption {
     xp: number
     label: string
     description: string
-    icon: React.ComponentType<{ className?: string }>
+    icon: React.ComponentType<{ className?: string; style?: React.CSSProperties }>
 }
 
 interface QuizQuestion {
