@@ -21,10 +21,10 @@ import type { TeachBlock, ExerciseV2, SubLessonData } from '@/lib/lessonTypes'
 const API_URL = process.env.NEXT_PUBLIC_API_URL ?? 'http://localhost:4000'
 
 const MODE_META = {
-    STORY: { label: 'Story', color: 'text-story', border: 'border-story', bg: 'bg-story', glow: 'shadow-[0_0_24px_rgba(255,180,90,0.4)]', Icon: BookOpen, dot: 'bg-story' },
-    DRILL: { label: 'Drill', color: 'text-drill', border: 'border-drill', bg: 'bg-drill', glow: 'shadow-[0_0_24px_rgba(77,216,230,0.4)]', Icon: Zap, dot: 'bg-drill' },
-    IMMERSION: { label: 'Immersion', color: 'text-immersion', border: 'border-immersion', bg: 'bg-immersion', glow: 'shadow-[0_0_24px_rgba(185,140,240,0.4)]', Icon: Music, dot: 'bg-immersion' },
-    PROFESSIONAL: { label: 'Professional', color: 'text-pro', border: 'border-pro', bg: 'bg-pro', glow: 'shadow-[0_0_24px_rgba(127,166,255,0.4)]', Icon: GraduationCap, dot: 'bg-pro' },
+    STORY: { label: 'Story', color: 'text-story', border: 'border-story', bg: 'bg-story', text: 'text-night-900', glow: 'shadow-[0_0_24px_rgba(255,180,90,0.4)]', Icon: BookOpen, dot: 'bg-story' },
+    DRILL: { label: 'Drill', color: 'text-drill', border: 'border-drill', bg: 'bg-drill', text: 'text-night-900', glow: 'shadow-[0_0_24px_rgba(77,216,230,0.4)]', Icon: Zap, dot: 'bg-drill' },
+    IMMERSION: { label: 'Immersion', color: 'text-immersion', border: 'border-immersion', bg: 'bg-immersion', text: 'text-night-900', glow: 'shadow-[0_0_24px_rgba(185,140,240,0.4)]', Icon: Music, dot: 'bg-immersion' },
+    PROFESSIONAL: { label: 'Professional', color: 'text-pro', border: 'border-pro', bg: 'bg-pro', text: 'text-night-900', glow: 'shadow-[0_0_24px_rgba(127,166,255,0.4)]', Icon: GraduationCap, dot: 'bg-pro' },
 }
 
 type LessonPhase = 'teach' | 'practice' | 'use' | 'celebration'
@@ -139,6 +139,7 @@ export default function LessonPage() {
     const checkAnswer = (value: string) => {
         if (isRevealed || !value?.trim()) return
         if (!currentExercise) return
+        if (currentExercise.type === 'match') return // match exercises use different logic
 
         let correct = false
         if (currentExercise.type === 'mcq' || currentExercise.type === 'listen_choose') {
@@ -713,9 +714,9 @@ export default function LessonPage() {
                                                 )}
                                                 <div className="flex-1 space-y-1.5">
                                                     <p className="text-sm font-semibold text-leaf">{intensity.playfulCopy ? 'Perfect!' : 'Correct.'}</p>
-                                                    {currentExercise.whyExplanation && (
+                                                    {(currentExercise as any).whyExplanation && (
                                                         <p className="text-xs text-cream/80 leading-relaxed">
-                                                            <span className="font-semibold">Why:</span> {currentExercise.whyExplanation}
+                                                            <span className="font-semibold">Why:</span> {(currentExercise as any).whyExplanation}
                                                         </p>
                                                     )}
                                                 </div>
@@ -732,11 +733,11 @@ export default function LessonPage() {
                                                 <div className="flex-1 space-y-1.5">
                                                     <p className="text-sm font-semibold text-coral">{intensity.playfulCopy ? 'Not quite right.' : 'Incorrect.'}</p>
                                                     <p className="text-xs text-cream/80">
-                                                        <span className="font-semibold">Answer:</span> <span className="font-bold text-cream">{currentExercise.answer}</span>
+                                                        <span className="font-semibold">Answer:</span> <span className="font-bold text-cream">{(currentExercise as any).answer}</span>
                                                     </p>
-                                                    {currentExercise.whyExplanation && (
+                                                    {(currentExercise as any).whyExplanation && (
                                                         <p className="text-xs text-cream/80 leading-relaxed border-t border-coral/20 pt-2 mt-2">
-                                                            <span className="font-semibold">Why:</span> {currentExercise.whyExplanation}
+                                                            <span className="font-semibold">Why:</span> {(currentExercise as any).whyExplanation}
                                                         </p>
                                                     )}
                                                 </div>
@@ -749,7 +750,7 @@ export default function LessonPage() {
                                         className={`w-full py-3 rounded-xl font-bold text-sm text-night-900 transition-all hover:brightness-110 flex items-center justify-center gap-2 ${meta?.bg || 'bg-glow'}`}
                                     >
                                         {currentIndex === totalExercises - 1
-                                            ? (currentSub.realLife ? 'Use it in real life' : 'Finish this part')
+                                            ? (currentSub?.realLife ? 'Use it in real life' : 'Finish this part')
                                             : 'Continue'}
                                         <ArrowRight className="h-4 w-4" />
                                     </button>
@@ -763,7 +764,7 @@ export default function LessonPage() {
                                         className={`w-full py-3 rounded-xl font-bold text-sm text-night-900 transition-all hover:brightness-110 flex items-center justify-center gap-2 ${meta?.bg || 'bg-glow'}`}
                                     >
                                         {currentIndex === totalExercises - 1
-                                            ? (currentSub.realLife ? 'Use it in real life' : 'Finish this part')
+                                            ? (currentSub?.realLife ? 'Use it in real life' : 'Finish this part')
                                             : 'Continue'}
                                         <ArrowRight className="h-4 w-4" />
                                     </button>
@@ -795,7 +796,7 @@ export default function LessonPage() {
 
                             <div className="space-y-2.5">
                                 <button
-                                    onClick={() => router.push(`/chat?seed=${encodeURIComponent(currentSub.realLife.chatSeed || '')}`)}
+                                    onClick={() => currentSub?.realLife && router.push(`/chat?seed=${encodeURIComponent(currentSub.realLife.chatSeed || '')}`)}
                                     className="w-full py-3 rounded-xl bg-pro text-night-900 font-bold text-sm transition-all hover:brightness-110 flex items-center justify-center gap-2 shadow-[0_0_24px_rgba(127,166,255,0.35)]"
                                 >
                                     <MessageCircle className="h-4 w-4" />
