@@ -15,6 +15,17 @@ router.get('/api/v1/dashboard', async (req: Request, res: Response, next: NextFu
         })
         const dailyXp = todayLog?.xpEarned || 0
 
+        // Calculate weekly XP (last 7 days) for future leaderboard support
+        const weekAgo = new Date()
+        weekAgo.setDate(weekAgo.getDate() - 7)
+        const weeklyLogs = await prisma.streakLog.findMany({
+            where: {
+                userId: user.id,
+                date: { gte: weekAgo.toISOString().split('T')[0] }
+            }
+        })
+        const weeklyXp = weeklyLogs.reduce((sum, log) => sum + log.xpEarned, 0)
+
         const recentProgress = await prisma.userProgress.findMany({
             where: { userId: user.id },
             orderBy: { completedAt: 'desc' },
@@ -85,7 +96,8 @@ router.get('/api/v1/dashboard', async (req: Request, res: Response, next: NextFu
 
         if (!nextConcept || nextConcept.variants.length === 0) {
             return res.json({
-                dailyXp, dailyGoalXp: user.dailyGoalXp, streakDays: user.streakDays,
+                dailyXp, weeklyXp, totalXp: user.xpTotal,
+                dailyGoalXp: user.dailyGoalXp, streakDays: user.streakDays,
                 preferredMode: user.preferredMode, nextLesson: null, reviewRequired: false,
                 accuracy: 100, comboStreak, glowTier, glowNext, activeDays,
                 unlockedCosmetics, equippedCosmetic: user.equippedCosmetic ?? 'gold', newUnlocks,
@@ -100,7 +112,8 @@ router.get('/api/v1/dashboard', async (req: Request, res: Response, next: NextFu
         if (totalAttempts >= 2 && accuracy < 0.6) reviewRequired = true
 
         res.json({
-            dailyXp, dailyGoalXp: user.dailyGoalXp, streakDays: user.streakDays,
+            dailyXp, weeklyXp, totalXp: user.xpTotal,
+            dailyGoalXp: user.dailyGoalXp, streakDays: user.streakDays,
             preferredMode: user.preferredMode,
             nextLesson: {
                 conceptId: nextConcept.id, conceptName: nextConcept.name,
