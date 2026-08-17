@@ -21,18 +21,23 @@ import type { TeachBlock, ExerciseV2, SubLessonData } from '@/lib/lessonTypes'
 const API_URL = process.env.NEXT_PUBLIC_API_URL ?? 'http://localhost:4000'
 
 const MODE_META = {
-    STORY: { label: 'Story', color: 'text-story', border: 'border-story', bg: 'bg-story', text: 'text-night-900', glow: 'shadow-[0_0_24px_rgba(255,180,90,0.4)]', Icon: BookOpen, dot: 'bg-story' },
-    DRILL: { label: 'Drill', color: 'text-drill', border: 'border-drill', bg: 'bg-drill', text: 'text-night-900', glow: 'shadow-[0_0_24px_rgba(77,216,230,0.4)]', Icon: Zap, dot: 'bg-drill' },
-    IMMERSION: { label: 'Immersion', color: 'text-immersion', border: 'border-immersion', bg: 'bg-immersion', text: 'text-night-900', glow: 'shadow-[0_0_24px_rgba(185,140,240,0.4)]', Icon: Music, dot: 'bg-immersion' },
-    PROFESSIONAL: { label: 'Professional', color: 'text-pro', border: 'border-pro', bg: 'bg-pro', text: 'text-night-900', glow: 'shadow-[0_0_24px_rgba(127,166,255,0.4)]', Icon: GraduationCap, dot: 'bg-pro' },
+    STORY: { label: 'Story', color: 'text-story', bg: 'bg-story', text: 'text-night-900', Icon: BookOpen },
+    DRILL: { label: 'Drill', color: 'text-drill', bg: 'bg-drill', text: 'text-night-900', Icon: Zap },
+    IMMERSION: { label: 'Immersion', color: 'text-immersion', bg: 'bg-immersion', text: 'text-night-900', Icon: Music },
+    PROFESSIONAL: { label: 'Professional', color: 'text-pro', bg: 'bg-pro', text: 'text-night-900', Icon: GraduationCap },
 }
 
 type LessonPhase = 'teach' | 'practice' | 'use' | 'celebration'
 
-type MatchItem = {
-    id: string
-    a: string
-    b: string
+type MatchItem = { id: string; a: string; b: string }
+
+function shuffle<T>(arr: T[]): T[] {
+    const a = [...arr]
+    for (let i = a.length - 1; i > 0; i--) {
+        const j = Math.floor(Math.random() * (i + 1));
+        [a[i], a[j]] = [a[j], a[i]]
+    }
+    return a
 }
 
 function legacyAsSubLesson(lesson: any): SubLessonData {
@@ -64,6 +69,7 @@ export default function LessonPage() {
     const router = useRouter()
     const searchParams = useSearchParams()
     const modeParam = searchParams.get('mode')
+    const partParam = searchParams.get('part')
     const { getToken } = useAuth()
 
     const [lesson, setLesson] = useState<any>(null)
@@ -71,22 +77,24 @@ export default function LessonPage() {
     const [saving, setSaving] = useState(false)
     const [glowColors, setGlowColors] = useState(DEFAULT_GLOW)
 
+    // ONE part per session (Duolingo-style: do a part, rest, come back)
     const [subLessons, setSubLessons] = useState<SubLessonData[]>([])
-    const [subLessonIndex, setSubLessonIndex] = useState(0)
-    const [completedSubLessons, setCompletedSubLessons] = useState<Set<string>>(new Set())
+    const [activeSubId, setActiveSubId] = useState<string | null>(null)
+    const [completedIds, setCompletedIds] = useState<Set<string>>(new Set())
+    const [partNumber, setPartNumber] = useState(1)
+    const [wasReview, setWasReview] = useState(false)
+    const [earnedXp, setEarnedXp] = useState(0)
 
     const [phase, setPhase] = useState<LessonPhase>('teach')
     const [currentIndex, setCurrentIndex] = useState(0)
-    const [userInput, setUserInput] = useState<string>('')
+    const [userInput, setUserInput] = useState('')
     const [isRevealed, setIsRevealed] = useState(false)
     const [isCorrect, setIsCorrect] = useState(false)
     const [correctCount, setCorrectCount] = useState(0)
     const [hearts, setHearts] = useState(5)
     const [showXpFloat, setShowXpFloat] = useState(false)
     const [shakeCard, setShakeCard] = useState(false)
-    const [fireflyMood, setFireflyMood] = useState<'idle' | 'excited' | 'dim' | 'sad' | 'proud' | 'radiant' | 'thinking'>('idle')
-    
-    // Match exercise state
+
     const [matchPairs, setMatchPairs] = useState<MatchItem[]>([])
     const [shuffledB, setShuffledB] = useState<MatchItem[]>([])
     const [selectedA, setSelectedA] = useState<string | null>(null)
@@ -110,36 +118,71 @@ export default function LessonPage() {
                     setGlowColors(COSMETICS[data.lesson.equippedCosmetic as CosmeticId].colors)
                 }
 
-                const subs: SubLessonData[] = (data.lesson.subLessons && data.lesson.subLessons.length > 0)
+                const done = new Set<string>(data.lesson.completedSubLessonIds ?? [])
+                setCompletedIds(done)
+
+                const raw: SubLessonData[] = (data.lesson.subLessons && data.lesson.subLessons.length > 0)
                     ? data.lesson.subLessons
                     : [legacyAsSubLesson(data.lesson)]
+                const subs = raw.map(s => ({ ...s, exercises: shuffle(s.exercises || []) }))
                 setSubLessons(subs)
 
-                const firstIncomplete = subs.findIndex(s => !data.lesson.completedSubLessons?.includes(s.id))
-                setSubLessonIndex(firstIncomplete >= 0 ? firstIncomplete : 0)
+                // Pick the part for this session: ?part= param, else first incomplete
+                const fromParam = partParam ? subs.find(s => s.id === partParam) : undefined
+                const active = fromParam ?? subs.find(s => !done.has(s.id)) ?? null
 
-                if (subs[firstIncomplete >= 0 ? firstIncomplete : 0]?.teach.length === 0) {
-                    setPhase('practice')
+                if (active) {
+                    setActiveSubId(active.id)
+                    setPartNumber(subs.indexOf(active) + 1)
+                    setWasReview(done.has(active.id))
+                    if (!active.teach?.length) setPhase('practice')
+                } else {
+                    // Everything already finished — show completion screen
+                    setPhase('celebration')
                 }
             } catch (e) { console.error(e) } finally { setLoading(false) }
         }
         fetchLesson()
-    }, [getToken, params.conceptId, modeParam])
+    }, [getToken, params.conceptId, modeParam, partParam])
 
-    const currentSub = subLessons[subLessonIndex]
-    const exercises: ExerciseV2[] = currentSub?.exercises || []
+    const activeSub = subLessons.find(s => s.id === activeSubId) ?? null
+    const exercises: ExerciseV2[] = activeSub?.exercises || []
     const currentExercise = exercises[currentIndex]
     const totalSubs = subLessons.length
     const totalExercises = exercises.length
+    const allDone = totalSubs > 0 && subLessons.every(s => completedIds.has(s.id))
 
-    const subProgressPercent = totalSubs
-        ? ((completedSubLessons.size + (phase === 'celebration' ? 1 : 0) + (phase === 'practice' ? currentIndex / Math.max(1, totalExercises) : 0)) / totalSubs) * 100
+    const partProgress = totalExercises > 0
+        ? ((currentIndex + (isRevealed ? 1 : 0)) / totalExercises) * 100
         : 0
+
+    const resetExerciseState = () => {
+        setCurrentIndex(0)
+        setUserInput('')
+        setIsRevealed(false)
+        setIsCorrect(false)
+        setCorrectCount(0)
+        setHearts(5)
+        setMatchPairs([])
+        setShuffledB([])
+        setSelectedA(null)
+        setSelectedB(null)
+        setMatchedIds(new Set())
+        setWrongPair(null)
+    }
+
+    const startReview = (sub: SubLessonData) => {
+        resetExerciseState()
+        setActiveSubId(sub.id)
+        setPartNumber(subLessons.indexOf(sub) + 1)
+        setWasReview(true)
+        setEarnedXp(0)
+        setPhase(sub.teach?.length ? 'teach' : 'practice')
+    }
 
     const checkAnswer = (value: string) => {
         if (isRevealed || !value?.trim()) return
-        if (!currentExercise) return
-        if (currentExercise.type === 'match') return // match exercises use different logic
+        if (!currentExercise || currentExercise.type === 'match') return
 
         let correct = false
         if (currentExercise.type === 'mcq' || currentExercise.type === 'listen_choose') {
@@ -154,33 +197,20 @@ export default function LessonPage() {
 
         if (correct) {
             setCorrectCount(c => c + 1)
-            setFireflyMood('excited')
             setShowXpFloat(true)
             if (floatTimer.current) clearTimeout(floatTimer.current)
-            floatTimer.current = setTimeout(() => {
-                setShowXpFloat(false)
-                setFireflyMood('idle')
-            }, 1400)
+            floatTimer.current = setTimeout(() => setShowXpFloat(false), 1400)
         } else {
             setHearts(h => Math.max(0, h - 1))
             setShakeCard(true)
-            setFireflyMood('dim')
-            setTimeout(() => {
-                setShakeCard(false)
-                setFireflyMood(hearts - 1 === 0 ? 'sad' : 'idle')
-            }, 450)
+            setTimeout(() => setShakeCard(false), 450)
         }
     }
 
     const initMatchExercise = useCallback((pairs: { a: string; b: string }[]) => {
-        const items: MatchItem[] = pairs.map((p, i) => ({
-            id: `pair-${i}`,
-            a: p.a,
-            b: p.b,
-        }))
-        const shuffled = [...items].sort(() => Math.random() - 0.5)
+        const items: MatchItem[] = pairs.map((p, i) => ({ id: `pair-${i}`, a: p.a, b: p.b }))
         setMatchPairs(items)
-        setShuffledB(shuffled)
+        setShuffledB(shuffle(items))
         setMatchedIds(new Set())
         setSelectedA(null)
         setSelectedB(null)
@@ -188,85 +218,76 @@ export default function LessonPage() {
     }, [])
 
     const handleMatchClick = useCallback((side: 'a' | 'b', id: string) => {
-        if (matchedIds.has(id)) return
-        if (wrongPair) return // animating wrong pair
+        if (matchedIds.has(id) || wrongPair) return
 
-        if (side === 'a') {
-            if (selectedA === id) {
+        const resolve = (aId: string, bId: string) => {
+            if (aId === bId) {
+                const newMatched = new Set([...matchedIds, aId])
+                setMatchedIds(newMatched)
                 setSelectedA(null)
-                return
-            }
-            setSelectedA(id)
-            
-            if (selectedB) {
-                if (id === selectedB) {
-                    // Match found!
-                    const newMatched = new Set([...matchedIds, id])
-                    setMatchedIds(newMatched)
-                    setSelectedA(null)
-                    setSelectedB(null)
-                    setFireflyMood('excited')
-                    setTimeout(() => setFireflyMood('idle'), 800)
-                    
-                    // Check if all matched
-                    if (newMatched.size === matchPairs.length) {
-                        setTimeout(() => {
-                            setIsRevealed(true)
-                            setIsCorrect(true)
-                            setCorrectCount(c => c + 1)
-                        }, 600)
-                    }
-                } else {
-                    // Wrong pair
-                    setWrongPair({ a: id, b: selectedB })
-                    setFireflyMood('dim')
-                    setTimeout(() => {
-                        setWrongPair(null)
-                        setSelectedA(null)
-                        setSelectedB(null)
-                        setFireflyMood('idle')
-                    }, 500)
-                }
-            }
-        } else {
-            if (selectedB === id) {
                 setSelectedB(null)
-                return
-            }
-            setSelectedB(id)
-            
-            if (selectedA) {
-                if (id === selectedA) {
-                    // Match found!
-                    const newMatched = new Set([...matchedIds, id])
-                    setMatchedIds(newMatched)
+                if (newMatched.size === matchPairs.length) {
+                    setTimeout(() => {
+                        setIsRevealed(true)
+                        setIsCorrect(true)
+                        setCorrectCount(c => c + 1)
+                    }, 400)
+                }
+            } else {
+                setWrongPair({ a: aId, b: bId })
+                setTimeout(() => {
+                    setWrongPair(null)
                     setSelectedA(null)
                     setSelectedB(null)
-                    setFireflyMood('excited')
-                    setTimeout(() => setFireflyMood('idle'), 800)
-                    
-                    // Check if all matched
-                    if (newMatched.size === matchPairs.length) {
-                        setTimeout(() => {
-                            setIsRevealed(true)
-                            setIsCorrect(true)
-                            setCorrectCount(c => c + 1)
-                        }, 600)
-                    }
-                } else {
-                    // Wrong pair
-                    setWrongPair({ a: selectedA, b: id })
-                    setFireflyMood('dim')
-                    setTimeout(() => {
-                        setWrongPair(null)
-                        setSelectedA(null)
-                        setSelectedB(null)
-                        setFireflyMood('idle')
-                    }, 500)
-                }
+                }, 500)
             }
         }
+
+        if (side === 'a') {
+            if (selectedA === id) { setSelectedA(null); return }
+            setSelectedA(id)
+            if (selectedB) resolve(id, selectedB)
+        } else {
+            if (selectedB === id) { setSelectedB(null); return }
+            setSelectedB(id)
+            if (selectedA) resolve(selectedA, id)
+        }
     }, [selectedA, selectedB, matchedIds, matchPairs.length, wrongPair])
+
+    // Finish THIS part only — then the user rests and goes back to the path
+    const completePart = async () => {
+        if (!lesson || !activeSub) return
+        setSaving(true)
+        const isLegacy = activeSub.id.startsWith('legacy-')
+        const xp = wasReview ? 0 : activeSub.xpReward
+        try {
+            const token = await getToken()
+            const res = await fetch(`${API_URL}/api/v1/lessons/complete`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+                body: JSON.stringify({
+                    conceptId: lesson.conceptId,
+                    subLessonId: isLegacy ? undefined : activeSub.id,
+                    mode: lesson.mode,
+                    correctCount,
+                    incorrectCount: Math.max(0, totalExercises - correctCount),
+                    xpEarned: xp,
+                }),
+            })
+            if (res.ok) {
+                setCompletedIds(prev => new Set([...prev, activeSub.id]))
+                setEarnedXp(xp)
+                posthog.capture('lesson_part_completed', {
+                    concept_id: lesson.conceptId,
+                    sub_lesson_id: activeSub.id,
+                    mode: lesson.mode,
+                    xp_earned: xp,
+                })
+                window.dispatchEvent(new Event('luma:progress-updated'))
+            }
+        } catch (e) { console.error('Network error saving progress:', e) }
+        finally { setSaving(false); setPhase('celebration') }
+    }
 
     const handleNext = () => {
         if (currentIndex < totalExercises - 1) {
@@ -280,70 +301,12 @@ export default function LessonPage() {
             setSelectedB(null)
             setMatchedIds(new Set())
             setWrongPair(null)
+        } else if (activeSub?.realLife) {
+            setPhase('use')
         } else {
-            if (currentSub?.realLife) {
-                setPhase('use')
-            } else {
-                completeSubLesson()
-            }
+            completePart()
         }
     }
-
-    const completeSubLesson = () => {
-        setCompletedSubLessons(prev => new Set([...prev, currentSub.id]))
-
-        if (subLessonIndex < totalSubs - 1) {
-            const nextIdx = subLessonIndex + 1
-            setSubLessonIndex(nextIdx)
-            setCurrentIndex(0)
-            setUserInput('')
-            setIsRevealed(false)
-            setIsCorrect(false)
-            setCorrectCount(0)
-            setMatchPairs([])
-            setShuffledB([])
-            setSelectedA(null)
-            setSelectedB(null)
-            setMatchedIds(new Set())
-            setPhase(subLessons[nextIdx].teach.length > 0 ? 'teach' : 'practice')
-        } else {
-            setPhase('celebration')
-            saveProgress()
-        }
-    }
-
-    const saveProgress = useCallback(async () => {
-        if (!lesson) return
-        setSaving(true)
-        try {
-            const token = await getToken()
-            const totalSubXp = subLessons.reduce((sum, s) => sum + (s.xpReward || 0), 0)
-            const xpEarned = Math.round((completedSubLessons.size + 1) / Math.max(1, totalSubs) * totalSubXp)
-
-            const res = await fetch(`${API_URL}/api/v1/lessons/complete`, {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
-                body: JSON.stringify({
-                    conceptId: lesson.conceptId,
-                    subLessonId: currentSub?.id,
-                    mode: lesson.mode,
-                    correctCount,
-                    incorrectCount: totalExercises - correctCount,
-                    xpEarned,
-                }),
-            })
-
-            if (res.ok) {
-                posthog.capture('lesson_completed', {
-                    concept_id: lesson.conceptId,
-                    sub_lessons_completed: completedSubLessons.size + 1,
-                    mode: lesson.mode,
-                    xp_earned: xpEarned,
-                })
-                window.dispatchEvent(new Event('luma:progress-updated'))
-            }
-        } catch (e) { console.error('Network error saving progress:', e) } finally { setSaving(false) }
-    }, [lesson, correctCount, getToken, subLessons, completedSubLessons, totalSubs, currentSub, totalExercises])
 
     if (loading) {
         return (
@@ -371,8 +334,15 @@ export default function LessonPage() {
 
     const meta = MODE_META[lesson.mode as keyof typeof MODE_META]
     const intensity = useIntensity(lesson.mode)
-    const totalXp = subLessons.reduce((sum, s) => sum + (s.xpReward || 0), 0)
-    const xpEarned = Math.round((completedSubLessons.size + (phase === 'celebration' ? 1 : 0)) / Math.max(1, totalSubs) * totalXp)
+    const partAccuracy = totalExercises > 0 ? Math.round((correctCount / totalExercises) * 100) : 100
+
+    // Mode flavor — this is what makes the 4 modes feel different
+    const flavor = lesson.variant
+    const flavorCard =
+        lesson.mode === 'STORY' && flavor?.storyBeat ? { Icon: BookOpen, accent: 'text-story', border: 'border-story/30', title: 'Story so far', text: flavor.storyBeat } :
+        lesson.mode === 'IMMERSION' && flavor?.culturalRef ? { Icon: Music, accent: 'text-immersion', border: 'border-immersion/30', title: 'Culture note', text: flavor.culturalRef } :
+        lesson.mode === 'PROFESSIONAL' && flavor?.formalPhrase ? { Icon: GraduationCap, accent: 'text-pro', border: 'border-pro/30', title: 'Professional context', text: flavor.formalPhrase } :
+        null
 
     const renderTeachBlock = (block: TeachBlock, i: number) => {
         switch (block.type) {
@@ -398,10 +368,7 @@ export default function LessonPage() {
                         <p className="text-xs font-bold uppercase tracking-wider text-cream/40 mb-2">Vocabulary</p>
                         <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
                             {block.items.map((item, j) => (
-                                <div
-                                    key={j}
-                                    className="flex items-center justify-between gap-2 rounded-lg border border-white/10 bg-night-900/60 p-3 hover:border-glow/30 hover:bg-night-900 transition-all"
-                                >
+                                <div key={j} className="flex items-center justify-between gap-2 rounded-lg border border-white/10 bg-night-900/60 p-3">
                                     <div className="flex-1 min-w-0">
                                         <p className="font-display text-sm md:text-base font-bold text-cream truncate">{item.word}</p>
                                         <p className="text-xs text-cream/50 truncate">{item.translation}</p>
@@ -443,12 +410,10 @@ export default function LessonPage() {
                 return (
                     <>
                         {currentExercise.type === 'listen_choose' && (
-                            <>
-                                <div className="mb-4 flex items-center justify-center">
-                                    <SpeakerButton text={currentExercise.audio} lang="es-ES" size="lg" />
-                                </div>
-                                <p className="text-center text-xs text-cream/50 mb-4">Listen and pick the correct translation</p>
-                            </>
+                            <div className="mb-4 flex flex-col items-center gap-2">
+                                <SpeakerButton text={currentExercise.audio} lang="es-ES" size="lg" />
+                                <p className="text-center text-xs text-cream/50">Listen and pick the correct translation</p>
+                            </div>
                         )}
                         <div className="space-y-2">
                             {(currentExercise.options || []).map((option, i) => {
@@ -465,11 +430,11 @@ export default function LessonPage() {
                                         key={i}
                                         onClick={() => !isRevealed && checkAnswer(option)}
                                         disabled={isRevealed}
-                                        className={`w-full p-3 rounded-xl border-2 text-left transition-all flex items-center justify-between ${styles}`}
+                                        className={`w-full p-4 rounded-xl border-2 text-left transition-all flex items-center justify-between min-h-[56px] ${styles}`}
                                     >
-                                        <span className="text-sm font-medium">{option}</span>
-                                        {isRevealed && isCorrectOption && <CheckCircle2 className="h-4 w-4 flex-shrink-0" />}
-                                        {isRevealed && isSelected && !isCorrectOption && <XCircle className="h-4 w-4 flex-shrink-0" />}
+                                        <span className="text-sm font-medium flex-1">{option}</span>
+                                        {isRevealed && isCorrectOption && <CheckCircle2 className="h-4 w-4 flex-shrink-0 ml-2" />}
+                                        {isRevealed && isSelected && !isCorrectOption && <XCircle className="h-4 w-4 flex-shrink-0 ml-2" />}
                                     </button>
                                 )
                             })}
@@ -483,20 +448,22 @@ export default function LessonPage() {
                 return (
                     <>
                         {currentExercise.type === 'listen_type' && (
-                            <>
-                                <div className="mb-4 flex items-center justify-center">
-                                    <SpeakerButton text={currentExercise.audio} lang="es-ES" size="lg" />
-                                </div>
-                                <p className="text-center text-xs text-cream/50 mb-4">Type what you hear</p>
-                            </>
+                            <div className="mb-4 flex flex-col items-center gap-2">
+                                <SpeakerButton text={currentExercise.audio} lang="es-ES" size="lg" />
+                                <p className="text-center text-xs text-cream/50">Type what you hear</p>
+                            </div>
                         )}
                         <input
                             type="text"
                             value={userInput}
                             onChange={(e) => setUserInput(e.target.value)}
                             disabled={isRevealed}
-                            className={`w-full p-3 rounded-xl border-2 bg-night-900/50 text-cream text-base focus:outline-none transition-all ${isRevealed ? isCorrect ? 'border-leaf/50' : 'border-coral/50' : 'border-white/10 focus:border-glow focus:bg-night-900'}`}
-                            placeholder={currentExercise.type === 'fill_blank' ? "Type your answer..." : currentExercise.type === 'translate' ? "Type the translation..." : "Type what you hear..."}
+                            className={`w-full p-4 rounded-xl border-2 bg-night-900/50 text-cream text-base focus:outline-none transition-all min-h-[56px] ${
+                                isRevealed
+                                    ? isCorrect ? 'border-leaf/50' : 'border-coral/50'
+                                    : 'border-white/10 focus:border-cream/40 focus:bg-night-900'
+                            }`}
+                            placeholder={currentExercise.type === 'fill_blank' ? 'Type your answer...' : currentExercise.type === 'translate' ? 'Type the translation...' : 'Type what you hear...'}
                             autoFocus
                             onKeyDown={(e) => e.key === 'Enter' && !isRevealed && checkAnswer(userInput)}
                         />
@@ -504,7 +471,7 @@ export default function LessonPage() {
                             <button
                                 onClick={() => checkAnswer(userInput)}
                                 disabled={!userInput.trim()}
-                                className={`w-full py-3 rounded-xl font-bold text-sm transition-all disabled:opacity-40 disabled:cursor-not-allowed mt-3 ${meta?.bg || 'bg-glow'} text-night-900 hover:brightness-110`}
+                                className="w-full py-3.5 rounded-xl font-bold text-sm bg-glow text-night-900 transition-all disabled:opacity-40 disabled:cursor-not-allowed mt-3 hover:bg-glow-bright"
                             >
                                 Check Answer
                             </button>
@@ -516,27 +483,19 @@ export default function LessonPage() {
                 if (matchPairs.length === 0 && currentExercise.pairs) {
                     initMatchExercise(currentExercise.pairs)
                 }
-                
                 const allMatched = matchPairs.length > 0 && matchedIds.size === matchPairs.length
 
-                const getAStyles = (id: string) => {
+                const tileStyles = (id: string, side: 'a' | 'b') => {
                     if (matchedIds.has(id)) return 'border-leaf/40 bg-leaf/10 text-leaf opacity-50 cursor-default'
-                    if (wrongPair?.a === id) return 'border-coral bg-coral/20 text-coral'
-                    if (selectedA === id) return 'border-glow bg-glow/15 text-cream ring-2 ring-glow/30'
-                    return 'border-white/10 bg-night-900/60 text-cream hover:border-white/25'
-                }
-
-                const getBStyles = (id: string) => {
-                    if (matchedIds.has(id)) return 'border-leaf/40 bg-leaf/10 text-leaf opacity-50 cursor-default'
-                    if (wrongPair?.b === id) return 'border-coral bg-coral/20 text-coral'
-                    if (selectedB === id) return 'border-glow bg-glow/15 text-cream ring-2 ring-glow/30'
+                    if (wrongPair && ((side === 'a' && wrongPair.a === id) || (side === 'b' && wrongPair.b === id))) return 'border-coral bg-coral/20 text-coral'
+                    if ((side === 'a' && selectedA === id) || (side === 'b' && selectedB === id)) return 'border-glow bg-glow/15 text-cream ring-2 ring-glow/30'
                     return 'border-white/10 bg-night-900/60 text-cream hover:border-white/25'
                 }
 
                 return (
                     <div className="space-y-3">
                         <p className="text-xs text-cream/50 text-center mb-3">
-                            {selectedA ? 'Now tap the matching translation' : 'Tap a word, then its match'}
+                            {selectedA || selectedB ? 'Now tap the matching translation' : 'Tap a word, then its match'}
                         </p>
                         <div className="grid grid-cols-2 gap-2 md:gap-3">
                             <div className="space-y-2">
@@ -545,7 +504,7 @@ export default function LessonPage() {
                                         key={`a-${pair.id}`}
                                         onClick={() => handleMatchClick('a', pair.id)}
                                         disabled={matchedIds.has(pair.id) || !!wrongPair}
-                                        className={`w-full p-2.5 md:p-3 rounded-lg border-2 text-left text-sm font-medium transition-all ${getAStyles(pair.id)}`}
+                                        className={`w-full p-3 rounded-lg border-2 text-left text-sm font-medium transition-all min-h-[52px] ${tileStyles(pair.id, 'a')}`}
                                     >
                                         {pair.a}
                                     </button>
@@ -557,7 +516,7 @@ export default function LessonPage() {
                                         key={`b-${pair.id}`}
                                         onClick={() => handleMatchClick('b', pair.id)}
                                         disabled={matchedIds.has(pair.id) || !!wrongPair}
-                                        className={`w-full p-2.5 md:p-3 rounded-lg border-2 text-left text-sm font-medium transition-all ${getBStyles(pair.id)}`}
+                                        className={`w-full p-3 rounded-lg border-2 text-left text-sm font-medium transition-all min-h-[52px] ${tileStyles(pair.id, 'b')}`}
                                     >
                                         {pair.b}
                                     </button>
@@ -601,27 +560,21 @@ export default function LessonPage() {
                     <div className="flex-1 relative h-2.5 md:h-3">
                         <div className="absolute inset-0 rounded-full bg-white/5 overflow-hidden">
                             <div
-                                className={`h-full rounded-full ${meta?.bg || 'bg-glow'} transition-all ease-out ${lesson.mode === 'DRILL' ? 'duration-200' : 'duration-500'}`}
-                                style={{
-                                    width: `${Math.min(100, subProgressPercent)}%`,
-                                    boxShadow: intensity.glowEffects ? undefined : 'none'
-                                }}
+                                className="h-full rounded-full bg-glow transition-all ease-out duration-300"
+                                style={{ width: `${Math.min(100, phase === 'celebration' ? 100 : partProgress)}%` }}
                             />
                         </div>
                     </div>
 
                     <span className="text-[11px] md:text-xs font-bold text-cream/50 whitespace-nowrap">
-                        {completedSubLessons.size + (phase === 'celebration' ? 1 : 0)}/{totalSubs}
+                        Part {partNumber}/{totalSubs}
                     </span>
 
                     <div className="flex items-center gap-0.5">
                         {Array.from({ length: 5 }).map((_, i) => (
                             <Heart
                                 key={i}
-                                className={`h-3.5 w-3.5 md:h-4 md:w-4 transition-all duration-300 ${i < hearts
-                                        ? intensity.glowEffects ? 'fill-coral text-coral' : 'fill-cream/70 text-cream/70'
-                                        : 'text-cream/15'
-                                    }`}
+                                className={`h-3.5 w-3.5 md:h-4 md:w-4 transition-all duration-300 ${i < hearts ? 'fill-coral text-coral' : 'text-cream/15'}`}
                             />
                         ))}
                     </div>
@@ -630,225 +583,40 @@ export default function LessonPage() {
 
             <div className="mx-auto max-w-3xl px-3 md:px-4 py-4 md:py-8">
 
-                {phase !== 'celebration' && currentSub && (
-                    <div className="mb-4 md:mb-6 fade-in">
-                        <div className="flex items-center gap-2.5 mb-1.5">
-                            <div className={`h-7 w-7 md:h-8 md:w-8 rounded-lg flex items-center justify-center ${meta?.bg || 'bg-glow'} ${meta?.text || 'text-night-900'}`}>
-                                {(() => {
-                                    const SubIcon = ICON_MAP[currentSub.icon] || Sparkles
-                                    return <SubIcon className="h-3.5 w-3.5 md:h-4 md:w-4" />
-                                })()}
-                            </div>
-                            <span className="text-[11px] md:text-xs font-bold uppercase tracking-wider text-cream/40">
-                                Part {subLessonIndex + 1} of {totalSubs}
-                            </span>
-                        </div>
-                        <h1 className="font-display text-xl md:text-2xl font-black text-cream leading-tight">
-                            {currentSub.title}
-                        </h1>
-                    </div>
-                )}
-
-                {phase === 'teach' && currentSub && (
-                    <div className="space-y-3 fade-in">
-                        <div className="flex items-center gap-2 text-glow text-[11px] md:text-xs font-bold uppercase tracking-wider mb-1">
-                            <BookOpenCheck className="h-3 w-3 md:h-3.5 md:w-3.5" />
-                            Understand
-                        </div>
-
-                        {currentSub.teach.map((block, i) => renderTeachBlock(block, i))}
-
-                        <button
-                            onClick={() => {
-                                setPhase('practice')
-                                setCurrentIndex(0)
-                                setUserInput('')
-                                setIsRevealed(false)
-                            }}
-                            className={`w-full py-3.5 rounded-xl font-bold text-night-900 text-sm md:text-base transition-all hover:brightness-110 flex items-center justify-center gap-2 mt-4 ${meta?.bg || 'bg-glow'}`}
-                        >
-                            Start Practice
-                            <ArrowRight className="h-4 w-4 md:h-5 md:w-5" />
-                        </button>
-                    </div>
-                )}
-
-                {phase === 'practice' && currentSub && currentExercise && (
-                    <div className={`relative ${shakeCard ? 'card-shake' : ''} fade-in`}>
-                        <div className="flex items-center gap-2 text-drill text-[11px] md:text-xs font-bold uppercase tracking-wider mb-3">
-                            <Puzzle className="h-3 w-3 md:h-3.5 md:w-3.5" />
-                            Practice
-                            <span className="text-cream/40 ml-auto">
-                                {currentIndex + 1} of {totalExercises}
-                            </span>
-                        </div>
-
-                        {intensity.showComboBanner && showXpFloat && (
-                            <div className="pointer-events-none absolute left-1/2 -top-3 z-10 xp-float">
-                                <div className="inline-flex items-center gap-1 rounded-full bg-glow px-2.5 py-1 text-xs font-black text-night-900 shadow-glow-md">
-                                    <Sparkles className="h-3 w-3" /> +{Math.round(currentSub.xpReward / totalExercises)} XP
-                                </div>
-                            </div>
-                        )}
-
-                        <div className="rounded-xl border border-white/10 bg-night-800/70 p-4 md:p-6 backdrop-blur-sm shadow-glow-sm relative overflow-hidden">
-                            <div className={`absolute inset-x-0 top-0 h-1 ${meta?.bg} opacity-70`} />
-
-                            {(currentExercise.type === 'mcq' || currentExercise.type === 'fill_blank' || currentExercise.type === 'translate') && (
-                                <h2 className="font-display text-base md:text-lg font-bold text-cream leading-snug mb-4 md:mb-5">
-                                    {currentExercise.prompt}
-                                </h2>
-                            )}
-
-                            {renderExercise()}
-
-                            {isRevealed && currentExercise.type !== 'match' && (
-                                <div className="mt-5 space-y-3">
-                                    {isCorrect ? (
-                                        <div className="rounded-lg border border-leaf/30 bg-leaf/10 p-3">
-                                            <div className="flex items-start gap-2.5">
-                                                {intensity.playfulCopy ? (
-                                                    <Firefly mood="proud" size={40} glow={glowColors} />
-                                                ) : (
-                                                    <CheckCircle2 className="h-5 w-5 text-leaf flex-shrink-0 mt-0.5" />
-                                                )}
-                                                <div className="flex-1 space-y-1.5">
-                                                    <p className="text-sm font-semibold text-leaf">{intensity.playfulCopy ? 'Perfect!' : 'Correct.'}</p>
-                                                    {(currentExercise as any).whyExplanation && (
-                                                        <p className="text-xs text-cream/80 leading-relaxed">
-                                                            <span className="font-semibold">Why:</span> {(currentExercise as any).whyExplanation}
-                                                        </p>
-                                                    )}
-                                                </div>
-                                            </div>
-                                        </div>
-                                    ) : (
-                                        <div className="rounded-lg border border-coral/30 bg-coral/10 p-3 space-y-2">
-                                            <div className="flex items-start gap-2.5">
-                                                {intensity.playfulCopy ? (
-                                                    <Firefly mood="sad" size={40} glow={glowColors} />
-                                                ) : (
-                                                    <XCircle className="h-5 w-5 text-coral flex-shrink-0 mt-0.5" />
-                                                )}
-                                                <div className="flex-1 space-y-1.5">
-                                                    <p className="text-sm font-semibold text-coral">{intensity.playfulCopy ? 'Not quite right.' : 'Incorrect.'}</p>
-                                                    <p className="text-xs text-cream/80">
-                                                        <span className="font-semibold">Answer:</span> <span className="font-bold text-cream">{(currentExercise as any).answer}</span>
-                                                    </p>
-                                                    {(currentExercise as any).whyExplanation && (
-                                                        <p className="text-xs text-cream/80 leading-relaxed border-t border-coral/20 pt-2 mt-2">
-                                                            <span className="font-semibold">Why:</span> {(currentExercise as any).whyExplanation}
-                                                        </p>
-                                                    )}
-                                                </div>
-                                            </div>
-                                        </div>
-                                    )}
-
-                                    <button
-                                        onClick={handleNext}
-                                        className={`w-full py-3 rounded-xl font-bold text-sm text-night-900 transition-all hover:brightness-110 flex items-center justify-center gap-2 ${meta?.bg || 'bg-glow'}`}
-                                    >
-                                        {currentIndex === totalExercises - 1
-                                            ? (currentSub?.realLife ? 'Use it in real life' : 'Finish this part')
-                                            : 'Continue'}
-                                        <ArrowRight className="h-4 w-4" />
-                                    </button>
-                                </div>
-                            )}
-
-                            {isRevealed && currentExercise.type === 'match' && (
-                                <div className="mt-4">
-                                    <button
-                                        onClick={handleNext}
-                                        className={`w-full py-3 rounded-xl font-bold text-sm text-night-900 transition-all hover:brightness-110 flex items-center justify-center gap-2 ${meta?.bg || 'bg-glow'}`}
-                                    >
-                                        {currentIndex === totalExercises - 1
-                                            ? (currentSub?.realLife ? 'Use it in real life' : 'Finish this part')
-                                            : 'Continue'}
-                                        <ArrowRight className="h-4 w-4" />
-                                    </button>
-                                </div>
-                            )}
-                        </div>
-                    </div>
-                )}
-
-                {phase === 'use' && currentSub?.realLife && (
-                    <div className="fade-in">
-                        <div className="flex items-center gap-2 text-immersion text-[11px] md:text-xs font-bold uppercase tracking-wider mb-3">
-                            <MessageCircle className="h-3 w-3 md:h-3.5 md:w-3.5" />
-                            Use it
-                        </div>
-
-                        <div className="rounded-xl border border-glow/30 bg-gradient-to-br from-night-800/80 to-night-900/80 p-4 md:p-6 backdrop-blur-sm shadow-glow-md">
-                            <div className="flex items-start gap-3 mb-5">
-                                <div className="flex-shrink-0">
-                                    <Firefly mood="proud" size={56} glow={glowColors} />
-                                </div>
-                                <div className="flex-1">
-                                    <p className="text-[11px] font-bold uppercase tracking-wider text-glow mb-1.5">Your mission</p>
-                                    <p className="font-display text-base md:text-lg font-bold text-cream leading-snug">
-                                        {currentSub.realLife.prompt}
-                                    </p>
-                                </div>
-                            </div>
-
-                            <div className="space-y-2.5">
-                                <button
-                                    onClick={() => currentSub?.realLife && router.push(`/chat?seed=${encodeURIComponent(currentSub.realLife.chatSeed || '')}`)}
-                                    className="w-full py-3 rounded-xl bg-pro text-night-900 font-bold text-sm transition-all hover:brightness-110 flex items-center justify-center gap-2 shadow-[0_0_24px_rgba(127,166,255,0.35)]"
-                                >
-                                    <MessageCircle className="h-4 w-4" />
-                                    Practice with Ecla
-                                    <ChevronRight className="h-4 w-4" />
-                                </button>
-
-                                <button
-                                    onClick={completeSubLesson}
-                                    className="w-full py-2.5 rounded-xl border border-white/10 bg-night-900/60 text-cream text-sm font-semibold transition-all hover:bg-night-900 hover:border-white/25"
-                                >
-                                    {subLessonIndex < totalSubs - 1 ? 'Continue to next part' : 'Finish lesson'}
-                                </button>
-                            </div>
-
-                            <p className="text-[11px] text-cream/40 text-center mt-3">
-                                Chat is optional — you can always come back.
-                            </p>
-                        </div>
-                    </div>
-                )}
-
-                {phase === 'celebration' && (
+                {/* ── CELEBRATION (rest screen) ── */}
+                {phase === 'celebration' ? (
                     <div className="py-6 md:py-12 text-center fade-in">
-                        {intensity.fullCelebration ? (
+                        <div className="mb-6 flex justify-center">
+                            <Firefly mood="proud" size={120} glow={glowColors} />
+                        </div>
+                        {!activeSub || allDone ? (
                             <>
-                                <div className="mb-6 flex justify-center"><Firefly mood="proud" size={140} glow={glowColors} /></div>
-                                <h1 className="font-display text-3xl md:text-4xl font-black text-cream mb-2">Radiant!</h1>
-                                <p className="text-cream/60 text-sm md:text-base mb-6">You mastered every part of this lesson.</p>
+                                <h1 className="font-display text-2xl md:text-3xl font-black text-cream mb-2">Concept complete!</h1>
+                                <p className="text-cream/60 text-sm md:text-base mb-6">
+                                    All {totalSubs} parts finished. The next concept is unlocked on your path.
+                                </p>
                             </>
                         ) : (
                             <>
-                                <div className="mb-6 flex justify-center">
-                                    <div className="flex h-20 w-20 items-center justify-center rounded-full bg-leaf/15 border-2 border-leaf/40">
-                                        <CheckCircle2 className="h-10 w-10 text-leaf" />
-                                    </div>
-                                </div>
-                                <h1 className="font-display text-2xl md:text-3xl font-black text-cream mb-2">Lesson complete.</h1>
-                                <p className="text-cream/60 text-sm md:text-base mb-6">Here's how you did.</p>
+                                <h1 className="font-display text-2xl md:text-3xl font-black text-cream mb-2">
+                                    Part {partNumber} complete!
+                                </h1>
+                                <p className="text-cream/60 text-sm md:text-base mb-6">
+                                    Nice work. Take a rest — the next part will be waiting on your path.
+                                </p>
                             </>
                         )}
 
-                        <div className="grid grid-cols-3 gap-2 md:gap-3 mb-6">
-                            <div className={`rounded-xl border ${intensity.glowEffects ? 'border-glow/30' : 'border-white/10'} bg-night-800/70 p-3`}>
+                        <div className="grid grid-cols-3 gap-2 md:gap-3 mb-6 max-w-md mx-auto">
+                            <div className="rounded-xl border border-glow/30 bg-night-800/70 p-3">
                                 <p className="text-[10px] md:text-xs font-bold uppercase tracking-wider text-cream/40 mb-0.5">Earned</p>
-                                <p className={`font-display text-xl md:text-2xl font-bold ${intensity.glowEffects ? 'text-glow' : 'text-cream'}`}>+{xpEarned}</p>
+                                <p className="font-display text-xl md:text-2xl font-bold text-glow">+{earnedXp}</p>
                                 <p className="text-[10px] md:text-xs text-cream/50">XP</p>
                             </div>
                             <div className="rounded-xl border border-leaf/30 bg-night-800/70 p-3">
-                                <p className="text-[10px] md:text-xs font-bold uppercase tracking-wider text-cream/40 mb-0.5">Parts</p>
-                                <p className="font-display text-xl md:text-2xl font-bold text-leaf">{totalSubs}</p>
-                                <p className="text-[10px] md:text-xs text-cream/50">done</p>
+                                <p className="text-[10px] md:text-xs font-bold uppercase tracking-wider text-cream/40 mb-0.5">Accuracy</p>
+                                <p className="font-display text-xl md:text-2xl font-bold text-leaf">{activeSub ? partAccuracy : 100}%</p>
+                                <p className="text-[10px] md:text-xs text-cream/50">this part</p>
                             </div>
                             <div className="rounded-xl border border-coral/30 bg-night-800/70 p-3">
                                 <p className="text-[10px] md:text-xs font-bold uppercase tracking-wider text-cream/40 mb-0.5">Hearts</p>
@@ -857,15 +625,216 @@ export default function LessonPage() {
                             </div>
                         </div>
 
-                        <button
-                            onClick={() => router.push('/course')}
-                            className="w-full py-3 rounded-xl bg-glow font-bold text-night-900 text-sm md:text-base transition-all hover:bg-glow-bright flex items-center justify-center gap-2"
-                            disabled={saving}
-                        >
-                            {saving ? 'Saving...' : 'Continue Path'}
-                            <ArrowRight className="h-4 w-4" />
-                        </button>
+                        <div className="max-w-md mx-auto space-y-2">
+                            <button
+                                onClick={() => router.push('/course')}
+                                className="w-full py-3.5 rounded-xl bg-glow font-bold text-night-900 text-sm md:text-base transition-all hover:bg-glow-bright flex items-center justify-center gap-2"
+                                disabled={saving}
+                            >
+                                {saving ? 'Saving...' : 'Back to Path'}
+                                <ArrowRight className="h-4 w-4" />
+                            </button>
+                            {!activeSub && subLessons.length > 0 && (
+                                <button
+                                    onClick={() => startReview(subLessons[0])}
+                                    className="w-full py-3 rounded-xl border border-white/10 bg-night-900/60 text-cream text-sm font-semibold transition-all hover:bg-night-900 hover:border-white/25"
+                                >
+                                    Practice a part (no XP)
+                                </button>
+                            )}
+                        </div>
                     </div>
+                ) : (
+                    <>
+                        {/* Part header */}
+                        {activeSub && (
+                            <div className="mb-4 md:mb-6 fade-in">
+                                <div className="flex items-center gap-2.5 mb-1.5">
+                                    <div className="h-7 w-7 md:h-8 md:w-8 rounded-lg flex items-center justify-center bg-glow text-night-900">
+                                        {(() => {
+                                            const SubIcon = ICON_MAP[activeSub.icon] || Sparkles
+                                            return <SubIcon className="h-3.5 w-3.5 md:h-4 md:w-4" />
+                                        })()}
+                                    </div>
+                                    <span className="text-[11px] md:text-xs font-bold uppercase tracking-wider text-cream/40">
+                                        Part {partNumber} of {totalSubs}{wasReview ? ' · Review' : ''}
+                                    </span>
+                                </div>
+                                <h1 className="font-display text-xl md:text-2xl font-black text-cream leading-tight">
+                                    {activeSub.title}
+                                </h1>
+                            </div>
+                        )}
+
+                        {/* Mode flavor — makes the 4 modes visibly different */}
+                        {flavorCard && (
+                            <div className={`mb-4 rounded-xl border ${flavorCard.border} bg-night-900/50 p-3.5 md:p-4 fade-in`}>
+                                <div className="flex items-start gap-2.5">
+                                    <flavorCard.Icon className={`h-4 w-4 ${flavorCard.accent} flex-shrink-0 mt-0.5`} />
+                                    <div>
+                                        <p className={`text-[10px] md:text-xs font-bold uppercase tracking-wider ${flavorCard.accent} mb-1`}>{flavorCard.title}</p>
+                                        <p className="text-xs md:text-sm text-cream/80 leading-relaxed">{flavorCard.text}</p>
+                                    </div>
+                                </div>
+                            </div>
+                        )}
+
+                        {/* TEACH */}
+                        {phase === 'teach' && activeSub && (
+                            <div className="space-y-3 fade-in">
+                                <div className="flex items-center gap-2 text-glow text-[11px] md:text-xs font-bold uppercase tracking-wider mb-1">
+                                    <BookOpenCheck className="h-3 w-3 md:h-3.5 md:w-3.5" />
+                                    Understand
+                                </div>
+
+                                {activeSub.teach.map((block, i) => renderTeachBlock(block, i))}
+
+                                <button
+                                    onClick={() => { setPhase('practice'); setCurrentIndex(0); setUserInput(''); setIsRevealed(false) }}
+                                    className="w-full py-3.5 rounded-xl font-bold text-night-900 text-sm md:text-base transition-all hover:bg-glow-bright flex items-center justify-center gap-2 mt-4 bg-glow"
+                                >
+                                    Start Practice
+                                    <ArrowRight className="h-4 w-4 md:h-5 md:w-5" />
+                                </button>
+                            </div>
+                        )}
+
+                        {/* PRACTICE */}
+                        {phase === 'practice' && activeSub && currentExercise && (
+                            <div className={`relative ${shakeCard ? 'card-shake' : ''} fade-in`}>
+                                <div className="flex items-center gap-2 text-drill text-[11px] md:text-xs font-bold uppercase tracking-wider mb-3">
+                                    <Puzzle className="h-3 w-3 md:h-3.5 md:w-3.5" />
+                                    Practice
+                                    <span className="text-cream/40 ml-auto">{currentIndex + 1} of {totalExercises}</span>
+                                </div>
+
+                                {showXpFloat && (
+                                    <div className="pointer-events-none absolute left-1/2 -top-3 z-10 xp-float">
+                                        <div className="inline-flex items-center gap-1 rounded-full bg-glow px-2.5 py-1 text-xs font-black text-night-900">
+                                            <Sparkles className="h-3 w-3" /> +{Math.max(1, Math.round(activeSub.xpReward / totalExercises))} XP
+                                        </div>
+                                    </div>
+                                )}
+
+                                <div className="rounded-xl border border-white/10 bg-night-800/70 p-4 md:p-6 backdrop-blur-sm relative overflow-hidden min-h-[380px] flex flex-col">
+                                    <div className="absolute inset-x-0 top-0 h-1 bg-glow opacity-70" />
+
+                                    <div className="flex-1">
+                                        {(currentExercise.type === 'mcq' || currentExercise.type === 'fill_blank' || currentExercise.type === 'translate') && (
+                                            <h2 className="font-display text-base md:text-lg font-bold text-cream leading-snug mb-4 md:mb-5">
+                                                {currentExercise.prompt}
+                                            </h2>
+                                        )}
+
+                                        {renderExercise()}
+                                    </div>
+
+                                    {isRevealed && currentExercise.type !== 'match' && (
+                                        <div className="mt-5 space-y-3">
+                                            {isCorrect ? (
+                                                <div className="rounded-lg border border-leaf/30 bg-leaf/10 p-3">
+                                                    <div className="flex items-start gap-2.5">
+                                                        <CheckCircle2 className="h-5 w-5 text-leaf flex-shrink-0 mt-0.5" />
+                                                        <div className="flex-1 space-y-1.5">
+                                                            <p className="text-sm font-semibold text-leaf">Correct.</p>
+                                                            {(currentExercise as any).whyExplanation && (
+                                                                <p className="text-xs text-cream/80 leading-relaxed">
+                                                                    <span className="font-semibold">Why:</span> {(currentExercise as any).whyExplanation}
+                                                                </p>
+                                                            )}
+                                                        </div>
+                                                    </div>
+                                                </div>
+                                            ) : (
+                                                <div className="rounded-lg border border-coral/30 bg-coral/10 p-3 space-y-2">
+                                                    <div className="flex items-start gap-2.5">
+                                                        <XCircle className="h-5 w-5 text-coral flex-shrink-0 mt-0.5" />
+                                                        <div className="flex-1 space-y-1.5">
+                                                            <p className="text-sm font-semibold text-coral">Not quite right.</p>
+                                                            <p className="text-xs text-cream/80">
+                                                                <span className="font-semibold">Answer:</span> <span className="font-bold text-cream">{(currentExercise as any).answer}</span>
+                                                            </p>
+                                                            {(currentExercise as any).whyExplanation && (
+                                                                <p className="text-xs text-cream/80 leading-relaxed border-t border-coral/20 pt-2 mt-2">
+                                                                    <span className="font-semibold">Why:</span> {(currentExercise as any).whyExplanation}
+                                                                </p>
+                                                            )}
+                                                        </div>
+                                                    </div>
+                                                </div>
+                                            )}
+
+                                            <button
+                                                onClick={handleNext}
+                                                className="w-full py-3.5 rounded-xl font-bold text-sm text-night-900 transition-all hover:bg-glow-bright flex items-center justify-center gap-2 bg-glow"
+                                            >
+                                                {currentIndex === totalExercises - 1 ? 'Finish Part' : 'Continue'}
+                                                <ArrowRight className="h-4 w-4" />
+                                            </button>
+                                        </div>
+                                    )}
+
+                                    {isRevealed && currentExercise.type === 'match' && (
+                                        <div className="mt-4">
+                                            <button
+                                                onClick={handleNext}
+                                                className="w-full py-3.5 rounded-xl font-bold text-sm text-night-900 transition-all hover:bg-glow-bright flex items-center justify-center gap-2 bg-glow"
+                                            >
+                                                {currentIndex === totalExercises - 1 ? 'Finish Part' : 'Continue'}
+                                                <ArrowRight className="h-4 w-4" />
+                                            </button>
+                                        </div>
+                                    )}
+                                </div>
+                            </div>
+                        )}
+
+                        {/* USE — optional real-life bridge, then rest */}
+                        {phase === 'use' && activeSub?.realLife && (
+                            <div className="fade-in">
+                                <div className="flex items-center gap-2 text-immersion text-[11px] md:text-xs font-bold uppercase tracking-wider mb-3">
+                                    <MessageCircle className="h-3 w-3 md:h-3.5 md:w-3.5" />
+                                    Use it (optional)
+                                </div>
+
+                                <div className="rounded-xl border border-glow/30 bg-gradient-to-br from-night-800/80 to-night-900/80 p-4 md:p-6 backdrop-blur-sm">
+                                    <div className="flex items-start gap-3 mb-5">
+                                        <div className="flex-shrink-0"><Firefly mood="proud" size={56} glow={glowColors} /></div>
+                                        <div className="flex-1">
+                                            <p className="text-[11px] font-bold uppercase tracking-wider text-glow mb-1.5">Your mission</p>
+                                            <p className="font-display text-base md:text-lg font-bold text-cream leading-snug">
+                                                {activeSub.realLife.prompt}
+                                            </p>
+                                        </div>
+                                    </div>
+
+                                    <div className="space-y-2.5">
+                                        <button
+                                            onClick={() => router.push(`/chat?seed=${encodeURIComponent(activeSub.realLife!.chatSeed || '')}`)}
+                                            className="w-full py-3 rounded-xl bg-pro text-night-900 font-bold text-sm transition-all hover:brightness-110 flex items-center justify-center gap-2"
+                                        >
+                                            <MessageCircle className="h-4 w-4" />
+                                            Practice with Ecla
+                                            <ChevronRight className="h-4 w-4" />
+                                        </button>
+
+                                        <button
+                                            onClick={completePart}
+                                            className="w-full py-3 rounded-xl bg-glow text-night-900 text-sm font-bold transition-all hover:bg-glow-bright flex items-center justify-center gap-2"
+                                            disabled={saving}
+                                        >
+                                            {saving ? 'Saving...' : 'Finish Part'}
+                                            <ArrowRight className="h-4 w-4" />
+                                        </button>
+                                    </div>
+
+                                    <p className="text-[11px] text-cream/40 text-center mt-3">
+                                        Chat is optional — finish now and rest if you prefer.
+                                    </p>
+                                </div>
+                            </div>
+                        )}
+                    </>
                 )}
             </div>
         </main>

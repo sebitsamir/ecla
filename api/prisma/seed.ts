@@ -176,7 +176,7 @@ async function main() {
                 { word: 'explicar', translation: 'to explain' },
             ],
             orderIndex: 3,
-            xpReward: 25,
+            xpReward: 20,
         },
     })
     console.log(`  ✓ Concept 3: ${concept3.name}`)
@@ -237,7 +237,7 @@ async function main() {
                 { word: 'escribir', translation: 'to write' },
             ],
             orderIndex: 4,
-            xpReward: 25,
+            xpReward: 20,
         },
     })
     console.log(`  ✓ Concept 4: ${concept4.name}`)

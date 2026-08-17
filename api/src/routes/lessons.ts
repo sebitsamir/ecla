@@ -5,6 +5,8 @@ import { AppError } from '../lib/errors'
 import { cleanVariant } from '../lib/ai'
 import { lessonCompleteSchema } from '../lib/schemas'
 
+const VALID_MODES = ['STORY', 'DRILL', 'IMMERSION', 'PROFESSIONAL']
+
 const router = Router()
 
 router.get('/api/v1/lessons/:conceptId', async (req: Request, res: Response, next: NextFunction) => {
@@ -12,28 +14,40 @@ router.get('/api/v1/lessons/:conceptId', async (req: Request, res: Response, nex
         const user = await getOrSyncUser(req)
         const conceptId = req.params.conceptId as string
 
+        // Honor the requested mode, fall back to preferred mode
+        const requested = req.query.mode as string | undefined
+        const mode = requested && VALID_MODES.includes(requested) ? requested : user.preferredMode
+
         const concept = await prisma.concept.findUnique({
             where: { id: conceptId },
             include: {
-                variants: {
-                    where: { mode: user.preferredMode },
-                },
+                variants: { where: { mode } },
                 subLessons: { orderBy: { orderIndex: 'asc' } },
             },
         }) as any
 
         if (!concept || concept.variants.length === 0) {
-            throw new AppError('Lesson not found or not available in your preferred mode', 404)
+            throw new AppError('Lesson not found or not available in this mode', 404)
         }
+
+        const completedRows = await prisma.userProgress.findMany({
+            where: { userId: user.id, conceptId: concept.id, status: 'completed', subLessonId: { not: null } },
+            select: { subLessonId: true },
+            distinct: ['subLessonId'],
+        })
+        const completedSubLessonIds = completedRows
+            .map(r => r.subLessonId)
+            .filter((id): id is string => id !== null)
 
         res.json({
             lesson: {
                 conceptId: concept.id,
                 conceptName: concept.name,
                 grammarNote: concept.grammarNote,
-                mode: user.preferredMode,
+                mode,
                 variant: cleanVariant(concept.variants[0]),
                 subLessons: concept.subLessons,
+                completedSubLessonIds,
                 equippedCosmetic: user.equippedCosmetic ?? 'gold',
             },
         })

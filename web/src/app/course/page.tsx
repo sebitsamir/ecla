@@ -60,7 +60,7 @@ const MODE_META: Record<ModeId, {
     },
 }
 
-type NodeState = 'mastered' | 'struggling' | 'in_progress' | 'current' | 'locked'
+type NodeState = 'mastered' | 'completed' | 'struggling' | 'in_progress' | 'current' | 'locked'
 
 const TOP = 110
 const SPACING = 175
@@ -99,6 +99,7 @@ export default function CourseMapPage() {
     const [loading, setLoading] = useState(true)
     const [openConcept, setOpenConcept] = useState<any>(null)
     const [subLessons, setSubLessons] = useState<SubLessonData[]>([])
+    const [completedSubIds, setCompletedSubIds] = useState<string[]>([])
     const [loadingSubs, setLoadingSubs] = useState(false)
     const [chestOpen, setChestOpen] = useState(false)
     const [joke, setJoke] = useState('')
@@ -127,6 +128,17 @@ export default function CourseMapPage() {
     }
 
     useEffect(() => { fetchMap() }, [getToken])
+
+    // Refetch when returning from a lesson
+    useEffect(() => {
+        const handleUpdate = () => fetchMap()
+        window.addEventListener('luma:progress-updated', handleUpdate)
+        window.addEventListener('focus', handleUpdate)
+        return () => {
+            window.removeEventListener('luma:progress-updated', handleUpdate)
+            window.removeEventListener('focus', handleUpdate)
+        }
+    }, [getToken])
 
     const switchMode = async (mode: ModeId) => {
         if (mode === preferredMode) { setShowModePicker(false); return }
@@ -161,22 +173,42 @@ export default function CourseMapPage() {
             })
             const data = await res.json()
             setSubLessons(data.lesson.subLessons || [])
+            setCompletedSubIds(data.lesson.completedSubLessonIds || [])
         } catch (e) {
             console.error(e)
             setSubLessons([])
+            setCompletedSubIds([])
         } finally {
             setLoadingSubs(false)
         }
     }
 
+    // ── Unlock logic: Duolingo-style completion-based unlocking ──
+    // A concept is FINISHED only when ALL its parts are done.
+    // The next concept unlocks only after the previous one is finished.
+    const isFinished = (c: any) => {
+        const total = c.totalSubLessons || 0
+        if (total > 0) return (c.completedSubLessons || 0) >= total
+        return c.status === 'mastered'
+    }
+
     const states: Record<string, NodeState> = {}
     let currentFound = false
-    for (const u of units) for (const c of u.concepts) {
+    const allConcepts: any[] = []
+    for (const u of units) for (const c of u.concepts) allConcepts.push(c)
+
+    for (let i = 0; i < allConcepts.length; i++) {
+        const c = allConcepts[i]
         if (!c.isAvailable) { states[c.id] = 'locked'; continue }
-        if (!currentFound && (c.status === 'not_started' || c.status === 'in_progress')) { states[c.id] = 'current'; currentFound = true }
-        else if (c.status === 'mastered') states[c.id] = 'mastered'
-        else if (c.status === 'struggling') states[c.id] = 'struggling'
-        else if (c.status === 'in_progress') states[c.id] = 'in_progress'
+
+        if (isFinished(c)) {
+            states[c.id] = c.status === 'mastered' ? 'mastered'
+                : c.status === 'struggling' ? 'struggling'
+                : 'completed'
+            continue
+        }
+
+        if (!currentFound) { states[c.id] = 'current'; currentFound = true }
         else states[c.id] = 'locked'
     }
 
@@ -189,6 +221,7 @@ export default function CourseMapPage() {
     const openSheet = (concept: any) => {
         setOpenConcept(concept)
         setSubLessons([])
+        setCompletedSubIds([])
         fetchSubLessons(concept.id)
         posthog.capture('concept_opened', { concept_id: concept.id })
     }
@@ -198,6 +231,10 @@ export default function CourseMapPage() {
             case 'mastered': return {
                 ring: 'border-glow bg-glow shadow-[0_0_20px_rgba(255,200,87,0.5)]',
                 sub: 'Mastered', subCls: 'text-glow'
+            }
+            case 'completed': return {
+                ring: 'border-leaf/60 bg-night-800 shadow-[0_0_16px_rgba(107,220,140,0.25)]',
+                sub: 'Completed', subCls: 'text-leaf'
             }
             case 'current': return {
                 ring: 'border-glow bg-night-800 shadow-[0_0_24px_rgba(255,200,87,0.4)]',
@@ -241,6 +278,8 @@ export default function CourseMapPage() {
                 .chest-float { animation: chest-float 4s ease-in-out infinite; }
                 @keyframes firefly-bob { 0%,100% { transform: translate(-50%, 0); } 50% { transform: translate(-50%, -6px); } }
                 .firefly-bob { animation: firefly-bob 2.5s ease-in-out infinite; }
+                .no-scrollbar { -ms-overflow-style: none; scrollbar-width: none; }
+                .no-scrollbar::-webkit-scrollbar { display: none; }
             `}</style>
 
             <NightBackground />
@@ -392,7 +431,9 @@ export default function CourseMapPage() {
                                                     >
                                                         {concept.name}
                                                     </p>
-                                                    <p className={`text-[11px] sm:text-xs font-semibold ${subCls}`}>{sub}</p>
+                                                    <p className={`text-[11px] sm:text-xs font-semibold ${subCls}`}>
+                                                        {state === 'current' && (concept.completedSubLessons || 0) > 0 ? 'Continue' : sub}
+                                                    </p>
                                                     {!locked && concept.subLessonProgress > 0 && (
                                                         <p className="text-[10px] text-cream/40 mt-0.5">
                                                             {concept.completedSubLessons}/{concept.totalSubLessons} parts
@@ -412,7 +453,7 @@ export default function CourseMapPage() {
             {openConcept && (
                 <div className="fixed inset-0 z-50 flex items-end justify-center bg-black/60 backdrop-blur-sm sm:items-center sm:p-4" onClick={() => setOpenConcept(null)}>
                     <div
-                        className="w-full max-w-lg max-h-[90vh] overflow-y-auto rounded-t-3xl border border-white/10 bg-night-800 p-4 sm:p-6 shadow-glow-md sm:rounded-3xl sm:p-8"
+                        className="no-scrollbar w-full max-w-lg max-h-[90vh] overflow-y-auto rounded-t-3xl border border-white/10 bg-night-800 p-4 sm:p-6 shadow-glow-md sm:rounded-3xl sm:p-8"
                         onClick={e => e.stopPropagation()}
                     >
                         <div className="flex items-start justify-between mb-4 sm:mb-6">
@@ -472,30 +513,38 @@ export default function CourseMapPage() {
                                         <div className="h-3.5 w-3.5 sm:h-4 sm:w-4 border-2 border-glow border-t-transparent rounded-full animate-spin" />
                                     </div>
                                 ) : subLessons.length > 0 ? (
-                                    subLessons.map((sub) => {
+                                    subLessons.map((sub, idx) => {
                                         const SubIcon = ICON_MAP[sub.icon] || BookOpenCheck
+                                        const done = completedSubIds.includes(sub.id)
+                                        const nextIdx = subLessons.findIndex(s => !completedSubIds.includes(s.id))
+                                        const isNext = idx === nextIdx
+                                        const locked = !done && !isNext
                                         return (
-                                            <div
+                                            <button
                                                 key={sub.id}
-                                                className="flex items-center gap-2.5 sm:gap-3 rounded-xl border border-white/10 bg-night-900/40 p-2.5 sm:p-3"
+                                                disabled={locked}
+                                                onClick={() => router.push(`/learn/${openConcept.id}?mode=${preferredMode}&part=${sub.id}`)}
+                                                className={`w-full flex items-center gap-2.5 sm:gap-3 rounded-xl border p-2.5 sm:p-3 text-left transition-all ${
+                                                    locked
+                                                        ? 'border-white/5 bg-night-900/20 opacity-50 cursor-not-allowed'
+                                                        : isNext
+                                                            ? 'border-glow/40 bg-glow/5 hover:bg-glow/10'
+                                                            : 'border-white/10 bg-night-900/40 hover:border-white/25 hover:bg-night-900'
+                                                }`}
                                             >
-                                                <div className="h-7 w-7 sm:h-8 sm:w-8 rounded-lg bg-night-800 border border-white/10 flex items-center justify-center flex-shrink-0">
-                                                    <SubIcon className="h-3.5 w-3.5 sm:h-4 sm:w-4 text-cream/70" />
+                                                <div className={`h-7 w-7 sm:h-8 sm:w-8 rounded-lg border flex items-center justify-center flex-shrink-0 ${done ? 'bg-leaf/10 border-leaf/30' : 'bg-night-800 border-white/10'}`}>
+                                                    {done ? <CheckCircle2 className="h-3.5 w-3.5 sm:h-4 sm:w-4 text-leaf" /> : <SubIcon className="h-3.5 w-3.5 sm:h-4 sm:w-4 text-cream/70" />}
                                                 </div>
                                                 <div className="flex-1 min-w-0">
                                                     <p className="text-xs sm:text-sm font-semibold text-cream truncate">{sub.title}</p>
                                                     <p className="text-[11px] sm:text-xs text-cream/50">
-                                                        {sub.teach.length > 0 && `${sub.teach.length} lessons`}
-                                                        {sub.teach.length > 0 && sub.exercises.length > 0 && ' • '}
-                                                        {sub.exercises.length > 0 && `${sub.exercises.length} exercises`}
-                                                        {sub.exercises.length > 0 && sub.realLife && ' • '}
-                                                        {sub.realLife && 'Real chat'}
+                                                        {locked ? 'Finish previous part to unlock' : done ? 'Completed — tap to review' : isNext ? 'Up next' : ''}
                                                     </p>
                                                 </div>
-                                                <div className="text-[11px] sm:text-xs font-bold text-glow flex-shrink-0">
-                                                    +{sub.xpReward} XP
+                                                <div className={`text-[11px] sm:text-xs font-bold flex-shrink-0 ${done ? 'text-leaf' : 'text-glow'}`}>
+                                                    {locked ? <Lock className="h-3.5 w-3.5" /> : done ? '+0 XP' : `+${sub.xpReward} XP`}
                                                 </div>
-                                            </div>
+                                            </button>
                                         )
                                     })
                                 ) : (
@@ -513,7 +562,6 @@ export default function CourseMapPage() {
 
                         {(() => {
                             const available = (openConcept.modes || []).includes(preferredMode)
-                            const ModeIcon = currentMode.Icon
                             if (!available) {
                                 return (
                                     <div className="rounded-xl border border-white/10 bg-night-900/40 p-3 sm:p-4 text-center">
@@ -522,13 +570,16 @@ export default function CourseMapPage() {
                                     </div>
                                 )
                             }
+                            const nextIdx = subLessons.findIndex(s => !completedSubIds.includes(s.id))
+                            const href = nextIdx === -1
+                                ? `/learn/${openConcept.id}?mode=${preferredMode}`
+                                : `/learn/${openConcept.id}?mode=${preferredMode}&part=${subLessons[nextIdx].id}`
                             return (
                                 <button
-                                    onClick={() => router.push(`/learn/${openConcept.id}?mode=${preferredMode}`)}
+                                    onClick={() => router.push(href)}
                                     className={`w-full py-3 sm:py-4 rounded-xl ${currentMode.bg} ${currentMode.text} font-bold text-sm sm:text-base transition-all hover:brightness-110 active:scale-[0.98] flex items-center justify-center gap-2 ${currentMode.glow}`}
                                 >
-                                    <ModeIcon className="h-4 w-4 sm:h-5 sm:w-5" />
-                                    Start Learning
+                                    {nextIdx === -1 ? 'Review Lesson' : `Start Part ${nextIdx + 1}`}
                                     <ArrowRight className="h-4 w-4 sm:h-5 sm:w-5" />
                                 </button>
                             )
