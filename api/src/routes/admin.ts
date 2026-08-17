@@ -87,7 +87,7 @@ router.post('/api/v1/admin/generate-flavor', async (req: Request, res: Response,
         }
 
         const completion = await groq.chat.completions.create({
-            model: 'llama-3.1-8b-instant',
+            model: 'openai/gpt-oss-20b',
             messages: [
                 { role: 'system', content: CONTENT_SYSTEM_PROMPT },
                 { role: 'user', content: prompt },
@@ -120,7 +120,7 @@ Return ONLY a valid JSON array. Do not use markdown backticks. Do not add text o
 Example format: [{"type":"mcq","prompt":"I eat","options":["Como","Comes"],"answer":"Como"}]`
 
         const completion = await groq.chat.completions.create({
-            model: 'llama-3.1-8b-instant',
+            model: 'openai/gpt-oss-20b',
             messages: [
                 { role: 'system', content: CONTENT_SYSTEM_PROMPT },
                 { role: 'user', content: prompt },
