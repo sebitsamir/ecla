@@ -79,6 +79,7 @@ router.get('/api/v1/course/map', async (req: Request, res: Response, next: NextF
                     status,
                     accuracy: Math.round(accuracy * 100),
                     subLessonProgress,
+                    completed: concept.progress.length > 0,
                     completedSubLessons: completedSubLessons.length,
                     totalSubLessons,
                 }
