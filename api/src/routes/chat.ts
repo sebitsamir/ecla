@@ -26,7 +26,7 @@ Rules:
 - Be warm, encouraging, and a little fun.`
 
         const completion = await groq.chat.completions.create({
-            model: 'llama-3.1-8b-instant',
+            model: 'openai/gpt-oss-20b',
             messages: [
                 { role: 'system', content: systemPrompt },
                 ...parsed.data.messages.map(m => ({ role: m.role, content: m.content })),
