@@ -14,9 +14,9 @@ async function main() {
     const allConcepts = course.units.flatMap(u => u.concepts)
     console.log(`  Found ${allConcepts.length} concepts to seed`)
 
-    // ────────────────────────────────────────────────
+    // ───────────────────────────────────────────────────────────
     // CONCEPT 1: Ser vs Estar (Emotions)
-    // ────────────────────────────────────────────────
+    // ───────────────────────────────────────────────────────────
     const concept1 = allConcepts.find(c => c.id === 'concept-ser-estar-emotions')
     if (concept1) {
         const subs = [
@@ -44,16 +44,17 @@ async function main() {
                     { type: 'mcq', prompt: 'She is tired today.', options: ['Ella es cansada hoy', 'Ella está cansada hoy'], answer: 'Ella está cansada hoy', whyExplanation: '"Hoy" (today) is the giveaway — a feeling tied to a specific day is temporary, so "está."' },
                     { type: 'fill_blank', prompt: 'Nosotros ___ ocupados. (estar)', answer: 'estamos', whyExplanation: 'Nosotros form of "estar" is "estamos." Busy-ness is always a temporary state.' },
                     { type: 'listen_choose', audio: 'Estoy triste.', options: ['I am sad.', 'I am boring.', 'I am tired.'], answer: 'I am sad.', whyExplanation: '"Estoy triste" — "triste" means sad, and "estoy" confirms it\'s a temporary feeling.' },
+                    { type: 'translate', prompt: 'We are happy today.', answer: 'Estamos felices hoy', whyExplanation: '"Nosotros" form is "estamos." Emotions are temporary, so "estar" is correct.' },
                     { type: 'match', pairs: [
                         { a: 'Estoy feliz', b: 'I am happy' },
                         { a: 'Estás triste', b: 'You are sad' },
                         { a: 'Está cansado', b: 'He is tired' },
                         { a: 'Estamos aburridos', b: 'We are bored' },
-                    ]},
+                    ], whyExplanation: 'Match each conjugation of "estar" with its English translation. Notice how the verb changes but the emotion stays the same.' },
                 ],
                 realLife: {
-                    prompt: 'Say out loud how you feel right now: "Estoy..." and then one emotion from the vocab list.',
-                    chatSeed: 'Quiero practicar emociones con "estar": estoy feliz, estoy cansado, estoy triste.',
+                    prompt: 'Right now, say out loud: "Estoy [emotion] porque [reason]." Example: "Estoy cansado porque trabajé mucho."',
+                    chatSeed: 'Quiero practicar emociones con "estar": estoy feliz, estoy cansado, estoy triste. Dame ejemplos de cómo usar "estar" con diferentes emociones.',
                 },
             },
             {
@@ -69,13 +70,14 @@ async function main() {
                 exercises: [
                     { type: 'listen_choose', audio: 'Estoy cansado.', options: ['I am tired.', 'You are tired.', 'He is tired.'], answer: 'I am tired.', whyExplanation: '"Estoy" = "yo" form of estar, so it means "I am."' },
                     { type: 'listen_choose', audio: 'Ella está triste.', options: ['She is sad.', 'He is sad.', 'They are sad.'], answer: 'She is sad.', whyExplanation: '"Está" + "ella" confirms she is sad. "Está" is the él/ella/usted form.' },
-                    { type: 'listen_type', audio: 'Estamos felices hoy.', answer: 'Estamos felices hoy.' },
+                    { type: 'listen_type', audio: 'Estamos felices hoy.', answer: 'Estamos felices hoy.', whyExplanation: 'Listen carefully to the "nosotros" form: "estamos." This is how you say "we are (feeling)" in Spanish.' },
                     { type: 'mcq', prompt: '"They are bored" in Spanish is…', options: ['Están aburridos', 'Estamos aburridos', 'Estoy aburrido'], answer: 'Están aburridos', whyExplanation: '"Ellos/ellas" form of estar is "están." "Aburridos" matches the plural subject.' },
                     { type: 'listen_choose', audio: '¿Estás ocupado?', options: ['Are you busy?', 'Is he busy?', 'Are we busy?'], answer: 'Are you busy?', whyExplanation: '"Estás" is the "tú" (you) form of estar.' },
+                    { type: 'fill_blank', prompt: 'Listen and type: "___ (están) muy contentos."', answer: 'Están', whyExplanation: '"Están" is the "ellos/ellas" form. The audio says "Están muy contentos" — they are very happy.' },
                 ],
                 realLife: {
-                    prompt: 'Close your eyes and say out loud: "¿Cómo estás?" then answer yourself with a different emotion each time.',
-                    chatSeed: 'Practica escuchar frases con emociones: ¿Cómo estás? Estoy feliz, está cansado.',
+                    prompt: 'Ask someone "¿Cómo estás?" and answer yourself with three different emotions throughout the day.',
+                    chatSeed: 'Practica escuchar frases con emociones: ¿Cómo estás? Estoy feliz, está cansado, están contentos.',
                 },
             },
             {
@@ -101,16 +103,17 @@ async function main() {
                     { type: 'mcq', prompt: '"Juan is smart" (as a personality trait)', options: ['Juan está listo', 'Juan es listo'], answer: 'Juan es listo', whyExplanation: 'Smartness as a trait uses "ser listo." "Estar listo" would mean "Juan is ready (to do something)."' },
                     { type: 'fill_blank', prompt: 'Mi hermano ___ enfermo hoy. (ser or estar)', answer: 'está', whyExplanation: 'Sickness is always temporary — use "estar enfermo." "Ser enfermo" would mean "he is a sick person" as a trait, which is wrong.' },
                     { type: 'listen_choose', audio: 'Estoy aburrido en clase.', options: ['I am bored in class.', 'I am boring in class.'], answer: 'I am bored in class.', whyExplanation: '"Estoy aburrido" = I feel bored. The context (in class) confirms it\'s a current feeling.' },
+                    { type: 'translate', prompt: 'The apple is unripe (not ready to eat).', answer: 'La manzana está verde', whyExplanation: '"Verde" with "estar" means unripe. With "ser" it would mean green in color.' },
                     { type: 'match', pairs: [
-                        { a: 'Estoy aburrido', b: 'I am bored' },
-                        { a: 'Soy aburrido', b: 'I am boring' },
-                        { a: 'Estoy listo', b: 'I am ready' },
-                        { a: 'Soy listo', b: 'I am smart' },
-                    ]},
+                        { a: 'Estoy aburrido', b: 'I am bored (feeling)' },
+                        { a: 'Soy aburrido', b: 'I am boring (trait)' },
+                        { a: 'Estoy listo', b: 'I am ready (state)' },
+                        { a: 'Soy listo', b: 'I am smart (trait)' },
+                    ], whyExplanation: 'Notice how the same adjective changes meaning completely with ser vs estar. Memorize these as vocabulary chunks.' },
                 ],
                 realLife: {
-                    prompt: 'Say out loud one thing you are bored of right now ("Estoy aburrido de...") and one thing you are ready for ("Estoy listo para...").',
-                    chatSeed: 'Practica los adjetivos que cambian de significado con ser vs estar: aburrido, listo, malo.',
+                    prompt: 'Say out loud: one thing you are bored of right now, one thing you are ready for, and describe someone as smart (not ready).',
+                    chatSeed: 'Practica los adjetivos que cambian de significado con ser vs estar: aburrido, listo, malo, verde.',
                 },
             },
             {
@@ -126,16 +129,18 @@ async function main() {
                     { type: 'translate', prompt: 'I am happy because it is Friday.', answer: 'Estoy feliz porque es viernes', whyExplanation: '"Estoy" for the feeling, "porque" (because) introduces the reason. "Viernes" = Friday.' },
                     { type: 'translate', prompt: 'She is tired after work.', answer: 'Ella está cansada después del trabajo', whyExplanation: '"Estar + cansada" matches the feminine subject. "Después del trabajo" = after work.' },
                     { type: 'mcq', prompt: '"We are busy today" in Spanish is…', options: ['Estamos ocupados hoy', 'Somos ocupados hoy', 'Están ocupados hoy'], answer: 'Estamos ocupados hoy', whyExplanation: '"Nosotros" form of estar is "estamos." Being busy is always a state, so "estar."' },
+                    { type: 'fill_blank', prompt: 'Mi amigo ___ (estar) triste ___ (porque) perdió su trabajo.', answer: 'está porque', whyExplanation: '"Está" for the temporary emotion, "porque" to give the reason. "Perdió" = lost.' },
+                    { type: 'listen_choose', audio: 'Estoy cansado porque trabajé mucho hoy.', options: ['I am tired because I worked a lot today.', 'I am boring because I work a lot today.'], answer: 'I am tired because I worked a lot today.', whyExplanation: '"Estoy cansado" = I feel tired (temporary). "Trabajé" = I worked (past tense).' },
                     { type: 'match', pairs: [
                         { a: 'Estoy feliz', b: 'I am happy' },
                         { a: 'Ella está triste', b: 'She is sad' },
                         { a: 'Estamos cansados', b: 'We are tired' },
                         { a: 'Están aburridos', b: 'They are bored' },
-                    ]},
+                    ], whyExplanation: 'Practice the full conjugation of "estar" with emotions. This is how you\'ll express feelings in Spanish.' },
                 ],
                 realLife: {
-                    prompt: 'Chat with Ecla for 2 minutes describing how you feel at different times of day (morning, afternoon, evening).',
-                    chatSeed: 'Hablemos de cómo me siento en diferentes momentos del día usando "estar" + emociones.',
+                    prompt: 'Describe your morning, afternoon, and evening feelings in Spanish. Use "porque" to explain why you felt that way.',
+                    chatSeed: 'Hablemos de cómo me siento en diferentes momentos del día usando "estar" + emociones + "porque" + razón.',
                 },
             },
         ]
@@ -151,9 +156,9 @@ async function main() {
         console.log(`  ✓ Seeded ${subs.length} sub-lessons into "${concept1.name}"`)
     }
 
-    // ────────────────────────────────────────────────
+    // ───────────────────────────────────────────────────────────
     // CONCEPT 2: Ser vs Estar (Locations & Events)
-    // ────────────────────────────────────────────────
+    // ───────────────────────────────────────────────────────────
     const concept2 = allConcepts.find(c => c.id === 'concept-ser-estar-locations')
     if (concept2) {
         const subs = [
@@ -181,16 +186,17 @@ async function main() {
                     { type: 'fill_blank', prompt: 'The wedding ___ in Madrid. (event)', answer: 'es', whyExplanation: 'A wedding is an event that takes place — "ser," not "estar."' },
                     { type: 'mcq', prompt: 'The party is at my house.', options: ['La fiesta es en mi casa', 'La fiesta está en mi casa'], answer: 'La fiesta es en mi casa', whyExplanation: 'A party is an event with a start and end time — "ser," even though it sounds like a location.' },
                     { type: 'listen_choose', audio: 'El aeropuerto está cerca.', options: ['The airport is near.', 'The airport takes place near.'], answer: 'The airport is near.', whyExplanation: '"Está" confirms it\'s a location, not an event.' },
+                    { type: 'translate', prompt: 'The concert is in the park.', answer: 'El concierto es en el parque', whyExplanation: 'Concert = event = "ser." "En el parque" = in the park.' },
                     { type: 'match', pairs: [
                         { a: 'El hospital está', b: 'The hospital is (located)' },
                         { a: 'La boda es', b: 'The wedding takes place' },
                         { a: 'La reunión es', b: 'The meeting takes place' },
                         { a: 'La fiesta es', b: 'The party takes place' },
-                    ]},
+                    ], whyExplanation: 'Notice the pattern: events always use "es" (ser), physical places always use "está" (estar).' },
                 ],
                 realLife: {
-                    prompt: 'Say out loud one place near you using "está" and one event you have this week using "es."',
-                    chatSeed: 'Quiero practicar la diferencia entre "ser" (eventos) y "estar" (lugares físicos).',
+                    prompt: 'Look around you right now. Say out loud one place using "está" and one event you have this week using "es."',
+                    chatSeed: 'Quiero practicar la diferencia entre "ser" (eventos) y "estar" (lugares físicos). Dame ejemplos de eventos y lugares.',
                 },
             },
             {
@@ -206,12 +212,13 @@ async function main() {
                 exercises: [
                     { type: 'listen_choose', audio: '¿Dónde es la boda?', options: ['Where does the wedding take place?', 'Where is the wedding located?'], answer: 'Where does the wedding take place?', whyExplanation: '"Es" = event question. A wedding is an event.' },
                     { type: 'listen_choose', audio: '¿Dónde está el hospital?', options: ['Where is the hospital located?', 'Where does the hospital take place?'], answer: 'Where is the hospital located?', whyExplanation: '"Está" = location question. A hospital is a physical place.' },
-                    { type: 'listen_type', audio: 'La reunión es en la oficina central.', answer: 'La reunión es en la oficina central.' },
+                    { type: 'listen_type', audio: 'La reunión es en la oficina central.', answer: 'La reunión es en la oficina central.', whyExplanation: 'Listen for "es" — this tells you it\'s an event (meeting) taking place at a location.' },
                     { type: 'mcq', prompt: '"Where is the concert?" (event)', options: ['¿Dónde es el concierto?', '¿Dónde está el concierto?'], answer: '¿Dónde es el concierto?', whyExplanation: 'A concert is an event, so "¿Dónde es...?" is correct.' },
                     { type: 'listen_choose', audio: 'El aeropuerto está muy lejos.', options: ['The airport is very far (located).', 'The airport takes place very far.'], answer: 'The airport is very far (located).', whyExplanation: '"Está" = physical location of the airport.' },
+                    { type: 'fill_blank', prompt: 'Listen and type: "La clase ___ (es/está) en el aula 5."', answer: 'es', whyExplanation: '"Clase" (class) is an event that takes place, so it uses "ser" (es).' },
                 ],
                 realLife: {
-                    prompt: 'Close your eyes. Ask yourself out loud: "¿Dónde es la próxima fiesta?" then answer with a location.',
+                    prompt: 'Ask yourself out loud: "¿Dónde es la próxima fiesta?" then "¿Dónde está el supermercado?" Notice how your brain switches.',
                     chatSeed: 'Practica escuchar preguntas con "¿Dónde es?" (eventos) y "¿Dónde está?" (lugares).',
                 },
             },
@@ -238,16 +245,17 @@ async function main() {
                     { type: 'fill_blank', prompt: 'El concierto ___ en el parque esta noche.', answer: 'es', whyExplanation: 'Concert = event = "es." Not "está," even though it sounds like a location.' },
                     { type: 'mcq', prompt: 'The class is at 10.', options: ['La clase es a las diez', 'La clase está a las diez'], answer: 'La clase es a las diez', whyExplanation: 'A class is an event with a scheduled time — "ser" is correct.' },
                     { type: 'listen_choose', audio: 'La fiesta es en mi casa el sábado.', options: ['The party takes place at my house on Saturday.', 'The party is located at my house on Saturday.'], answer: 'The party takes place at my house on Saturday.', whyExplanation: '"Es" = the party is an event.' },
+                    { type: 'translate', prompt: 'The meeting is at the office at 3.', answer: 'La reunión es en la oficina a las tres', whyExplanation: 'Meeting = event = "es." "A las tres" = at 3 o\'clock.' },
                     { type: 'match', pairs: [
                         { a: 'La boda es', b: 'Wedding (event)' },
                         { a: 'El concierto es', b: 'Concert (event)' },
                         { a: 'El hospital está', b: 'Hospital (location)' },
                         { a: 'La clase es', b: 'Class (event)' },
-                    ]},
+                    ], whyExplanation: 'Memorize these event words with "es" as chunks. Your brain will learn to reach for "ser" automatically.' },
                 ],
                 realLife: {
-                    prompt: 'Say out loud three events you have this week, each starting with the name of the event and "es en..."',
-                    chatSeed: 'Practica "la boda es", "la reunión es", "la fiesta es" — eventos, no lugares.',
+                    prompt: 'Say out loud three events you have this week, each starting with the event name and "es en..." or "es a las..."',
+                    chatSeed: 'Practica "la boda es", "la reunión es", "la fiesta es" — eventos, no lugares. Dame más ejemplos de eventos.',
                 },
             },
             {
@@ -263,16 +271,18 @@ async function main() {
                     { type: 'translate', prompt: 'The wedding is in Madrid on Saturday.', answer: 'La boda es en Madrid el sábado', whyExplanation: 'Wedding = event = "es." Day of week uses "el" + day.' },
                     { type: 'translate', prompt: 'The hospital is near the airport.', answer: 'El hospital está cerca del aeropuerto', whyExplanation: 'Both are physical places, so both use "estar." "Del" = "de + el."' },
                     { type: 'mcq', prompt: '"The party takes place at my house" in Spanish…', options: ['La fiesta es en mi casa', 'La fiesta está en mi casa'], answer: 'La fiesta es en mi casa', whyExplanation: 'A party is an event — "es," not "está."' },
+                    { type: 'fill_blank', prompt: 'La clase ___ (ser) en el aula 205 ___ (a las) diez de la mañana.', answer: 'es a las', whyExplanation: '"Es" for the event (class), "a las" to indicate the time.' },
+                    { type: 'listen_choose', audio: 'La boda es en Segovia, pero el hotel está en Madrid.', options: ['The wedding is in Segovia, but the hotel is in Madrid.', 'The wedding takes place in Segovia, but the hotel is located in Madrid.'], answer: 'The wedding takes place in Segovia, but the hotel is located in Madrid.', whyExplanation: 'Both translations work, but notice: "es" = event location, "está" = physical location.' },
                     { type: 'match', pairs: [
                         { a: 'La boda es en Madrid', b: 'Wedding in Madrid (event)' },
                         { a: 'El hospital está cerca', b: 'Hospital is near (location)' },
                         { a: 'La reunión es a las tres', b: 'Meeting at 3 (event)' },
                         { a: 'El aeropuerto está lejos', b: 'Airport is far (location)' },
-                    ]},
+                    ], whyExplanation: 'Practice mixing events and locations in the same sentence, just like real Spanish conversations.' },
                 ],
                 realLife: {
-                    prompt: 'Chat with Ecla describing one event you have this week and one place you go often, using both "es" and "está" correctly.',
-                    chatSeed: 'Hablemos de mis eventos de la semana y los lugares a los que voy, mezclando "ser" y "estar".',
+                    prompt: 'Chat with Ecla describing one event you have this week (when + where) and one place you go often (where it\'s located).',
+                    chatSeed: 'Hablemos de mis eventos de la semana (cuándo y dónde) y los lugares a los que voy (dónde están), mezclando "ser" y "estar".',
                 },
             },
         ]
@@ -288,9 +298,9 @@ async function main() {
         console.log(`  ✓ Seeded ${subs.length} sub-lessons into "${concept2.name}"`)
     }
 
-    // ────────────────────────────────────────────────
+    // ───────────────────────────────────────────────────────────
     // CONCEPT 3: Present Tense (-AR Verbs)
-    // ────────────────────────────────────────────────
+    // ───────────────────────────────────────────────────────────
     const concept3 = allConcepts.find(c => c.id === 'concept-present-ar')
     if (concept3) {
         const subs = [
@@ -318,16 +328,17 @@ async function main() {
                     { type: 'mcq', prompt: 'We work here.', options: ['Trabajamos aquí', 'Trabajan aquí'], answer: 'Trabajamos aquí', whyExplanation: '"Nosotros" (we) takes -amos: trabajar → trabajamos.' },
                     { type: 'mcq', prompt: 'She studies Spanish every day.', options: ['Ella estudia español todos los días', 'Ella estudio español todos los días'], answer: 'Ella estudia español todos los días', whyExplanation: '"Ella" form takes -a: estudiar → estudia.' },
                     { type: 'listen_choose', audio: 'Yo hablo con mi jefe.', options: ['I speak with my boss.', 'You speak with my boss.'], answer: 'I speak with my boss.', whyExplanation: '"Hablo" ends in -o, which is the "yo" (I) form.' },
+                    { type: 'translate', prompt: 'They carry the books to class.', answer: 'Ellos llevan los libros a clase', whyExplanation: '"Ellos" form takes -an: llevar → llevan. "A clase" = to class.' },
                     { type: 'match', pairs: [
                         { a: 'hablo', b: 'I speak' },
                         { a: 'trabajas', b: 'you work' },
                         { a: 'estudia', b: 'he/she studies' },
                         { a: 'explicamos', b: 'we explain' },
-                    ]},
+                    ], whyExplanation: 'Match each -AR conjugation with its English translation. Notice the pattern: -o, -as, -a, -amos, -an.' },
                 ],
                 realLife: {
-                    prompt: 'Say out loud three things you do every day, starting each sentence with "Yo..." and a -AR verb.',
-                    chatSeed: 'Quiero practicar verbos -AR regulares en presente: hablo, trabajo, estudio.',
+                    prompt: 'Say out loud three things you do every day, starting each sentence with "Yo..." and a -AR verb from the vocab list.',
+                    chatSeed: 'Quiero practicar verbos -AR regulares en presente: hablo, trabajo, estudio, explico, llevo.',
                 },
             },
             {
@@ -343,13 +354,14 @@ async function main() {
                 exercises: [
                     { type: 'listen_choose', audio: 'Ellos trabajan mucho.', options: ['They work a lot.', 'We work a lot.', 'I work a lot.'], answer: 'They work a lot.', whyExplanation: '"Trabajan" ends in -an, the "ellos" (they) form.' },
                     { type: 'listen_choose', audio: '¿Estudias español?', options: ['Do you study Spanish?', 'Does he study Spanish?', 'Do we study Spanish?'], answer: 'Do you study Spanish?', whyExplanation: '"Estudias" ends in -as, which is the "tú" (you) form.' },
-                    { type: 'listen_type', audio: 'Hablamos con la profesora.', answer: 'Hablamos con la profesora.' },
+                    { type: 'listen_type', audio: 'Hablamos con la profesora.', answer: 'Hablamos con la profesora.', whyExplanation: 'Listen for the -amos ending. This is how you say "we speak" in Spanish.' },
                     { type: 'mcq', prompt: '"They explain" in Spanish is…', options: ['explican', 'explicas', 'explica', 'explico'], answer: 'explican', whyExplanation: '"Ellos/ellas" form takes -an for all -AR verbs.' },
                     { type: 'listen_choose', audio: 'Trabajo desde casa los viernes.', options: ['I work from home on Fridays.', 'She works from home on Fridays.'], answer: 'I work from home on Fridays.', whyExplanation: '"Trabajo" ends in -o, so it\'s "yo" (I). "Los viernes" = on Fridays.' },
+                    { type: 'fill_blank', prompt: 'Listen and type: "Ella ___ (explica) todo muy bien."', answer: 'explica', whyExplanation: '"Explica" ends in -a, the él/ella form. "Todo muy bien" = everything very well.' },
                 ],
                 realLife: {
                     prompt: 'Close your eyes and say the full -AR ending set out loud, no notes: -o, -as, -a, -amos, -an.',
-                    chatSeed: 'Practica escuchar terminaciones -AR en presente para reconocer el sujeto sin el pronombre.',
+                    chatSeed: 'Practica escuchar terminaciones -AR en presente para reconocer el sujeto sin el pronombre: hablo, hablas, habla, hablamos, hablan.',
                 },
             },
             {
@@ -375,16 +387,17 @@ async function main() {
                     { type: 'fill_blank', prompt: 'La clase ___ a las ocho. (empezar)', answer: 'empieza', whyExplanation: 'Empezar is e→ie in the él/ella form: empieza.' },
                     { type: 'listen_choose', audio: 'Cierro la puerta.', options: ['I close the door.', 'You close the door.', 'He closes the door.'], answer: 'I close the door.', whyExplanation: '"Cierro" ends in -o with the e→ie change — it\'s "yo" form of cerrar.' },
                     { type: 'mcq', prompt: 'We think Spanish is fun. (nosotros)', options: ['Pensamos que el español es divertido', 'Pensamos que el español es divertida'], answer: 'Pensamos que el español es divertido', whyExplanation: '"Nosotros" form is always regular — pensamos. "Español" is masculine so "divertido."' },
+                    { type: 'translate', prompt: 'The movie starts at 7.', answer: 'La película empieza a las siete', whyExplanation: '"Empezar" is e→ie in él/ella form: empieza. "A las siete" = at 7.' },
                     { type: 'match', pairs: [
                         { a: 'pienso', b: 'I think' },
                         { a: 'empiezas', b: 'you start' },
                         { a: 'cierra', b: 'he/she closes' },
                         { a: 'encontramos', b: 'we find' },
-                    ]},
+                    ], whyExplanation: 'Notice how "encontramos" stays regular (no change) but the other forms change. This is the boot verb pattern.' },
                 ],
                 realLife: {
                     prompt: 'Say out loud three opinions using "pienso que..." (I think that...) — about food, weather, and a TV show.',
-                    chatSeed: 'Practica verbos -AR con cambio radical: pienso, empiezo, cierro, encuentro.',
+                    chatSeed: 'Practica verbos -AR con cambio radical: pienso, empiezo, cierro, encuentro, cuestan. Dame ejemplos de cada uno.',
                 },
             },
             {
@@ -400,16 +413,18 @@ async function main() {
                     { type: 'translate', prompt: 'I work in Madrid and I speak Spanish every day.', answer: 'Trabajo en Madrid y hablo español todos los días', whyExplanation: 'Both regular -AR verbs in yo form: trabajo, hablo.' },
                     { type: 'translate', prompt: 'The class starts at ten.', answer: 'La clase empieza a las diez', whyExplanation: 'Empezar is e→ie in the él/ella form: empieza.' },
                     { type: 'mcq', prompt: '"We close the store at eight" in Spanish…', options: ['Cerramos la tienda a las ocho', 'Cierran la tienda a las ocho'], answer: 'Cerramos la tienda a las ocho', whyExplanation: '"Nosotros" form of cerrar is always regular: cerramos.' },
+                    { type: 'fill_blank', prompt: 'Yo ___ (encontrar) las llaves en la mesa.', answer: 'encuentro', whyExplanation: '"Encontrar" is o→ue stem-changing in yo form: encuentro.' },
+                    { type: 'listen_choose', audio: 'Pienso en ti cuando empiezo el día.', options: ['I think about you when I start the day.', 'You think about me when you start the day.'], answer: 'I think about you when I start the day.', whyExplanation: '"Pienso" = I think (yo form with e→ie change). "Empiezo" = I start (also e→ie).' },
                     { type: 'match', pairs: [
                         { a: 'Trabajo mucho', b: 'I work a lot' },
                         { a: 'Hablo español', b: 'I speak Spanish' },
                         { a: 'Empiezo temprano', b: 'I start early' },
                         { a: 'Cierro tarde', b: 'I close late' },
-                    ]},
+                    ], whyExplanation: 'Practice combining regular and stem-changing -AR verbs in real sentences about your day.' },
                 ],
                 realLife: {
-                    prompt: 'Chat with Ecla for 2 minutes describing your workday in Spanish, using at least 5 different -AR verbs.',
-                    chatSeed: 'Hablemos de mi rutina de trabajo en español usando verbos -AR regulares y con cambio radical.',
+                    prompt: 'Chat with Ecla for 2 minutes describing your workday in Spanish, using at least 5 different -AR verbs (mix regular and stem-changing).',
+                    chatSeed: 'Hablemos de mi rutina de trabajo en español usando verbos -AR regulares (hablar, trabajar, estudiar) y con cambio radical (pensar, empezar, cerrar, encontrar).',
                 },
             },
         ]
@@ -425,9 +440,9 @@ async function main() {
         console.log(`  ✓ Seeded ${subs.length} sub-lessons into "${concept3.name}"`)
     }
 
-    // ────────────────────────────────────────────────
+    // ───────────────────────────────────────────────────────────
     // CONCEPT 4: Present Tense (-ER / -IR Verbs)
-    // ────────────────────────────────────────────────
+    // ───────────────────────────────────────────────────────────
     const concept4 = allConcepts.find(c => c.id === 'concept-present-er-ir')
     if (concept4) {
         const subs = [
@@ -455,17 +470,17 @@ async function main() {
                     { type: 'mcq', prompt: 'Ella ___ en Sevilla. (vivir)', options: ['vive', 'vives', 'vivo', 'viven'], answer: 'vive', whyExplanation: '"Ella" (she) takes the -e ending: vive. "Viven" would be for "ellos/ellas" (they).' },
                     { type: 'fill_blank', prompt: 'Nosotros ___ (comer) juntos los domingos.', answer: 'comemos', whyExplanation: '-ER verbs use -emos for "we" — comer → comemos.' },
                     { type: 'fill_blank', prompt: 'Nosotros ___ (vivir) en la misma ciudad.', answer: 'vivimos', whyExplanation: '-IR verbs use -imos for "we" — vivir → vivimos. This is the ONE place -ER and -IR actually differ.' },
-                    { type: 'listen_type', audio: 'Yo bebo agua todos los días.', answer: 'Yo bebo agua todos los días.' },
+                    { type: 'listen_type', audio: 'Yo bebo agua todos los días.', answer: 'Yo bebo agua todos los días.', whyExplanation: 'Listen for the -o ending on "bebo." This is the "yo" form of beber (to drink).' },
                     { type: 'match', pairs: [
                         { a: 'comer', b: 'to eat' },
                         { a: 'beber', b: 'to drink' },
                         { a: 'vivir', b: 'to live' },
                         { a: 'leer', b: 'to read' },
-                    ]},
+                    ], whyExplanation: 'Match each -ER/-IR verb with its English translation. These are the most common verbs in both families.' },
                 ],
                 realLife: {
                     prompt: 'Say three true sentences about yourself out loud right now: "Como…", "Bebo…", "Vivo en…".',
-                    chatSeed: 'Quiero practicar verbos -ER y -IR en presente hablando de mi día.',
+                    chatSeed: 'Quiero practicar verbos -ER y -IR en presente hablando de mi día: como, bebo, vivo, escribo, leo.',
                 },
             },
             {
@@ -481,13 +496,14 @@ async function main() {
                 exercises: [
                     { type: 'listen_choose', audio: 'Ellos viven aquí.', options: ['They live here.', 'We live here.', 'I live here.'], answer: 'They live here.', whyExplanation: '"Viven" ends in -en, the "ellos/ellas" (they) ending.' },
                     { type: 'listen_choose', audio: '¿Qué bebes?', options: ['What do you drink?', 'What do you eat?', 'Where do you live?'], answer: 'What do you drink?', whyExplanation: '"Bebes" comes from "beber" (to drink), -es ending = "tú" (you).' },
-                    { type: 'listen_type', audio: 'Ella escribe una carta.', answer: 'Ella escribe una carta.' },
+                    { type: 'listen_type', audio: 'Ella escribe una carta.', answer: 'Ella escribe una carta.', whyExplanation: 'Listen for the -e ending on "escribe." This is the él/ella form of escribir (to write).' },
                     { type: 'mcq', prompt: '"They eat" in Spanish is…', options: ['comen', 'comes', 'come', 'como'], answer: 'comen', whyExplanation: '-en is the "they" ending for both -ER and -IR verbs.' },
                     { type: 'listen_choose', audio: 'Leemos el periódico por la mañana.', options: ['We read the newspaper in the morning.', 'I read the newspaper in the morning.', 'They read the newspaper in the morning.'], answer: 'We read the newspaper in the morning.', whyExplanation: '"Leemos" — -emos ending confirms "nosotros" (we).' },
+                    { type: 'fill_blank', prompt: 'Listen and type: "Yo ___ (vivo) en Madrid con mi familia."', answer: 'vivo', whyExplanation: '"Vivo" ends in -o, the "yo" form of vivir. "Con mi familia" = with my family.' },
                 ],
                 realLife: {
                     prompt: 'Close your eyes and say the full -ER ending set out loud, no notes: -o, -es, -e, -emos, -en.',
-                    chatSeed: 'Dime frases cortas con verbos -ER y -IR para practicar el oído.',
+                    chatSeed: 'Dime frases cortas con verbos -ER y -IR para practicar el oído: como, bebes, vive, comemos, escriben.',
                 },
             },
             {
@@ -511,16 +527,18 @@ async function main() {
                     { type: 'mcq', prompt: 'Yo ___ un perro y un gato. (tener)', options: ['tengo', 'teno', 'tiene', 'tienes'], answer: 'tengo', whyExplanation: '"Tener" is irregular only in "yo": tengo. Everywhere else it follows the normal -ER pattern with a small vowel change (tienes, tiene).' },
                     { type: 'fill_blank', prompt: 'Yo ___ (salir) de casa muy temprano.', answer: 'salgo', whyExplanation: 'Salir → salgo in "yo" only. Tú sales, él sale, follows the regular pattern.' },
                     { type: 'listen_choose', audio: 'Hago la tarea antes de cenar.', options: ['I do homework before dinner.', 'You do homework before dinner.', 'She does homework before dinner.'], answer: 'I do homework before dinner.', whyExplanation: '"Hago" is unmistakably "yo" (I) — it is the exception form, so it only ever means "I do/make."' },
+                    { type: 'translate', prompt: 'I put the book on the table.', answer: 'Pongo el libro en la mesa', whyExplanation: '"Poner" is irregular in yo form: pongo. "En la mesa" = on the table.' },
+                    { type: 'listen_choose', audio: 'Tengo mucho trabajo hoy.', options: ['I have a lot of work today.', 'You have a lot of work today.', 'He has a lot of work today.'], answer: 'I have a lot of work today.', whyExplanation: '"Tengo" is the irregular yo form of tener. "Mucho trabajo" = a lot of work.' },
                     { type: 'match', pairs: [
                         { a: 'tengo', b: 'I have' },
                         { a: 'salgo', b: 'I leave' },
                         { a: 'hago', b: 'I do/make' },
                         { a: 'pongo', b: 'I put' },
-                    ]},
+                    ], whyExplanation: 'Memorize these -go endings as chunks. They\'re irregular only in yo form — everywhere else they\'re regular.' },
                 ],
                 realLife: {
                     prompt: 'Say out loud: what you have (tengo…), what time you leave home (salgo a las…), and one thing you do every day (hago…).',
-                    chatSeed: 'Quiero practicar los verbos irregulares tengo, salgo y hago hablando de mi rutina.',
+                    chatSeed: 'Quiero practicar los verbos irregulares tengo, salgo, hago y pongo hablando de mi rutina diaria.',
                 },
             },
             {
@@ -536,16 +554,18 @@ async function main() {
                     { type: 'translate', prompt: 'I live in Madrid and I have a dog.', answer: 'Vivo en Madrid y tengo un perro.', whyExplanation: 'Combines a regular -IR verb (vivo) with the irregular yo-form (tengo) — this is exactly how natives actually talk.' },
                     { type: 'translate', prompt: 'I eat breakfast at eight and I leave at nine.', answer: 'Como el desayuno a las ocho y salgo a las nueve.', whyExplanation: 'Two verbs, two different patterns (como = regular, salgo = irregular) in one natural sentence.' },
                     { type: 'mcq', prompt: '"We write" in Spanish is…', options: ['escribimos', 'escriben', 'escribes', 'escribo'], answer: 'escribimos', whyExplanation: '-IR verbs take -imos for "nosotros" — escribir → escribimos.' },
+                    { type: 'fill_blank', prompt: 'Yo ___ (hacer) ejercicio por la mañana y ___ (leer) por la noche.', answer: 'hago leo', whyExplanation: '"Hago" is irregular yo form of hacer. "Leo" is regular yo form of leer (no accent needed).' },
+                    { type: 'listen_choose', audio: 'Vivo con mi familia y tengo dos hermanos.', options: ['I live with my family and I have two siblings.', 'You live with your family and you have two siblings.'], answer: 'I live with my family and I have two siblings.', whyExplanation: '"Vivo" = I live (regular -IR). "Tengo" = I have (irregular yo form). Both are yo forms.' },
                     { type: 'match', pairs: [
                         { a: 'Yo como', b: 'I eat' },
                         { a: 'Ella vive', b: 'She lives' },
                         { a: 'Ellos beben', b: 'They drink' },
                         { a: 'Yo tengo', b: 'I have' },
-                    ]},
+                    ], whyExplanation: 'Practice combining regular and irregular -ER/-IR verbs in real sentences about your day.' },
                 ],
                 realLife: {
-                    prompt: 'Chat with Ecla for 2 minutes, in Spanish, describing your actual daily routine start to finish.',
-                    chatSeed: 'Hablemos de mi rutina diaria en español, usando verbos -ER, -IR y tengo/salgo/hago.',
+                    prompt: 'Chat with Ecla for 2 minutes, in Spanish, describing your actual daily routine start to finish using at least 6 different verbs (mix regular and irregular).',
+                    chatSeed: 'Hablemos de mi rutina diaria en español, usando verbos -ER, -IR regulares (comer, beber, vivir, escribir, leer) y irregulares (tengo, salgo, hago, pongo).',
                 },
             },
         ]
