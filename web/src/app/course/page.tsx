@@ -89,8 +89,12 @@ export default function CourseMapPage() {
     const router = useRouter()
     const { getToken } = useAuth()
     const [units, setUnits] = useState<any[]>([])
-    const [preferredMode, setPreferredMode] = useState<ModeId>('DRILL') // Default value
-    const [mounted, setMounted] = useState(false) // Track hydration completion
+    const [preferredMode, setPreferredMode] = useState<ModeId>(() => {
+        if (typeof window === 'undefined') return 'DRILL'
+        const stored = localStorage.getItem('ecla-preferred-mode') as ModeId | null
+        return stored && MODE_META[stored] ? stored : 'DRILL'
+    })
+    const [mounted, setMounted] = useState(false)
     const [showModePicker, setShowModePicker] = useState(false)
     const [loading, setLoading] = useState(true)
     const [openConcept, setOpenConcept] = useState<any>(null)
@@ -100,7 +104,6 @@ export default function CourseMapPage() {
     const [joke, setJoke] = useState('')
     const glowColors = useEquippedGlow()
 
-    // Read from localStorage AFTER hydration to avoid mismatch
     useEffect(() => {
         setMounted(true)
         const stored = localStorage.getItem('ecla-preferred-mode') as ModeId | null
@@ -216,10 +219,8 @@ export default function CourseMapPage() {
     }
 
     const currentMode = MODE_META[preferredMode]
-
     const totalSubLessonXP = subLessons.reduce((sum, sub) => sum + (sub.xpReward || 0), 0)
 
-    // Show loading state until hydration is complete to avoid mismatch
     if (!mounted) {
         return (
             <main className="min-h-screen font-body relative overflow-x-clip">
@@ -365,6 +366,23 @@ export default function CourseMapPage() {
                                                             style={state !== 'mastered' ? { color: cat.color } : undefined}
                                                         />
                                                     )}
+
+                                                    {/* Sub-lesson progress ring */}
+                                                    {!locked && concept.subLessonProgress > 0 && concept.subLessonProgress < 100 && (
+                                                        <svg className="absolute inset-0" viewBox="0 0 100 100">
+                                                            <circle cx="50" cy="50" r="48" fill="none" stroke="rgba(255,255,255,0.1)" strokeWidth="4" />
+                                                            <circle
+                                                                cx="50" cy="50" r="48"
+                                                                fill="none"
+                                                                stroke={state === 'mastered' ? '#FFC857' : '#4DD8E6'}
+                                                                strokeWidth="4"
+                                                                strokeDasharray={`${2 * Math.PI * 48}`}
+                                                                strokeDashoffset={`${2 * Math.PI * 48 * (1 - concept.subLessonProgress / 100)}`}
+                                                                strokeLinecap="round"
+                                                                transform="rotate(-90 50 50)"
+                                                            />
+                                                        </svg>
+                                                    )}
                                                 </button>
 
                                                 <div className="absolute left-1/2 top-full mt-2 sm:mt-3 w-max max-w-[160px] sm:max-w-[180px] -translate-x-1/2 text-center">
@@ -375,6 +393,11 @@ export default function CourseMapPage() {
                                                         {concept.name}
                                                     </p>
                                                     <p className={`text-[11px] sm:text-xs font-semibold ${subCls}`}>{sub}</p>
+                                                    {!locked && concept.subLessonProgress > 0 && (
+                                                        <p className="text-[10px] text-cream/40 mt-0.5">
+                                                            {concept.completedSubLessons}/{concept.totalSubLessons} parts
+                                                        </p>
+                                                    )}
                                                 </div>
                                             </div>
                                         </div>
