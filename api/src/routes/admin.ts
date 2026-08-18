@@ -13,7 +13,11 @@ router.get('/api/v1/admin/concepts', async (req: Request, res: Response, next: N
         requireAdmin(req)
         const concepts = await prisma.concept.findMany({
             orderBy: { orderIndex: 'asc' },
-            include: { variants: true, unit: true },
+            include: { 
+                variants: true, 
+                unit: true,
+                subLessons: { orderBy: { orderIndex: 'asc' } },
+            },
         })
         res.json({ concepts })
     } catch (error) { next(error) }
@@ -22,8 +26,15 @@ router.get('/api/v1/admin/concepts', async (req: Request, res: Response, next: N
 router.post('/api/v1/admin/concepts', async (req: Request, res: Response, next: NextFunction) => {
     try {
         requireAdmin(req)
+
+        // Extract subLessons BEFORE zod parse strips unknown fields
+        const subLessonsRaw = req.body.subLessons as any[] | undefined
+
         const parsed = conceptSchema.safeParse(req.body)
-        if (!parsed.success) throw new AppError('Invalid concept data', 400)
+        if (!parsed.success) {
+            console.error('Zod validation errors:', parsed.error.flatten())
+            throw new AppError('Invalid concept data', 400)
+        }
 
         const data = parsed.data
         const cleanVariants = data.variants.map(v => ({
@@ -33,7 +44,10 @@ router.post('/api/v1/admin/concepts', async (req: Request, res: Response, next: 
             formalPhrase: sanitizeAIOutput(v.formalPhrase),
         }))
 
+        let conceptId: string
+
         if (data.id) {
+            // ─── UPDATE EXISTING CONCEPT ───
             await prisma.concept.update({
                 where: { id: data.id },
                 data: {
@@ -42,14 +56,27 @@ router.post('/api/v1/admin/concepts', async (req: Request, res: Response, next: 
                     orderIndex: data.orderIndex, xpReward: data.xpReward,
                 },
             })
+            conceptId = data.id
+
+            // Upsert variants
             for (const v of cleanVariants) {
                 await prisma.lessonVariant.upsert({
                     where: { conceptId_mode: { conceptId: data.id, mode: v.mode } },
-                    update: { storyBeat: v.storyBeat, culturalRef: v.culturalRef, formalPhrase: v.formalPhrase, exercises: v.exercises },
-                    create: { conceptId: data.id, mode: v.mode, storyBeat: v.storyBeat, culturalRef: v.culturalRef, formalPhrase: v.formalPhrase, exercises: v.exercises },
+                    update: { 
+                        storyBeat: v.storyBeat, 
+                        culturalRef: v.culturalRef, 
+                        formalPhrase: v.formalPhrase, 
+                        exercises: v.exercises 
+                    },
+                    create: { 
+                        conceptId: data.id, mode: v.mode, 
+                        storyBeat: v.storyBeat, culturalRef: v.culturalRef, 
+                        formalPhrase: v.formalPhrase, exercises: v.exercises 
+                    },
                 })
             }
         } else {
+            // ─── CREATE NEW CONCEPT ───
             const concept = await prisma.concept.create({
                 data: {
                     id: `concept-${Date.now()}`,
@@ -58,14 +85,46 @@ router.post('/api/v1/admin/concepts', async (req: Request, res: Response, next: 
                     orderIndex: data.orderIndex, xpReward: data.xpReward,
                 },
             })
+            conceptId = concept.id
+
+            // Create variants
             for (const v of cleanVariants) {
                 await prisma.lessonVariant.create({
-                    data: { conceptId: concept.id, mode: v.mode, storyBeat: v.storyBeat, culturalRef: v.culturalRef, formalPhrase: v.formalPhrase, exercises: v.exercises },
+                    data: { 
+                        conceptId: concept.id, mode: v.mode, 
+                        storyBeat: v.storyBeat, culturalRef: v.culturalRef, 
+                        formalPhrase: v.formalPhrase, exercises: v.exercises 
+                    },
                 })
             }
         }
 
-        res.json({ success: true })
+        // ─── SUB-LESSONS (4-part structure) ───
+        if (Array.isArray(subLessonsRaw) && subLessonsRaw.length > 0) {
+            // Delete existing sub-lessons for this concept to prevent orphans
+            await prisma.subLesson.deleteMany({ where: { conceptId } })
+
+            // Insert new sub-lessons in order
+            for (let i = 0; i < subLessonsRaw.length; i++) {
+                const sub = subLessonsRaw[i]
+                if (!sub) continue
+
+                await prisma.subLesson.create({
+                    data: {
+                        conceptId,
+                        orderIndex: i,
+                        title: sub.title || `Part ${i + 1}`,
+                        icon: sub.icon || 'book-open',
+                        xpReward: typeof sub.xpReward === 'number' ? sub.xpReward : 5,
+                        teach: Array.isArray(sub.teach) ? sub.teach : [],
+                        exercises: Array.isArray(sub.exercises) ? sub.exercises : [],
+                        realLife: sub.realLife || null,
+                    },
+                })
+            }
+        }
+
+        res.json({ success: true, conceptId })
     } catch (error) { next(error) }
 })
 
