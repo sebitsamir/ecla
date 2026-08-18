@@ -1,6 +1,8 @@
 'use client'
+
 import { useState, useRef, useCallback } from 'react'
 import { useAuth } from '@clerk/nextjs'
+import { speak, cancelSpeech } from './speech'
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL ?? 'http://localhost:4000'
 
@@ -30,27 +32,25 @@ export function useVoice(onTranscript: (text: string) => void) {
                 })
                 const data = await res.json()
                 if (data.text) onTranscript(data.text)
-            } finally { setProcessing(false) }
+            } finally {
+                setProcessing(false)
+            }
         }
         recRef.current = rec
         rec.start()
         setListening(true)
     }, [getToken, onTranscript])
 
-    const stop = useCallback(() => { recRef.current?.stop(); setListening(false) }, [])
-
-    // Level 1 TTS (free). Later: swap body for an ElevenLabs/OpenAI call.
-    const speak = useCallback((text: string, lang = 'es-ES') => {
-        if (!('speechSynthesis' in window)) return
-        window.speechSynthesis.cancel()
-        const u = new SpeechSynthesisUtterance(text)
-        u.lang = lang
-        u.voice = window.speechSynthesis.getVoices().find(v => v.lang.startsWith('es')) ?? null
-        u.rate = 0.95
-        u.onstart = () => setSpeaking(true)
-        u.onend = () => setSpeaking(false)
-        window.speechSynthesis.speak(u)
+    const stop = useCallback(() => {
+        recRef.current?.stop()
+        setListening(false)
     }, [])
 
-    return { listening, processing, speaking, start, stop, speak }
+    const speakText = useCallback((text: string, lang = 'es-ES') => {
+        speak(text, lang, { onStart: () => setSpeaking(true), onEnd: () => setSpeaking(false) })
+    }, [])
+
+    const stopSpeaking = useCallback(() => { cancelSpeech(); setSpeaking(false) }, [])
+
+    return { listening, processing, speaking, start, stop, speak: speakText, stopSpeaking }
 }
