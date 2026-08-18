@@ -62,7 +62,9 @@ export default function ChatPage() {
             const res = await fetch(`${API_URL}/api/v1/chat`, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
-                body: JSON.stringify({ messages: next.map(m => ({ role: m.role, content: m.content })) }),
+                body: JSON.stringify({
+                    messages: next.map(m => ({ role: m.role, content: m.content })),
+                }),
             })
             const data = await res.json()
             const reply = data.reply ?? '...'
@@ -105,11 +107,10 @@ export default function ChatPage() {
                     <button
                         onClick={toggleVoiceMode}
                         title={voiceMode ? 'Voice mode ON — Ecla speaks her Spanish' : 'Voice mode OFF — tap to enable'}
-                        className={`flex h-9 w-9 items-center justify-center rounded-full border transition-all ${
-                            voiceMode
+                        className={`flex h-9 w-9 items-center justify-center rounded-full border transition-all ${voiceMode
                                 ? 'border-glow/40 bg-glow/10 text-glow shadow-[0_0_16px_rgba(255,200,87,0.25)]'
                                 : 'border-white/10 bg-night-800/60 text-cream/40 hover:text-cream'
-                        }`}
+                            }`}
                     >
                         {voiceMode ? <Volume2 className="w-4 h-4" /> : <VolumeX className="w-4 h-4" />}
                     </button>
