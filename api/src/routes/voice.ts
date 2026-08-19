@@ -16,13 +16,24 @@ router.post(
             const tmp = path.join(os.tmpdir(), `voice-${Date.now()}.webm`)
             fs.writeFileSync(tmp, req.body)
 
+            const started = Date.now()
+            console.log(`[VOICE] Transcribing ${req.body.length} bytes`)
+
             const transcription = await groq.audio.transcriptions.create({
                 file: fs.createReadStream(tmp),
-                model: 'whisper-large-v3-turbo',
-                // language: 'es',  // leave off = auto-detect (learners mix ES/EN)
+                model: 'whisper-large-v3-turbo',   // FULL model — best accuracy for advanced/complex Spanish
+                language: 'es',
+                temperature: 0.0,            // deterministic — no hallucination drift
+                response_format: 'json',
+                // NEUTRAL prompt: locks language + conversational style
+                // WITHOUT biasing vocabulary toward beginner phrases
+                prompt: 'Conversación en español entre un tutor y un estudiante.',
             })
+
             fs.unlinkSync(tmp)
-            res.json({ text: transcription.text })
+            const text = (transcription.text ?? '').trim()
+            console.log(`[VOICE] ${Date.now() - started}ms → "${text}"`)
+            res.json({ text })
         } catch (error) { next(error) }
     }
 )

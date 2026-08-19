@@ -30,6 +30,8 @@ export const chatSchema = z.object({
         role: z.enum(['user', 'assistant']),
         content: z.string().min(1).max(2000),
     })).min(1).max(30),
+    voice: z.boolean().optional(),
+    stream: z.boolean().optional(),
 })
 
 export const conceptSchema = z.object({
@@ -47,7 +49,7 @@ export const conceptSchema = z.object({
         culturalRef: z.string().nullable(),
         formalPhrase: z.string().nullable(),
         exercises: z.any(),
-    }))
+    })),
 })
 
 export const generateSchema = z.object({
