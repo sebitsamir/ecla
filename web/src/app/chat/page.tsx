@@ -3,10 +3,11 @@
 import { useEffect, useRef, useState } from 'react'
 import { useRouter, useSearchParams } from 'next/navigation'
 import { useAuth } from '@clerk/nextjs'
-import { ArrowLeft, Send, Volume2, VolumeX } from 'lucide-react'
+import { ArrowLeft, Send, Volume2, VolumeX, AudioLines } from 'lucide-react'
 import NightBackground from '@/components/NightBackground'
 import Firefly from '@/components/Firefly'
 import MicButton, { type MicStatus } from '@/components/MicButton'
+import VoiceCall, { type CallLine } from '@/components/VoiceCall'
 import { speakSpanish, cancelSpeech } from '@/lib/speech'
 import { useEquippedGlow } from '@/lib/useEquippedGlow'
 
@@ -20,6 +21,15 @@ const SUGGESTIONS = [
     'Háblame de tu día',
 ]
 
+// Split reply into Spanish (spoken) + English (subtitle) when backend returns EN: format
+function splitReply(content: string): { spanish: string; english?: string } {
+    const [esPart, enPart] = content.split(/\n?EN:\s*/)
+    return {
+        spanish: esPart.trim(),
+        english: enPart?.trim() || undefined,
+    }
+}
+
 export default function ChatPage() {
     const router = useRouter()
     const searchParams = useSearchParams()
@@ -32,6 +42,7 @@ export default function ChatPage() {
     const [voiceMode, setVoiceMode] = useState(false)
     const [micStatus, setMicStatus] = useState<MicStatus>('idle')
     const [speaking, setSpeaking] = useState(false)
+    const [showCall, setShowCall] = useState(false)
     const scrollRef = useRef<HTMLDivElement>(null)
     const thinkingRef = useRef(false)
 
@@ -45,7 +56,10 @@ export default function ChatPage() {
         scrollRef.current?.scrollTo({ top: scrollRef.current.scrollHeight, behavior: 'smooth' })
     }, [messages, thinking])
 
-    const speakOpts = { onStart: () => setSpeaking(true), onEnd: () => setSpeaking(false) }
+    const speakOpts = {
+        onStart: () => setSpeaking(true),
+        onEnd: () => setSpeaking(false)
+    }
 
     const send = async (text: string) => {
         const clean = text.trim()
@@ -64,6 +78,7 @@ export default function ChatPage() {
                 headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
                 body: JSON.stringify({
                     messages: next.map(m => ({ role: m.role, content: m.content })),
+                    voice: voiceMode,
                 }),
             })
             const data = await res.json()
@@ -83,9 +98,23 @@ export default function ChatPage() {
         cancelSpeech()
         setSpeaking(false)
         setVoiceMode(v => {
-            localStorage.setItem('ecla-voice-mode', v ? 'off' : 'on')
-            return !v
+            const newVal = !v
+            localStorage.setItem('ecla-voice-mode', newVal ? 'on' : 'off')
+            return newVal
         })
+    }
+
+    const handleCallEnd = (callLines: CallLine[]) => {
+        setShowCall(false)
+        if (callLines.length) {
+            setMessages(m => [
+                ...m,
+                ...callLines.map(l => ({
+                    role: (l.role === 'user' ? 'user' : 'assistant') as 'user' | 'assistant',
+                    content: l.text,
+                }))
+            ])
+        }
     }
 
     return (
@@ -94,26 +123,42 @@ export default function ChatPage() {
 
             <header className="z-40 backdrop-blur-md bg-night-950/70 border-b border-white/5">
                 <div className="mx-auto max-w-3xl px-4 h-16 flex items-center justify-between">
-                    <button onClick={() => router.push('/dashboard')} className="flex items-center gap-2 text-cream/60 hover:text-cream transition-colors text-sm font-semibold">
+                    <button
+                        onClick={() => router.push('/dashboard')}
+                        className="flex items-center gap-2 text-cream/60 hover:text-cream transition-colors text-sm font-semibold"
+                    >
                         <ArrowLeft className="w-4 h-4" /> Dashboard
                     </button>
                     <div className="flex items-center gap-2">
-                        <Firefly mood={thinking ? 'thinking' : speaking ? 'excited' : 'idle'} size={40} glow={glowColors} />
+                        <Firefly
+                            mood={thinking ? 'thinking' : speaking ? 'excited' : 'idle'}
+                            size={40}
+                            glow={glowColors}
+                        />
                         <div>
                             <h1 className="font-display text-lg font-bold text-cream leading-none">AI Tutor</h1>
                             <p className="text-[10px] font-semibold text-cream/50">Chat in Spanish</p>
                         </div>
                     </div>
-                    <button
-                        onClick={toggleVoiceMode}
-                        title={voiceMode ? 'Voice mode ON — Ecla speaks her Spanish' : 'Voice mode OFF — tap to enable'}
-                        className={`flex h-9 w-9 items-center justify-center rounded-full border transition-all ${voiceMode
-                                ? 'border-glow/40 bg-glow/10 text-glow shadow-[0_0_16px_rgba(255,200,87,0.25)]'
-                                : 'border-white/10 bg-night-800/60 text-cream/40 hover:text-cream'
-                            }`}
-                    >
-                        {voiceMode ? <Volume2 className="w-4 h-4" /> : <VolumeX className="w-4 h-4" />}
-                    </button>
+                    <div className="flex items-center gap-2">
+                        <button
+                            onClick={() => setShowCall(true)}
+                            title="Voice mode — talk with Ecla hands-free"
+                            className="flex h-9 w-9 items-center justify-center rounded-full border border-glow/40 bg-glow/10 text-glow hover:bg-glow/20 transition-all"
+                        >
+                            <AudioLines className="w-4 h-4" />
+                        </button>
+                        <button
+                            onClick={toggleVoiceMode}
+                            title={voiceMode ? 'Voice mode ON — Ecla speaks her Spanish' : 'Voice mode OFF — tap to enable'}
+                            className={`flex h-9 w-9 items-center justify-center rounded-full border transition-all ${voiceMode
+                                    ? 'border-glow/40 bg-glow/10 text-glow shadow-[0_0_16px_rgba(255,200,87,0.25)]'
+                                    : 'border-white/10 bg-night-800/60 text-cream/40 hover:text-cream'
+                                }`}
+                        >
+                            {voiceMode ? <Volume2 className="w-4 h-4" /> : <VolumeX className="w-4 h-4" />}
+                        </button>
+                    </div>
                 </div>
             </header>
 
@@ -132,7 +177,11 @@ export default function ChatPage() {
                             )}
                             <div className="flex flex-wrap justify-center gap-2">
                                 {SUGGESTIONS.map(s => (
-                                    <button key={s} onClick={() => send(s)} className="rounded-full border border-white/10 bg-night-800/60 px-4 py-2 text-sm font-semibold text-cream/70 hover:text-cream hover:border-white/25 transition-all">
+                                    <button
+                                        key={s}
+                                        onClick={() => send(s)}
+                                        className="rounded-full border border-white/10 bg-night-800/60 px-4 py-2 text-sm font-semibold text-cream/70 hover:text-cream hover:border-white/25 transition-all"
+                                    >
                                         {s}
                                     </button>
                                 ))}
@@ -140,16 +189,26 @@ export default function ChatPage() {
                         </div>
                     )}
 
-                    {messages.map((m, i) => (
-                        <div key={i} className={`flex ${m.role === 'user' ? 'justify-end' : 'justify-start'}`}>
-                            {m.role === 'user' ? (
-                                <div className="max-w-[80%] rounded-2xl px-4 py-3 text-sm leading-relaxed whitespace-pre-wrap bg-glow text-night-900 font-semibold rounded-br-md">
-                                    {m.content}
+                    {messages.map((m, i) => {
+                        if (m.role === 'user') {
+                            return (
+                                <div key={i} className="flex justify-end">
+                                    <div className="max-w-[80%] rounded-2xl px-4 py-3 text-sm leading-relaxed whitespace-pre-wrap bg-glow text-night-900 font-semibold rounded-br-md">
+                                        {m.content}
+                                    </div>
                                 </div>
-                            ) : (
+                            )
+                        }
+
+                        const { spanish, english } = splitReply(m.content)
+                        return (
+                            <div key={i} className="flex justify-start">
                                 <div className="flex items-end gap-1.5 max-w-[85%]">
                                     <div className="rounded-2xl px-4 py-3 text-sm leading-relaxed whitespace-pre-wrap bg-night-800/80 border border-white/5 text-cream/90 rounded-bl-md">
-                                        {m.content}
+                                        {spanish}
+                                        {english && (
+                                            <span className="block mt-1 text-[11px] text-cream/50 italic">{english}</span>
+                                        )}
                                     </div>
                                     <button
                                         onClick={() => speakSpanish(m.content, speakOpts)}
@@ -159,9 +218,9 @@ export default function ChatPage() {
                                         <Volume2 className="w-3.5 h-3.5" />
                                     </button>
                                 </div>
-                            )}
-                        </div>
-                    ))}
+                            </div>
+                        )
+                    })}
 
                     {thinking && (
                         <div className="flex justify-start items-end gap-2">
@@ -214,6 +273,8 @@ export default function ChatPage() {
                     </button>
                 </div>
             </div>
+
+            {showCall && <VoiceCall onEnd={handleCallEnd} />}
         </main>
     )
 }
