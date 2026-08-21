@@ -11,8 +11,7 @@ const SR_IMPL: any = typeof window !== 'undefined'
 
 export const voiceSupported = typeof SR_IMPL === 'function'
 
-// After the last final result, if nothing new arrives in this window,
-// close the session instead of waiting for Chrome's ~2s tail.
+// Close the session ourselves 800ms after the last final result
 const FINALIZE_MS = 800
 
 export function useHandsFreeVoice(onUtterance: (text: string) => void) {
@@ -22,6 +21,7 @@ export function useHandsFreeVoice(onUtterance: (text: string) => void) {
     const stateRef = useRef<VoiceState>('off')
     const recRef = useRef<any>(null)
     const finalRef = useRef('')
+    const interimRef = useRef('')
     const turnRef = useRef(false)
     const endedRef = useRef(true)
     const finalizeRef = useRef<ReturnType<typeof setTimeout> | null>(null)
@@ -56,27 +56,35 @@ export function useHandsFreeVoice(onUtterance: (text: string) => void) {
     function startRec() {
         killRec()
         finalRef.current = ''
+        interimRef.current = ''
         const rec = new SR_IMPL()
         rec.lang = 'es-ES'
         rec.continuous = true
         rec.interimResults = true
         rec.maxAlternatives = 1
 
+        // ── THE FIX ── e.results is CUMULATIVE on every platform, and Android
+        // Chrome doesn't advance resultIndex reliably. Appending per event
+        // caused the staircase repetition ("que que planes…"). Rebuilding the
+        // whole transcript from scratch each event is duplication-proof.
         rec.onresult = (e: any) => {
+            let final = ''
             let interim = ''
-            let sawFinal = false
-            for (let i = e.resultIndex; i < e.results.length; i++) {
+            for (let i = 0; i < e.results.length; i++) {
                 const r = e.results[i]
-                if (r.isFinal) { finalRef.current += `${r[0].transcript} `; sawFinal = true }
+                if (r.isFinal) final += `${r[0].transcript} `
                 else interim += r[0].transcript
             }
-            const live = (finalRef.current + interim).trim()
+            const finalsChanged = final !== finalRef.current
+            finalRef.current = final
+            interimRef.current = interim
+
+            const live = (final + interim).trim()
             setLiveText(live)
             if (live && stateRef.current === 'waiting') setSt('hearing')
 
-            // SMART ENDPOINTING: user paused after a final result → close the
-            // session now (800ms) instead of waiting for Chrome's long tail
-            if (sawFinal) {
+            // Smart endpointing: user paused after a final → close session now
+            if (finalsChanged) {
                 clearFinalize()
                 finalizeRef.current = setTimeout(() => {
                     const r = recRef.current
@@ -90,10 +98,12 @@ export function useHandsFreeVoice(onUtterance: (text: string) => void) {
         rec.onend = () => {
             clearFinalize()
             if (recRef.current !== rec) return // stale session
-            const text = finalRef.current.trim()
+            const text = (finalRef.current + interimRef.current).trim()
             if (text) { emit(text); return }
             if (turnRef.current && !endedRef.current) {
-                try { rec.start() } catch { setSt('waiting') }
+                finalRef.current = ''
+                interimRef.current = ''
+                try { rec.start() } catch { setSt('waiting') } // silence gap — keep listening
             } else {
                 setSt('off')
             }
@@ -120,7 +130,7 @@ export function useHandsFreeVoice(onUtterance: (text: string) => void) {
 
     const listen = useCallback(() => {
         if (endedRef.current || !voiceSupported) return
-        if (isSpeechActive()) { setTimeout(() => listen(), 250); return }
+        if (isSpeechActive()) { setTimeout(() => listen(), 250); return } // never listen over Ecla
         turnRef.current = true
         setLiveText('')
         setSt('waiting')

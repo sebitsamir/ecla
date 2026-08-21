@@ -3,7 +3,7 @@
 import { useEffect, useRef, useState, Suspense, KeyboardEvent } from 'react'
 import { useRouter, useSearchParams } from 'next/navigation'
 import { useAuth } from '@clerk/nextjs'
-import { ArrowLeft, ArrowUp, Mic, Volume2, VolumeX, Radio, AudioLines } from 'lucide-react'
+import { ArrowLeft, ArrowUp, Mic, Volume2, VolumeX, AudioLines } from 'lucide-react'
 import NightBackground from '@/components/NightBackground'
 import Firefly from '@/components/Firefly'
 import VoiceCall, { type CallLine } from '@/components/VoiceCall'
@@ -125,6 +125,8 @@ function ChatPageContent() {
 
     const startRecording = async () => {
         if (thinkingRef.current) return
+        cancelSpeech()          // don't record over Ecla's voice
+        setSpeaking(false)
         try {
             const stream = await navigator.mediaDevices.getUserMedia({ audio: true })
             const mediaRecorder = new MediaRecorder(stream)
@@ -174,7 +176,7 @@ function ChatPageContent() {
     }
 
     return (
-        <main className="flex h-screen flex-col font-body">
+        <main className="flex h-dvh flex-col font-body">
             <NightBackground />
 
             {/* ── Header ─ */}
@@ -193,25 +195,23 @@ function ChatPageContent() {
                         <span className="text-sm font-semibold text-cream">AI Tutor</span>
                     </div>
 
-                    <div className="flex items-center gap-1">
-                        <button
-                            onClick={toggleVoiceMode}
-                            title={voiceMode ? 'Voice replies on' : 'Voice replies off'}
-                            className={`flex h-8 w-8 items-center justify-center rounded-full transition-colors ${
-                                voiceMode ? 'text-glow' : 'text-cream/50 hover:bg-white/5 hover:text-cream'
-                            }`}
-                        >
-                            {voiceMode ? <Volume2 className="h-4 w-4" /> : <VolumeX className="h-4 w-4" />}
-                        </button>
-                    </div>
+                    <button
+                        onClick={toggleVoiceMode}
+                        title={voiceMode ? 'Voice replies on' : 'Voice replies off'}
+                        className={`flex h-8 w-8 items-center justify-center rounded-full transition-colors ${
+                            voiceMode ? 'text-glow' : 'text-cream/50 hover:bg-white/5 hover:text-cream'
+                        }`}
+                    >
+                        {voiceMode ? <Volume2 className="h-4 w-4" /> : <VolumeX className="h-4 w-4" />}
+                    </button>
                 </div>
             </header>
 
-            {/* ── Messages  */}
-            <div ref={scrollRef} className="flex-1 overflow-y-auto">
-                <div className="mx-auto max-w-2xl px-4 py-6">
+            {/* ── Messages — min-h-0 lets the flex child actually scroll on mobile ── */}
+            <div ref={scrollRef} className="flex-1 min-h-0 overflow-y-auto overscroll-contain">
+                <div className="mx-auto flex min-h-full max-w-2xl flex-col px-4 py-6">
                     {messages.length === 0 && !thinking ? (
-                        <div className="flex h-full flex-col items-center justify-center gap-6">
+                        <div className="flex flex-1 flex-col items-center justify-center gap-6">
                             <Firefly mood="idle" size={120} glow={glowColors} />
                             <div className="text-center">
                                 <h2 className="font-display text-lg font-semibold text-cream">Ecla is ready</h2>
@@ -281,8 +281,8 @@ function ChatPageContent() {
                 </div>
             </div>
 
-            {/*Style Pill Composer*/}
-            <div className="z-40 border-t border-white/5 bg-night-950/70 backdrop-blur-md">
+            {/* ── Composer — ChatGPT-style pill ── */}
+            <div className="z-40 border-t border-white/5 bg-night-950/70 backdrop-blur-md pb-[env(safe-area-inset-bottom)]">
                 <div className="mx-auto max-w-2xl px-4 py-3">
                     {(recording || speaking) && (
                         <p className={`mb-2 text-center text-[11px] font-medium ${recording ? 'text-coral' : 'text-glow'}`}>
@@ -298,10 +298,10 @@ function ChatPageContent() {
                             onKeyDown={handleKeyDown}
                             placeholder="Ask Ecla anything…"
                             rows={1}
+                            enterKeyHint="send"
                             className="max-h-[120px] flex-1 resize-none self-center bg-transparent px-3 py-1.5 text-sm text-cream placeholder:text-cream/30 focus:outline-none"
                         />
 
-                        {/* Mic — dictate into the input */}
                         <button
                             onClick={recording ? stopRecording : startRecording}
                             disabled={thinking}
@@ -315,7 +315,6 @@ function ChatPageContent() {
                             <Mic className="h-4 w-4" />
                         </button>
 
-                        {/* Primary: send arrow when typing, voice mode when empty */}
                         <button
                             onClick={() => (input.trim() ? send(input) : setShowCall(true))}
                             disabled={thinking && !!input.trim()}
@@ -348,7 +347,7 @@ export default function ChatPage() {
     return (
         <Suspense
             fallback={
-                <div className="flex h-screen items-center justify-center bg-night-950">
+                <div className="flex h-dvh items-center justify-center bg-night-950">
                     <Firefly mood="thinking" size={80} />
                 </div>
             }
