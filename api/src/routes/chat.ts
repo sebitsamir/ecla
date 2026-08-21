@@ -1,6 +1,6 @@
 import { Router, Request, Response, NextFunction } from 'express'
 import { groq } from '../lib/groq'
-import { getOrSyncUser } from '../lib/auth'
+import { getOrSyncUserFast } from '../lib/auth'
 import { AppError } from '../lib/errors'
 import { chatSchema } from '../lib/schemas'
 import { motivationHints } from '../lib/ai'
@@ -53,7 +53,7 @@ router.post('/api/v1/chat', async (req: Request, res: Response, next: NextFuncti
             throw new AppError('Invalid chat data', 400)
         }
 
-        const user = await getOrSyncUser(req)
+        const user = await getOrSyncUserFast(req)
         const level = user.currentLevel ?? 'A1'
         const motivation = user.motivation ?? 'FUN'
 

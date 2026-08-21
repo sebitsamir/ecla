@@ -1,13 +1,13 @@
 import { Router, Request, Response, NextFunction } from 'express'
 import { prisma } from '../lib/prisma'
-import { getOrSyncUser } from '../lib/auth'
+import { getOrSyncUserFast } from '../lib/auth'
 import { cleanVariant } from '../lib/ai'
 
 const router = Router()
 
 router.get('/api/v1/dashboard', async (req: Request, res: Response, next: NextFunction) => {
     try {
-        const user = await getOrSyncUser(req)
+        const user = await getOrSyncUserFast(req)
 
         const today = new Date().toISOString().split('T')[0]
         const todayLog = await prisma.streakLog.findUnique({

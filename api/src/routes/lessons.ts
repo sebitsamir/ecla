@@ -1,6 +1,6 @@
 import { Router, Request, Response, NextFunction } from 'express'
 import { prisma } from '../lib/prisma'
-import { getOrSyncUser } from '../lib/auth'
+import { getOrSyncUserFast } from '../lib/auth'
 import { AppError } from '../lib/errors'
 import { cleanVariant } from '../lib/ai'
 import { lessonCompleteSchema } from '../lib/schemas'
@@ -11,7 +11,7 @@ const router = Router()
 
 router.get('/api/v1/lessons/:conceptId', async (req: Request, res: Response, next: NextFunction) => {
     try {
-        const user = await getOrSyncUser(req)
+        const user = await getOrSyncUserFast(req)
         const conceptId = req.params.conceptId as string
 
         // Honor the requested mode, fall back to preferred mode
@@ -62,7 +62,7 @@ router.post('/api/v1/lessons/complete', async (req: Request, res: Response, next
         if (!parsed.success) throw new AppError('Invalid completion data', 400)
 
         const { conceptId, subLessonId, mode, correctCount, incorrectCount, xpEarned } = parsed.data
-        const user = await getOrSyncUser(req)
+        const user = await getOrSyncUserFast(req)
 
         await prisma.userProgress.create({
             data: {

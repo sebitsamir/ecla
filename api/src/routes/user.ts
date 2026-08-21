@@ -1,6 +1,6 @@
 import { Router, Request, Response, NextFunction } from 'express'
 import { prisma } from '../lib/prisma'
-import { getOrSyncUser } from '../lib/auth'
+import { getOrSyncUserFast } from '../lib/auth'
 import { AppError } from '../lib/errors'
 import { onboardingSchema, modeSchema } from '../lib/schemas'
 
@@ -8,7 +8,7 @@ const router = Router()
 
 router.post('/api/v1/sync-user', async (req: Request, res: Response, next: NextFunction) => {
     try {
-        const user = await getOrSyncUser(req)
+        const user = await getOrSyncUserFast(req)
         res.json({ synced: true, user, onboardingCompleted: user.onboardingCompleted })
     } catch (error) { next(error) }
 })
@@ -16,7 +16,7 @@ router.post('/api/v1/sync-user', async (req: Request, res: Response, next: NextF
 router.post('/api/v1/onboarding/complete', async (req: Request, res: Response, next: NextFunction) => {
     try {
         const userId = require('../lib/auth').requireAuth(req)
-        await getOrSyncUser(req)
+        await getOrSyncUserFast(req)
 
         const parsed = onboardingSchema.safeParse(req.body)
         if (!parsed.success) throw new AppError('Invalid onboarding data', 400)
@@ -53,7 +53,7 @@ router.post('/api/v1/user/mode', async (req: Request, res: Response, next: NextF
         const parsed = modeSchema.safeParse(req.body)
         if (!parsed.success) throw new AppError('Invalid mode', 400)
 
-        const user = await getOrSyncUser(req)
+        const user = await getOrSyncUserFast(req)
         await prisma.user.update({ where: { id: user.id }, data: { preferredMode: parsed.data.mode } })
 
         res.json({ success: true })
@@ -65,7 +65,7 @@ router.post('/api/v1/user/cosmetics/equip', async (req: Request, res: Response, 
         const { cosmeticId } = req.body
         if (typeof cosmeticId !== 'string') throw new AppError('Invalid cosmetic', 400)
 
-        const user = await getOrSyncUser(req)
+        const user = await getOrSyncUserFast(req)
         if (!(user.unlockedCosmetics ?? ['gold']).includes(cosmeticId)) {
             throw new AppError('Cosmetic not unlocked yet', 403)
         }
@@ -77,7 +77,7 @@ router.post('/api/v1/user/cosmetics/equip', async (req: Request, res: Response, 
 
 router.get('/api/v1/user/cosmetics', async (req: Request, res: Response, next: NextFunction) => {
     try {
-        const user = await getOrSyncUser(req)
+        const user = await getOrSyncUserFast(req)
         res.json({
             unlockedCosmetics: user.unlockedCosmetics ?? ['gold'],
             equippedCosmetic: user.equippedCosmetic ?? 'gold',

@@ -3,7 +3,7 @@ import fs from 'fs'
 import os from 'os'
 import path from 'path'
 import { groq } from '../lib/groq'
-import { getOrSyncUser } from '../lib/auth'
+import { getOrSyncUserFast } from '../lib/auth'
 
 const router = Router()
 
@@ -12,7 +12,7 @@ router.post(
     raw({ type: ['audio/*', 'application/octet-stream'], limit: '15mb' }),
     async (req: Request, res: Response, next: NextFunction) => {
         try {
-            await getOrSyncUser(req)
+            await getOrSyncUserFast(req)
             const tmp = path.join(os.tmpdir(), `voice-${Date.now()}.webm`)
             fs.writeFileSync(tmp, req.body)
 
