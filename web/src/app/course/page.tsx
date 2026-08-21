@@ -238,10 +238,10 @@ function CourseSkeleton() {
 export default function CourseMapPage() {
     const router = useRouter()
     const { getToken } = useAuth()
-    
+
     // ── Core Data State ──
     const [units, setUnits] = useState<any[]>([])
-    
+
     // ── Mode State ──
     const [preferredMode, setPreferredMode] = useState<ModeId>(() => {
         // Initialize from localStorage on client-side only
@@ -249,22 +249,22 @@ export default function CourseMapPage() {
         const stored = localStorage.getItem('ecla-preferred-mode') as ModeId | null
         return stored && MODE_META[stored] ? stored : 'DRILL'
     })
-    
+
     // ── UI State ──
     const [mounted, setMounted] = useState(false)
     const [showModePicker, setShowModePicker] = useState(false)
     const [loading, setLoading] = useState(true)
-    
+
     // ── Concept Sheet State ──
     const [openConcept, setOpenConcept] = useState<any>(null)
     const [subLessons, setSubLessons] = useState<SubLessonData[]>([])
     const [completedSubIds, setCompletedSubIds] = useState<string[]>([])
     const [loadingSubs, setLoadingSubs] = useState(false)
-    
+
     // ── Bonus Chest State ──
     const [chestOpen, setChestOpen] = useState(false)
     const [joke, setJoke] = useState('')
-    
+
     const glowColors = useEquippedGlow()
 
     /**
@@ -420,7 +420,7 @@ export default function CourseMapPage() {
         if (isFinished(c)) {
             states[c.id] = c.status === 'mastered' ? 'mastered'
                 : c.status === 'struggling' ? 'struggling'
-                : 'completed'
+                    : 'completed'
             continue
         }
 
@@ -554,9 +554,17 @@ export default function CourseMapPage() {
                     const H = TOP + (items.length - 1) * SPACING + 170
                     const d = smoothPath(pts)
 
-                    /* Calculate how much of the path is lit (completed) */
+                    /* Calculate how much of the path is lit (completed)
+                    - Unit containing the current node → partial lit up to it
+                    - Fully finished unit → 100
+                    - Untouched unit → 0 (dashed only)                        */
+                    const FINISHED_STATES = ['mastered', 'completed', 'struggling']
+                    const conceptItems = items.filter((it: any) => it.kind === 'concept')
                     const idxCurrent = items.findIndex((it: any) => it.kind === 'concept' && states[it.concept.id] === 'current')
-                    const lit = idxCurrent === -1 ? 100 : Math.max(3, (idxCurrent / Math.max(1, items.length - 1)) * 100)
+                    const allFinished = conceptItems.length > 0 && conceptItems.every((it: any) => FINISHED_STATES.includes(states[it.concept.id]))
+                    const lit = idxCurrent !== -1
+                        ? Math.max(3, (idxCurrent / Math.max(1, items.length - 1)) * 100)
+                        : allFinished ? 100 : 0
 
                     return (
                         <section key={unit.id} className="mb-16 sm:mb-20">
@@ -772,13 +780,12 @@ export default function CourseMapPage() {
                                                 key={sub.id}
                                                 disabled={locked}
                                                 onClick={() => router.push(`/learn/${openConcept.id}?mode=${preferredMode}&part=${sub.id}`)}
-                                                className={`w-full flex items-center gap-2.5 sm:gap-3 rounded-xl border p-2.5 sm:p-3 text-left transition-all ${
-                                                    locked
+                                                className={`w-full flex items-center gap-2.5 sm:gap-3 rounded-xl border p-2.5 sm:p-3 text-left transition-all ${locked
                                                         ? 'border-white/5 bg-night-900/20 opacity-50 cursor-not-allowed'
                                                         : isNext
                                                             ? 'border-glow/40 bg-glow/5 hover:bg-glow/10'
                                                             : 'border-white/10 bg-night-900/40 hover:border-white/25 hover:bg-night-900'
-                                                }`}
+                                                    }`}
                                             >
                                                 <div className={`h-7 w-7 sm:h-8 sm:w-8 rounded-lg border flex items-center justify-center flex-shrink-0 ${done ? 'bg-leaf/10 border-leaf/30' : 'bg-night-800 border-white/10'}`}>
                                                     {done ? <CheckCircle2 className="h-3.5 w-3.5 sm:h-4 sm:w-4 text-leaf" /> : <SubIcon className="h-3.5 w-3.5 sm:h-4 sm:w-4 text-cream/70" />}
@@ -884,7 +891,7 @@ export default function CourseMapPage() {
             {chestOpen && (
                 <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-3 sm:p-4 backdrop-blur-sm">
                     <div className="w-full max-w-sm rounded-card border border-white/10 bg-night-800 p-5 sm:p-8 text-center shadow-glow-md">
-                        <div className="mb-3 sm:mb-4 flex justify-center"><Firefly mood="proud" size={90} glow={glowColors}/></div>
+                        <div className="mb-3 sm:mb-4 flex justify-center"><Firefly mood="proud" size={90} glow={glowColors} /></div>
                         <h3 className="font-display mb-2 text-xl sm:text-2xl font-bold text-cream">Bonus Chest!</h3>
                         <p className="mb-4 sm:mb-6 text-xs sm:text-sm leading-relaxed text-cream/70">{joke}</p>
                         <div className="mb-4 sm:mb-6 inline-flex items-center gap-2 rounded-full border border-glow/30 bg-glow/10 px-3 sm:px-4 py-1.5 sm:py-2 text-xs sm:text-sm font-bold text-glow">+15 XP</div>
