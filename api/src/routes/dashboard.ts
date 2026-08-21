@@ -15,14 +15,10 @@ router.get('/api/v1/dashboard', async (req: Request, res: Response, next: NextFu
         })
         const dailyXp = todayLog?.xpEarned || 0
 
-        // Calculate weekly XP (last 7 days) for future leaderboard support
         const weekAgo = new Date()
         weekAgo.setDate(weekAgo.getDate() - 7)
         const weeklyLogs = await prisma.streakLog.findMany({
-            where: {
-                userId: user.id,
-                date: { gte: weekAgo.toISOString().split('T')[0] }
-            }
+            where: { userId: user.id, date: { gte: weekAgo.toISOString().split('T')[0] } }
         })
         const weeklyXp = weeklyLogs.reduce((sum, log) => sum + log.xpEarned, 0)
 
@@ -73,26 +69,82 @@ router.get('/api/v1/dashboard', async (req: Request, res: Response, next: NextFu
             await prisma.user.update({ where: { id: user.id }, data: { unlockedCosmetics } })
         }
 
+        // ── NEXT LESSON — must agree with /api/v1/course/map ──
         const allConcepts = await prisma.concept.findMany({
             where: { unit: { course: { isPublished: true } } },
             orderBy: { orderIndex: 'asc' },
             include: {
                 variants: { where: { mode: user.preferredMode } },
+                subLessons: { orderBy: { orderIndex: 'asc' }, select: { id: true } },
                 mastery: { where: { userId: user.id } },
-                progress: { where: { userId: user.id, status: 'completed' } }
+                progress: { where: { userId: user.id, status: 'completed' } },
             },
         })
 
-        let nextConcept = allConcepts.find(c => c.progress.length === 0)
-        if (!nextConcept) {
+        let nextConcept: any = null
+        let accurateRan = false
+
+        // ACCURATE PATH: sub-lesson completion (same rule as the course map)
+        const subIds = allConcepts.flatMap(c => c.subLessons.map(s => s.id))
+        if (subIds.length > 0) {
+            try {
+                const p = prisma as any
+                // Table name varies per schema — detect whichever exists
+                const subModel =
+                    p.subLessonProgress || p.subLessonCompletion || p.subLessonProgression ||
+                    p.lessonProgress || p.userSubLessonProgress || null
+
+                let doneIds: string[] = []
+                if (subModel) {
+                    const rows = await subModel.findMany({
+                        where: { userId: user.id, subLessonId: { in: subIds } },
+                        select: { subLessonId: true },
+                    })
+                    doneIds = rows.map((r: any) => r.subLessonId)
+                } else {
+                    // Completions may live inside userProgress with a subLessonId column
+                    const rows = await prisma.userProgress.findMany({
+                        where: { userId: user.id, subLessonId: { in: subIds } },
+                        select: { subLessonId: true },
+                    })
+                    doneIds = rows.map((r: any) => r.subLessonId).filter(Boolean)
+                }
+                const doneSet = new Set(doneIds)
+
+                accurateRan = true
+                nextConcept = allConcepts.find(c => {
+                    if (c.subLessons.length === 0) return c.progress.length === 0
+                    const done = c.subLessons.filter(s => doneSet.has(s.id)).length
+                    return done < c.subLessons.length
+                }) ?? null
+            } catch (e: any) {
+                console.warn('[DASHBOARD] accurate next-lesson lookup failed, using legacy:', e?.message)
+            }
+        }
+
+        // LEGACY FALLBACK (old behavior) only if the accurate path couldn't run
+        if (!accurateRan && !nextConcept) {
+            nextConcept = allConcepts.find(c => c.progress.length === 0) ?? null
+            if (!nextConcept) {
+                nextConcept = allConcepts.find(c => {
+                    const m = c.mastery[0]
+                    const total = (m?.correctCount || 0) + (m?.incorrectCount || 0)
+                    const acc = total > 0 ? m.correctCount / total : 1
+                    return total >= 2 && acc < 0.8
+                }) ?? null
+            }
+            if (!nextConcept && allConcepts.length > 0) nextConcept = allConcepts[0]
+        }
+
+        // Accurate path ran and nothing unfinished → maybe show a struggling concept
+        if (accurateRan && !nextConcept) {
             nextConcept = allConcepts.find(c => {
                 const m = c.mastery[0]
                 const total = (m?.correctCount || 0) + (m?.incorrectCount || 0)
-                const acc = total > 0 ? m!.correctCount / total : 1
+                const acc = total > 0 ? m.correctCount / total : 1
                 return total >= 2 && acc < 0.8
-            })
+            }) ?? null
         }
-        if (!nextConcept && allConcepts.length > 0) nextConcept = allConcepts[0]
 
         if (!nextConcept || nextConcept.variants.length === 0) {
             return res.json({
@@ -106,10 +158,8 @@ router.get('/api/v1/dashboard', async (req: Request, res: Response, next: NextFu
 
         const mastery = nextConcept.mastery[0]
         const totalAttempts = (mastery?.correctCount || 0) + (mastery?.incorrectCount || 0)
-        const accuracy = totalAttempts > 0 ? (mastery!.correctCount / totalAttempts) : 1
-
-        let reviewRequired = false
-        if (totalAttempts >= 2 && accuracy < 0.6) reviewRequired = true
+        const accuracy = totalAttempts > 0 ? (mastery.correctCount / totalAttempts) : 1
+        const reviewRequired = totalAttempts >= 2 && accuracy < 0.6
 
         res.json({
             dailyXp, weeklyXp, totalXp: user.xpTotal,
