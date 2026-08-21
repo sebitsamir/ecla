@@ -1,6 +1,6 @@
 import { Router, Request, Response, NextFunction } from 'express'
 import { prisma } from '../lib/prisma'
-import { getOrSyncUser } from '../lib/auth'
+import { getOrSyncUserFast } from '../lib/auth'
 import { AppError } from '../lib/errors'
 import { flashcardReviewSchema } from '../lib/schemas'
 
@@ -8,7 +8,7 @@ const router = Router()
 
 router.get('/api/v1/flashcards/due', async (req: Request, res: Response, next: NextFunction) => {
     try {
-        const user = await getOrSyncUser(req)
+        const user = await getOrSyncUserFast(req)
         const now = new Date()
 
         const allVocab = await prisma.vocabulary.findMany({ where: { courseId: 'course-spanish-a1' } })
@@ -34,7 +34,7 @@ router.post('/api/v1/flashcards/review', async (req: Request, res: Response, nex
         if (!parsed.success) throw new AppError('Invalid review data', 400)
 
         const { vocabId, quality } = parsed.data
-        const user = await getOrSyncUser(req)
+        const user = await getOrSyncUserFast(req)
 
         let prog = await prisma.userVocabProgress.findFirst({ where: { userId: user.id, vocabId } })
 

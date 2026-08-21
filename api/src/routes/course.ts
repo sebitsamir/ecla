@@ -1,12 +1,12 @@
 import { Router, Request, Response, NextFunction } from 'express'
 import { prisma } from '../lib/prisma'
-import { getOrSyncUser } from '../lib/auth'
+import { getOrSyncUserFast } from '../lib/auth'
 
 const router = Router()
 
 router.get('/api/v1/course/map', async (req: Request, res: Response, next: NextFunction) => {
     try {
-        const user = await getOrSyncUser(req)
+        const user = await getOrSyncUserFast(req)
 
         const course = await prisma.course.findFirst({
             where: { isPublished: true },

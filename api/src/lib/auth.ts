@@ -3,6 +3,32 @@ import { clerkClient, getAuth } from '@clerk/express'
 import { prisma } from './prisma'
 import { AppError } from './errors'
 
+// USER CACHE: 60s TTL, bounded to 500 users
+const userCache = new Map<string, { at: number; user: any }>()
+
+export async function getOrSyncUserFast(req: any) {
+    const id = req.auth?.userId
+    if (!id) return getOrSyncUser(req)
+    
+    const hit = userCache.get(id)
+    if (hit && Date.now() - hit.at < 60_000) {
+        return hit.user
+    }
+    
+    const user = await getOrSyncUser(req)
+    userCache.set(id, { at: Date.now(), user })
+    
+    // Prevent memory leaks
+    if (userCache.size > 500) {
+        const now = Date.now()
+        for (const [k, v] of userCache) {
+            if (now - v.at > 60_000) userCache.delete(k)
+        }
+    }
+    
+    return user
+}
+
 export function requireAuth(req: Request): string {
     const { userId } = getAuth(req)
     if (!userId) {
