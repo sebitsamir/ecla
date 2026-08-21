@@ -1,8 +1,27 @@
+/**
+ * Course Map Route — ECLA schema adapter
+ * 
+ * Reads: Course → Unit → Competency (+ mastery, experiences, prerequisites)
+ * Emits: the SAME shape the course page already consumes:
+ *   { units: [{ id, title, concepts: [{ id, name, status, isAvailable,
+ *     completedSubLessons, totalSubLessons, subLessonProgress, accuracy, modes }] }],
+ *     preferredMode }
+ * 
+ * Mapping (spec §12):
+ * - Concept          → Competency
+ * - SubLessons       → LearningExperiences (completion = UserExperienceProgress)
+ * - Mastery 80% rule → CompetencyMastery.level (CONTROLLED/TRANSFERRED/RETAINED = finished)
+ * - Linear unlock    → CompetencyPrerequisite graph (available when all prereqs finished)
+ */
+
 import { Router, Request, Response, NextFunction } from 'express'
 import { prisma } from '../lib/prisma'
 import { getOrSyncUserFast } from '../lib/auth'
 
 const router = Router()
+
+// §6.4 — levels that count as "finished" for unlocking dependents
+const FINISHED_LEVELS = ['CONTROLLED', 'TRANSFERRED', 'RETAINED']
 
 router.get('/api/v1/course/map', async (req: Request, res: Response, next: NextFunction) => {
     try {
@@ -14,16 +33,31 @@ router.get('/api/v1/course/map', async (req: Request, res: Response, next: NextF
                 units: {
                     orderBy: { orderIndex: 'asc' },
                     include: {
-                        concepts: {
+                        competencies: {
                             orderBy: { orderIndex: 'asc' },
                             include: {
                                 mastery: { where: { userId: user.id } },
-                                variants: { select: { mode: true } },
-                                subLessons: { select: { id: true } },
-                                progress: {
-                                    where: { userId: user.id },
-                                    select: { subLessonId: true, status: true }
-                                }
+                                experiences: {
+                                    orderBy: { orderIndex: 'asc' },
+                                    select: {
+                                        id: true,
+                                        type: true,
+                                        progress: { where: { userId: user.id }, select: { status: true } },
+                                    },
+                                },
+                                prerequisitesAsCompetency: {
+                                    select: {
+                                        prerequisite: {
+                                            select: {
+                                                id: true,
+                                                mastery: { where: { userId: user.id }, select: { level: true } },
+                                                experiences: {
+                                                    select: { id: true, progress: { where: { userId: user.id }, select: { status: true } } },
+                                                },
+                                            },
+                                        },
+                                    },
+                                },
                             },
                         },
                     },
@@ -31,69 +65,60 @@ router.get('/api/v1/course/map', async (req: Request, res: Response, next: NextF
             },
         })
 
-        if (!course) return res.json({ units: [], userXp: { total: user.xpTotal, weekly: 0 } })
+        if (!course) return res.json({ units: [], preferredMode: user.preferredMode })
 
-        // Calculate weekly XP
-        const weekAgo = new Date()
-        weekAgo.setDate(weekAgo.getDate() - 7)
-        const weeklyLogs = await prisma.streakLog.findMany({
-            where: {
-                userId: user.id,
-                date: { gte: weekAgo.toISOString().split('T')[0] }
-            }
-        })
-        const weeklyXp = weeklyLogs.reduce((sum, log) => sum + log.xpEarned, 0)
+        // A competency is FINISHED when mastery says so, or all its experiences are completed
+        const finishedOf = (c: any): boolean => {
+            const m = c.mastery?.[0]
+            if (m && FINISHED_LEVELS.includes(m.level)) return true
+            const exps = c.experiences ?? []
+            if (exps.length === 0) return false
+            return exps.every((e: any) => e.progress?.[0]?.status === 'completed')
+        }
 
-        const units = course.units.map(unit => ({
-            id: unit.id,
-            title: unit.title,
-            concepts: unit.concepts.map(concept => {
-                const mastery = concept.mastery[0]
-                const totalAttempts = (mastery?.correctCount || 0) + (mastery?.incorrectCount || 0)
-                const accuracy = totalAttempts > 0 ? mastery!.correctCount / totalAttempts : 0
+        // Pass 1: finished map (needed for prerequisite availability checks)
+        const finishedMap = new Map<string, boolean>()
+        for (const u of course.units) for (const c of u.competencies) finishedMap.set(c.id, finishedOf(c))
 
-                let status: 'mastered' | 'struggling' | 'in_progress' | 'not_started' = 'not_started'
-                if (totalAttempts === 0) status = 'not_started'
-                else if (accuracy >= 0.8) status = 'mastered'
-                else if (accuracy < 0.6) status = 'struggling'
-                else status = 'in_progress'
+        // Pass 2: build the UI contract
+        const units = course.units.map((u: any) => ({
+            id: u.id,
+            title: u.title,
+            description: u.description,
+            concepts: u.competencies.map((c: any) => {
+                const exps = c.experiences ?? []
+                const total = exps.length
+                const done = exps.filter((e: any) => e.progress?.[0]?.status === 'completed').length
 
-                const modes = concept.variants.map((v: any) => v.mode)
+                const m = c.mastery?.[0]
+                const attempts = (m?.successCount ?? 0) + (m?.failureCount ?? 0)
+                const accuracy = attempts > 0 ? Math.round(((m?.successCount ?? 0) / attempts) * 100) : 0
+                const finished = finishedMap.get(c.id)
 
-                // Calculate sub-lesson completion
-                const completedSubLessons = concept.progress
-                    .filter(p => p.status === 'completed' && p.subLessonId)
-                    .map(p => p.subLessonId)
-                const totalSubLessons = concept.subLessons.length
-                const subLessonProgress = totalSubLessons > 0 
-                    ? Math.round((completedSubLessons.length / totalSubLessons) * 100)
-                    : 0
+                // §5.8 — no artificial prerequisites: available iff every prereq is finished
+                const isAvailable = (c.prerequisitesAsCompetency ?? []).every((p: any) => finishedMap.get(p.prerequisite.id))
+
+                const status = finished
+                    ? (m && (m.level === 'RETAINED' || m.level === 'TRANSFERRED') ? 'mastered'
+                        : (attempts >= 2 && accuracy > 0 && accuracy < 60 ? 'struggling' : 'completed'))
+                    : (done > 0 ? 'in_progress' : 'available')
 
                 return {
-                    id: concept.id,
-                    name: concept.name,
-                    xpReward: concept.xpReward,
-                    grammarNote: concept.grammarNote,
-                    modes,
-                    isAvailable: modes.includes(user.preferredMode),
+                    id: c.id,
+                    name: c.title,
                     status,
-                    accuracy: Math.round(accuracy * 100),
-                    subLessonProgress,
-                    completed: concept.progress.length > 0,
-                    completedSubLessons: completedSubLessons.length,
-                    totalSubLessons,
+                    isAvailable,
+                    completedSubLessons: done,
+                    totalSubLessons: total,
+                    subLessonProgress: total ? Math.round((done / total) * 100) : 0,
+                    accuracy,
+                    modes: ['STORY', 'DRILL', 'IMMERSION', 'PROFESSIONAL'],
+                    xpReward: c.xpReward,
                 }
             }),
         }))
 
-        res.json({
-            units,
-            preferredMode: user.preferredMode,
-            userXp: {
-                total: user.xpTotal,
-                weekly: weeklyXp,
-            }
-        })
+        res.json({ units, preferredMode: user.preferredMode })
     } catch (error) { next(error) }
 })
 

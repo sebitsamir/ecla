@@ -1,122 +1,212 @@
+/**
+ * Lessons Route — ECLA schema adapter
+ * 
+ * GET  /api/v1/lessons/:conceptId  → competency + its LearningExperiences as "subLessons"
+ * POST /api/v1/lessons/complete    → writes evidence:
+ *      UserExperienceProgress + CompetencyMastery + StreakLog + User.xpTotal
+ * 
+ * Experience content from seed.ts already matches the lesson player shape
+ * ({ teach, exercises, realLife }) — we only normalize type names so the
+ * existing frontend renders everything without changes.
+ */
+
 import { Router, Request, Response, NextFunction } from 'express'
 import { prisma } from '../lib/prisma'
 import { getOrSyncUserFast } from '../lib/auth'
 import { AppError } from '../lib/errors'
-import { cleanVariant } from '../lib/ai'
 import { lessonCompleteSchema } from '../lib/schemas'
 
-const VALID_MODES = ['STORY', 'DRILL', 'IMMERSION', 'PROFESSIONAL']
-
 const router = Router()
+
+// ── Normalizers: seed content types → lesson player types ──
+const TEACH_TYPE: Record<string, string> = {
+    story: 'explain', explanation: 'explain', rule: 'explain', context: 'explain', mission: 'explain',
+}
+const TYPE_ICON: Record<string, string> = {
+    STORY: 'book-open', DRILL: 'puzzle', IMMERSION: 'ear', PROFESSIONAL: 'lightbulb', MISSION: 'message-circle',
+}
+
+function normalizeTeach(blocks: any[]): any[] {
+    return (blocks ?? []).map(b => ({ ...b, type: TEACH_TYPE[b.type] ?? b.type }))
+}
+
+function normalizeExercise(ex: any): any {
+    switch (ex?.type) {
+        case 'recognition':
+        case 'meaning':
+        case 'selection':
+            return { type: 'mcq', prompt: ex.prompt, options: ex.options ?? [], answer: ex.answer ?? '' }
+        case 'recall':
+            return { type: 'fill_blank', prompt: ex.prompt ?? 'Complete the expression.', answer: ex.answer ?? '' }
+        default:
+            return ex
+    }
+}
 
 router.get('/api/v1/lessons/:conceptId', async (req: Request, res: Response, next: NextFunction) => {
     try {
         const user = await getOrSyncUserFast(req)
-        const conceptId = req.params.conceptId as string
 
-        // Honor the requested mode, fall back to preferred mode
-        const requested = req.query.mode as string | undefined
-        const mode = requested && VALID_MODES.includes(requested) ? requested : user.preferredMode
-
-        const concept = await prisma.concept.findUnique({
-            where: { id: conceptId },
+        const competency = await prisma.competency.findUnique({
+            where: { id: req.params.conceptId },
             include: {
-                variants: { where: { mode } },
-                subLessons: { orderBy: { orderIndex: 'asc' } },
+                experiences: { orderBy: { orderIndex: 'asc' } },
+                realizations: { where: { languageId: { equals: undefined } } as any, include: undefined as any } as any, // filled below
             },
-        }) as any
+        }).catch(() => null)
 
-        if (!concept || concept.variants.length === 0) {
-            throw new AppError('Lesson not found or not available in this mode', 404)
-        }
-
-        const completedRows = await prisma.userProgress.findMany({
-            where: { userId: user.id, conceptId: concept.id, status: 'completed', subLessonId: { not: null } },
-            select: { subLessonId: true },
-            distinct: ['subLessonId'],
+        // realizations filtered separately (cleaner than nested where on relation)
+        const comp = await prisma.competency.findUnique({
+            where: { id: req.params.conceptId },
+            include: { experiences: { orderBy: { orderIndex: 'asc' } } },
         })
-        const completedSubLessonIds = completedRows
-            .map(r => r.subLessonId)
-            .filter((id): id is string => id !== null)
+        if (!comp) throw new AppError('Lesson not found', 404)
+
+        const realization = await prisma.languageRealization.findFirst({
+            where: { competencyId: comp.id },
+        })
+
+        const progress = await prisma.userExperienceProgress.findMany({
+            where: { userId: user.id, experienceId: { in: comp.experiences.map(e => e.id) } },
+        })
+        const completedIds = progress.filter(p => p.status === 'completed').map(p => p.experienceId)
+
+        const perPartXp = Math.max(5, Math.round(comp.xpReward / Math.max(1, comp.experiences.length)))
+
+        const subLessons = comp.experiences.map((e: any) => {
+            const content = (e.content ?? {}) as any
+            return {
+                id: e.id,
+                conceptId: comp.id,
+                orderIndex: e.orderIndex,
+                title: e.title,
+                icon: TYPE_ICON[e.type] ?? 'book-open',
+                type: e.type,
+                xpReward: perPartXp,
+                teach: normalizeTeach(content.teach),
+                exercises: (content.exercises ?? []).map(normalizeExercise),
+                realLife: content.realLife ?? null,
+            }
+        })
+
+        // Per-mode flavor text from the matching experience's first teach block
+        const flavorOf = (type: string) => {
+            const e = comp.experiences.find(x => x.type === type)
+            return ((e?.content as any)?.teach?.[0]?.text) ?? null
+        }
 
         res.json({
             lesson: {
-                conceptId: concept.id,
-                conceptName: concept.name,
-                grammarNote: concept.grammarNote,
-                mode,
-                variant: cleanVariant(concept.variants[0]),
-                subLessons: concept.subLessons,
-                completedSubLessonIds,
+                conceptId: comp.id,
+                conceptName: comp.title,
+                canDo: comp.canDo,
+                mode: req.query.mode ?? user.preferredMode,
+                xpReward: comp.xpReward,
+                grammarNote: realization?.grammarNote ?? null,
+                variant: {
+                    storyBeat: flavorOf('STORY'),
+                    culturalRef: flavorOf('IMMERSION'),
+                    formalPhrase: flavorOf('PROFESSIONAL'),
+                },
+                subLessons,
+                completedSubLessonIds: completedIds,
                 equippedCosmetic: user.equippedCosmetic ?? 'gold',
             },
         })
-    } catch (error) {
-        next(error)
-    }
+    } catch (error) { next(error) }
 })
 
+/**
+ * Complete one part (experience) of a competency.
+ * Evidence-based: updates mastery counts + level per §6.4,
+ * schedules retention review per §6.5, logs streak + XP.
+ */
 router.post('/api/v1/lessons/complete', async (req: Request, res: Response, next: NextFunction) => {
     try {
-        const parsed = lessonCompleteSchema.safeParse(req.body)
-        if (!parsed.success) throw new AppError('Invalid completion data', 400)
-
-        const { conceptId, subLessonId, mode, correctCount, incorrectCount, xpEarned } = parsed.data
         const user = await getOrSyncUserFast(req)
 
-        await prisma.userProgress.create({
-            data: {
-                userId: user.id,
-                conceptId,
-                subLessonId: subLessonId ?? null,
-                modeUsed: mode,
-                status: 'completed',
-                score: correctCount,
-                xpEarned,
-                completedAt: new Date(),
-            },
-        })
+        const parsed = lessonCompleteSchema.safeParse(req.body)
+        if (!parsed.success) throw new AppError('Invalid completion data', 400)
+        const { conceptId, subLessonId, correctCount, incorrectCount, xpEarned } = parsed.data
 
-        await prisma.conceptMastery.upsert({
-            where: { userId_conceptId: { userId: user.id, conceptId } },
-            update: {
-                correctCount: { increment: correctCount },
-                incorrectCount: { increment: incorrectCount },
-                lastSeenAt: new Date(),
-            },
-            create: { userId: user.id, conceptId, correctCount, incorrectCount },
-        })
-
-        const today = new Date().toISOString().split('T')[0]
-        const yesterday = new Date(Date.now() - 86400000).toISOString().split('T')[0]
-
-        const existingTodayLog = await prisma.streakLog.findUnique({
-            where: { userId_date: { userId: user.id, date: today } }
-        })
-
-        await prisma.streakLog.upsert({
-            where: { userId_date: { userId: user.id, date: today } },
-            update: { xpEarned: { increment: xpEarned }, lessonsDone: { increment: 1 } },
-            create: { userId: user.id, date: today, xpEarned, lessonsDone: 1 },
-        })
-
-        let newStreakDays = user.streakDays
-        if (!existingTodayLog) {
-            const yesterdayLog = await prisma.streakLog.findUnique({
-                where: { userId_date: { userId: user.id, date: yesterday } }
+        // 1) Experience progress
+        if (subLessonId) {
+            await prisma.userExperienceProgress.upsert({
+                where: { userId_experienceId: { userId: user.id, experienceId: subLessonId } },
+                update: {
+                    status: 'completed',
+                    score: correctCount,
+                    attempts: { increment: 1 },
+                    xpEarned: { increment: xpEarned },
+                    completedAt: new Date(),
+                    lastAttemptAt: new Date(),
+                },
+                create: {
+                    userId: user.id,
+                    experienceId: subLessonId,
+                    status: 'completed',
+                    score: correctCount,
+                    attempts: 1,
+                    xpEarned,
+                    completedAt: new Date(),
+                    lastAttemptAt: new Date(),
+                },
             })
-            newStreakDays = yesterdayLog ? user.streakDays + 1 : 1
         }
 
-        const updatedUser = await prisma.user.update({
-            where: { id: user.id },
-            data: { xpTotal: { increment: xpEarned }, streakDays: newStreakDays, lastActiveAt: new Date() },
+        // 2) Competency mastery — recompute level from evidence
+        const exps = await prisma.learningExperience.findMany({
+            where: { competencyId: conceptId }, select: { id: true, type: true },
+        })
+        const prog = await prisma.userExperienceProgress.findMany({
+            where: { userId: user.id, experienceId: { in: exps.map(e => e.id) } },
+        })
+        const completedSet = new Set(prog.filter(p => p.status === 'completed').map(p => p.experienceId))
+        if (subLessonId) completedSet.add(subLessonId)
+
+        const allDone = exps.length > 0 && exps.every(e => completedSet.has(e.id))
+        const missionDone = exps.some(e => e.type === 'MISSION' && completedSet.has(e.id))
+        const level = allDone ? (missionDone ? 'TRANSFERRED' : 'CONTROLLED') : 'DEVELOPING'
+
+        await prisma.competencyMastery.upsert({
+            where: { userId_competencyId: { userId: user.id, competencyId: conceptId } },
+            update: {
+                successCount: { increment: correctCount },
+                failureCount: { increment: incorrectCount },
+                exposureCount: { increment: 1 },
+                transferCount: missionDone && allDone ? { increment: 1 } : undefined,
+                level,
+                lastAssessedAt: new Date(),
+                nextReviewAt: new Date(Date.now() + 2 * 24 * 3600 * 1000), // §6.5: Day 1 → Day 2
+            },
+            create: {
+                userId: user.id,
+                competencyId: conceptId,
+                level,
+                exposureCount: 1,
+                successCount: correctCount,
+                failureCount: incorrectCount,
+                lastAssessedAt: new Date(),
+                nextReviewAt: new Date(Date.now() + 2 * 24 * 3600 * 1000),
+            },
         })
 
-        res.json({ success: true, newXpTotal: updatedUser.xpTotal, newStreak: newStreakDays })
-    } catch (error) {
-        next(error)
-    }
+        // 3) XP + streak
+        const today = new Date().toISOString().split('T')[0]
+        await prisma.$transaction([
+            prisma.user.update({
+                where: { id: user.id },
+                data: { xpTotal: { increment: xpEarned }, lastActiveAt: new Date() },
+            }),
+            prisma.streakLog.upsert({
+                where: { userId_date: { userId: user.id, date: today } },
+                update: { xpEarned: { increment: xpEarned }, lessonsDone: { increment: 1 } },
+                create: { userId: user.id, date: today, xpEarned, lessonsDone: 1 },
+            }),
+        ])
+
+        res.json({ success: true, xpEarned })
+    } catch (error) { next(error) }
 })
 
 export default router

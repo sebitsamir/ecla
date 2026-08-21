@@ -1,42 +1,65 @@
+/**
+ * Dashboard Route — ECLA schema adapter
+ * 
+ * Same response contract the dashboard page already consumes:
+ *   dailyXp, weeklyXp, totalXp, streakDays, preferredMode, nextLesson,
+ *   comboStreak, glowTier, glowNext, activeDays, unlockedCosmetics,
+ *   equippedCosmetic, newUnlocks, reviewRequired, accuracy
+ * 
+ * Source mapping (old → new):
+ * - userProgress        → UserExperienceProgress (combo streak, lessonsDone)
+ * - conceptMastery      → CompetencyMastery (mastered count, next lesson)
+ * - concept/variant     → Competency + LearningExperience flavor text
+ * - streakLog           → StreakLog (unchanged)
+ * 
+ * nextLesson rule: first AVAILABLE (prereqs finished) and NOT FINISHED
+ * competency — identical to course map, so the two never disagree.
+ */
+
 import { Router, Request, Response, NextFunction } from 'express'
 import { prisma } from '../lib/prisma'
 import { getOrSyncUserFast } from '../lib/auth'
-import { cleanVariant } from '../lib/ai'
 
 const router = Router()
+
+// §6.4 — levels that count as finished
+const FINISHED_LEVELS = ['CONTROLLED', 'TRANSFERRED', 'RETAINED'] as any[]
 
 router.get('/api/v1/dashboard', async (req: Request, res: Response, next: NextFunction) => {
     try {
         const user = await getOrSyncUserFast(req)
 
+        // ── Daily / weekly XP (StreakLog unchanged) ──
         const today = new Date().toISOString().split('T')[0]
         const todayLog = await prisma.streakLog.findUnique({
-            where: { userId_date: { userId: user.id, date: today } }
+            where: { userId_date: { userId: user.id, date: today } },
         })
         const dailyXp = todayLog?.xpEarned || 0
 
         const weekAgo = new Date()
         weekAgo.setDate(weekAgo.getDate() - 7)
         const weeklyLogs = await prisma.streakLog.findMany({
-            where: { userId: user.id, date: { gte: weekAgo.toISOString().split('T')[0] } }
+            where: { userId: user.id, date: { gte: weekAgo.toISOString().split('T')[0] } },
         })
         const weeklyXp = weeklyLogs.reduce((sum, log) => sum + log.xpEarned, 0)
 
-        const recentProgress = await prisma.userProgress.findMany({
+        // ── Combo streak: consecutive recent experiences with score > 0 ──
+        const recent = await prisma.userExperienceProgress.findMany({
             where: { userId: user.id },
-            orderBy: { completedAt: 'desc' },
+            orderBy: { lastAttemptAt: 'desc' },
             take: 5,
         })
         let comboStreak = 0
-        for (const p of recentProgress) {
+        for (const p of recent) {
             if (p.score === null || p.score === 0) break
             comboStreak += p.score
         }
 
+        // ── Active days + glow tier ──
         const thirtyDaysAgo = new Date()
         thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30)
         const activeDays = await prisma.streakLog.count({
-            where: { userId: user.id, date: { gte: thirtyDaysAgo.toISOString().split('T')[0] } }
+            where: { userId: user.id, date: { gte: thirtyDaysAgo.toISOString().split('T')[0] } },
         })
 
         let glowTier = 'Dim'
@@ -46,12 +69,13 @@ router.get('/api/v1/dashboard', async (req: Request, res: Response, next: NextFu
         else if (activeDays >= 7) { glowTier = 'Warm'; glowNext = 14 - activeDays }
         else { glowTier = 'Dim'; glowNext = 7 - activeDays }
 
-        const masteryRows = await prisma.conceptMastery.findMany({ where: { userId: user.id } })
-        const masteredCount = masteryRows.filter(m => {
-            const total = m.correctCount + m.incorrectCount
-            return total >= 2 && m.correctCount / total >= 0.8
-        }).length
-        const lessonsDone = await prisma.userProgress.count({ where: { userId: user.id } })
+        // ── Cosmetic unlock conditions (new evidence sources) ──
+        const masteredCount = await prisma.competencyMastery.count({
+            where: { userId: user.id, level: { in: FINISHED_LEVELS } },
+        })
+        const lessonsDone = await prisma.userExperienceProgress.count({
+            where: { userId: user.id, status: 'completed' },
+        })
 
         const conditions: Record<string, boolean> = {
             gold: true,
@@ -69,110 +93,106 @@ router.get('/api/v1/dashboard', async (req: Request, res: Response, next: NextFu
             await prisma.user.update({ where: { id: user.id }, data: { unlockedCosmetics } })
         }
 
-        // ── NEXT LESSON — must agree with /api/v1/course/map ──
-        const allConcepts = await prisma.concept.findMany({
-            where: { unit: { course: { isPublished: true } } },
-            orderBy: { orderIndex: 'asc' },
+        // ── Next lesson: first available + unfinished competency ──
+        const course = await prisma.course.findFirst({
+            where: { isPublished: true },
             include: {
-                variants: { where: { mode: user.preferredMode } },
-                subLessons: { orderBy: { orderIndex: 'asc' }, select: { id: true } },
-                mastery: { where: { userId: user.id } },
-                progress: { where: { userId: user.id, status: 'completed' } },
+                units: {
+                    orderBy: { orderIndex: 'asc' },
+                    include: {
+                        competencies: {
+                            orderBy: { orderIndex: 'asc' },
+                            include: {
+                                mastery: { where: { userId: user.id } },
+                                experiences: {
+                                    orderBy: { orderIndex: 'asc' },
+                                    select: { id: true, progress: { where: { userId: user.id }, select: { status: true } } },
+                                },
+                                prerequisitesAsCompetency: {
+                                    select: {
+                                        prerequisite: {
+                                            select: {
+                                                id: true,
+                                                mastery: { where: { userId: user.id }, select: { level: true } },
+                                                experiences: { select: { id: true, progress: { where: { userId: user.id }, select: { status: true } } } },
+                                            },
+                                        },
+                                    },
+                                },
+                            },
+                        },
+                    },
+                },
             },
         })
 
-        let nextConcept: any = null
-        let accurateRan = false
+        let nextLesson: any = null
+        if (course) {
+            const finishedOf = (c: any): boolean => {
+                const m = c.mastery?.[0]
+                if (m && FINISHED_LEVELS.includes(m.level)) return true
+                const exps = c.experiences ?? []
+                if (exps.length === 0) return false
+                return exps.every((e: any) => e.progress?.[0]?.status === 'completed')
+            }
 
-        // ACCURATE PATH: sub-lesson completion (same rule as the course map)
-        const subIds = allConcepts.flatMap(c => c.subLessons.map(s => s.id))
-        if (subIds.length > 0) {
-            try {
-                const p = prisma as any
-                // Table name varies per schema — detect whichever exists
-                const subModel =
-                    p.subLessonProgress || p.subLessonCompletion || p.subLessonProgression ||
-                    p.lessonProgress || p.userSubLessonProgress || null
+            const finishedMap = new Map<string, boolean>()
+            for (const u of course.units) for (const c of u.competencies) finishedMap.set(c.id, finishedOf(c))
 
-                let doneIds: string[] = []
-                if (subModel) {
-                    const rows = await subModel.findMany({
-                        where: { userId: user.id, subLessonId: { in: subIds } },
-                        select: { subLessonId: true },
-                    })
-                    doneIds = rows.map((r: any) => r.subLessonId)
-                } else {
-                    // Completions may live inside userProgress with a subLessonId column
-                    const rows = await prisma.userProgress.findMany({
-                        where: { userId: user.id, subLessonId: { in: subIds } },
-                        select: { subLessonId: true },
-                    })
-                    doneIds = rows.map((r: any) => r.subLessonId).filter(Boolean)
+            let nextConcept: any = null
+            outer: for (const u of course.units) {
+                for (const c of u.competencies) {
+                    const available = (c.prerequisitesAsCompetency ?? []).every((p: any) => finishedMap.get(p.prerequisite.id))
+                    if (available && !finishedMap.get(c.id)) { nextConcept = c; break outer }
                 }
-                const doneSet = new Set(doneIds)
+            }
 
-                accurateRan = true
-                nextConcept = allConcepts.find(c => {
-                    if (c.subLessons.length === 0) return c.progress.length === 0
-                    const done = c.subLessons.filter(s => doneSet.has(s.id)).length
-                    return done < c.subLessons.length
-                }) ?? null
-            } catch (e: any) {
-                console.warn('[DASHBOARD] accurate next-lesson lookup failed, using legacy:', e?.message)
+            if (nextConcept) {
+                // Flavor text per mode from the matching experience's first teach block
+                const [exps, realization] = await Promise.all([
+                    prisma.learningExperience.findMany({
+                        where: { competencyId: nextConcept.id },
+                        orderBy: { orderIndex: 'asc' },
+                    }),
+                    prisma.languageRealization.findFirst({ where: { competencyId: nextConcept.id } }),
+                ])
+                const flavorOf = (type: string) => {
+                    const e = exps.find(x => x.type === type)
+                    return ((e?.content as any)?.teach?.[0]?.text) ?? null
+                }
+
+                nextLesson = {
+                    conceptId: nextConcept.id,
+                    conceptName: nextConcept.title,
+                    canDo: nextConcept.canDo,
+                    xpReward: nextConcept.xpReward,
+                    mode: user.preferredMode,
+                    variant: {
+                        storyBeat: flavorOf('STORY'),
+                        culturalRef: flavorOf('IMMERSION'),
+                        formalPhrase: flavorOf('PROFESSIONAL'),
+                    },
+                }
             }
         }
-
-        // LEGACY FALLBACK (old behavior) only if the accurate path couldn't run
-        if (!accurateRan && !nextConcept) {
-            nextConcept = allConcepts.find(c => c.progress.length === 0) ?? null
-            if (!nextConcept) {
-                nextConcept = allConcepts.find(c => {
-                    const m = c.mastery[0]
-                    const total = (m?.correctCount || 0) + (m?.incorrectCount || 0)
-                    const acc = total > 0 ? m.correctCount / total : 1
-                    return total >= 2 && acc < 0.8
-                }) ?? null
-            }
-            if (!nextConcept && allConcepts.length > 0) nextConcept = allConcepts[0]
-        }
-
-        // Accurate path ran and nothing unfinished → maybe show a struggling concept
-        if (accurateRan && !nextConcept) {
-            nextConcept = allConcepts.find(c => {
-                const m = c.mastery[0]
-                const total = (m?.correctCount || 0) + (m?.incorrectCount || 0)
-                const acc = total > 0 ? m.correctCount / total : 1
-                return total >= 2 && acc < 0.8
-            }) ?? null
-        }
-
-        if (!nextConcept || nextConcept.variants.length === 0) {
-            return res.json({
-                dailyXp, weeklyXp, totalXp: user.xpTotal,
-                dailyGoalXp: user.dailyGoalXp, streakDays: user.streakDays,
-                preferredMode: user.preferredMode, nextLesson: null, reviewRequired: false,
-                accuracy: 100, comboStreak, glowTier, glowNext, activeDays,
-                unlockedCosmetics, equippedCosmetic: user.equippedCosmetic ?? 'gold', newUnlocks,
-            })
-        }
-
-        const mastery = nextConcept.mastery[0]
-        const totalAttempts = (mastery?.correctCount || 0) + (mastery?.incorrectCount || 0)
-        const accuracy = totalAttempts > 0 ? (mastery.correctCount / totalAttempts) : 1
-        const reviewRequired = totalAttempts >= 2 && accuracy < 0.6
 
         res.json({
-            dailyXp, weeklyXp, totalXp: user.xpTotal,
-            dailyGoalXp: user.dailyGoalXp, streakDays: user.streakDays,
+            dailyXp,
+            weeklyXp,
+            totalXp: user.xpTotal,
+            dailyGoalXp: user.dailyGoalXp,
+            streakDays: user.streakDays,
             preferredMode: user.preferredMode,
-            nextLesson: {
-                conceptId: nextConcept.id, conceptName: nextConcept.name,
-                xpReward: nextConcept.xpReward, mode: user.preferredMode,
-                variant: cleanVariant(nextConcept.variants[0]),
-            },
-            reviewRequired, accuracy: Math.round(accuracy * 100), comboStreak,
-            glowTier, glowNext, activeDays, unlockedCosmetics,
-            equippedCosmetic: user.equippedCosmetic ?? 'gold', newUnlocks,
+            nextLesson,
+            reviewRequired: false,
+            accuracy: 100,
+            comboStreak,
+            glowTier,
+            glowNext,
+            activeDays,
+            unlockedCosmetics,
+            equippedCosmetic: user.equippedCosmetic ?? 'gold',
+            newUnlocks,
         })
     } catch (error) { next(error) }
 })
