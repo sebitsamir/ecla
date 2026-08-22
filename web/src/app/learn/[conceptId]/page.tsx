@@ -17,14 +17,16 @@ import { useEffect, useRef, useState, Suspense } from 'react'
 import { useParams, useRouter, useSearchParams } from 'next/navigation'
 import { useAuth } from '@clerk/nextjs'
 import {
-    Mic, Square, Volume2, ChevronRight, ChevronLeft, Menu, SlidersHorizontal,
-    BookOpen, Lightbulb, AudioLines, StickyNote, Check, Circle, Dot, X,
+    Mic, Square, ChevronRight, ChevronLeft, Menu, SlidersHorizontal,
+    Lightbulb, AudioLines,
 } from 'lucide-react'
 import NightBackground from '@/components/NightBackground'
 import Firefly from '@/components/Firefly'
 import SpeakerButton from '@/components/SpeakerButton'
 import { useEquippedGlow } from '@/lib/useEquippedGlow'
 import { gradeLocal } from '@/lib/grading'
+import SceneExperience from '@/components/ecla/SceneExperience'
+import { sceneFor } from '@/content/scenes'
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL ?? 'http://localhost:4000'
 
@@ -168,6 +170,52 @@ function LearnPlayer() {
         </main>
     )
 
+    // ── Scene flow: competencies with authored scenes play as living worlds ──
+    const scene = sceneFor(lesson?.code)
+
+    const completeScene = async (correct: number, incorrect: number) => {
+        const exp = (lesson.subLessons ?? []).find((s: any) => s.type === 'STORY')
+        const token = await getToken()
+        await fetch(`${API_URL}/api/v1/lessons/complete`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+            body: JSON.stringify({
+                conceptId: lesson.conceptId,
+                subLessonId: exp?.id,
+                mode: 'STORY',
+                correctCount: correct,
+                incorrectCount: incorrect,
+                xpEarned: exp?.xpReward ?? lesson.xpReward ?? 20,
+            }),
+        })
+        window.dispatchEvent(new Event('ecla:progress-updated'))
+        window.dispatchEvent(new Event('luma:progress-updated'))
+        router.push('/course')
+    }
+
+    if (scene) {
+        return (
+            <main className="min-h-screen font-body bg-[#0B0B10]">
+                <header className="sticky top-0 z-40 border-b border-white/5 bg-[#0B0B10]/90 backdrop-blur">
+                    <div className="mx-auto max-w-[1400px] px-4 h-14 flex items-center gap-3">
+                        <button onClick={() => router.push('/course')} className="text-sm text-cream/60 hover:text-cream">
+                            ← Exit
+                        </button>
+                        <p className="text-sm font-semibold text-cream/80 truncate">{lesson.conceptName}</p>
+                        <p className="ml-auto text-[11px] uppercase tracking-widest text-cream/40">Spanish · Pre-A1</p>
+                    </div>
+                </header>
+                <SceneExperience
+                    scene={scene}
+                    tools={lesson.tools}
+                    mastery={lesson.mastery}
+                    getToken={getToken}
+                    onComplete={completeScene}
+                />
+            </main>
+        )
+    }
+
     /* ── Completion screen (evidence, not confetti) ── */
     if (finished) {
         const m = lesson.mastery
@@ -228,7 +276,7 @@ function LearnPlayer() {
                         <span className="text-cream/80 truncate">{lesson.breadcrumb?.competency}</span>
                     </nav>
                     <div className="ml-auto flex items-center gap-4 text-xs text-cream/60">
-                        <span>🔥 {lesson.mastery ? '—' : ''}</span>
+                        <span>{lesson.mastery ? '—' : ''}</span>
                         <button onClick={() => setToolsOpen(true)} className="xl:hidden text-cream/60"><SlidersHorizontal className="h-5 w-5" /></button>
                     </div>
                 </div>
