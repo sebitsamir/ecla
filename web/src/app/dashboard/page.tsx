@@ -64,6 +64,7 @@ import { COSMETICS, CosmeticId, DEFAULT_GLOW } from '@/lib/cosmetics'
 import { LogoMark } from '@/components/BrandLogo'
 import { useIntensity } from '@/lib/intensity'
 import CanDoPanel from '@/components/CanDoPanel'
+import NextUpCard from '@/components/NextUpCard'
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL ?? 'http://localhost:4000'
 
@@ -422,6 +423,11 @@ export default function DashboardPage() {
         {/* Can-Do Truth Panel (Phase 4) */}
         <section className="mb-8">
           <CanDoPanel />
+        </section>
+
+        {/* Next Up — Adaptive Engine (Phase 5) */}
+        <section className="mb-8">
+          <NextUpCard />
         </section>
 
         {/* ── Next Lesson Preview ─ 
