@@ -63,6 +63,7 @@ import Firefly from '@/components/Firefly'
 import { COSMETICS, CosmeticId, DEFAULT_GLOW } from '@/lib/cosmetics'
 import { LogoMark } from '@/components/BrandLogo'
 import { useIntensity } from '@/lib/intensity'
+import CanDoPanel from '@/components/CanDoPanel'
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL ?? 'http://localhost:4000'
 
@@ -416,6 +417,11 @@ export default function DashboardPage() {
               )
             })}
           </div>
+        </section>
+
+        {/* Can-Do Truth Panel (Phase 4) */}
+        <section className="mb-8">
+          <CanDoPanel />
         </section>
 
         {/* ── Next Lesson Preview ─ 
