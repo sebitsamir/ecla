@@ -271,10 +271,19 @@ model CompetencyMastery {
   userId         String
   competencyId   String
   level          MasteryLevel @default(NOT_STARTED)
+  
   exposureCount  Int          @default(0)
   successCount   Int          @default(0)
   failureCount   Int          @default(0)
   transferCount  Int          @default(0)
+  
+  comprehensionScore Float?   
+  retrievalScore     Float?  
+  interactionScore   Float?   
+  applicationScore   Float?  
+  transferScore      Float?  
+  overallScore       Float?  
+  
   retentionScore Float?
   lastAssessedAt DateTime?
   nextReviewAt   DateTime?
@@ -284,6 +293,7 @@ model CompetencyMastery {
 
   @@unique([userId, competencyId])
   @@index([userId, level])
+  @@index([userId, competencyId])
 }
 
 model UserVocabProgress {
