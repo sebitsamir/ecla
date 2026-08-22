@@ -1,40 +1,57 @@
 'use client'
 
-import { Volume2, Square } from 'lucide-react'
-import { useSpeech } from '@/lib/useSpeech'
+/**
+ * SpeakerButton — TTS trigger with lifecycle callbacks.
+ * Fires onStart the instant audio begins (unlocks the lesson flow)
+ * and onEnd when it finishes (accurate "listened" evidence).
+ * Shows a gentle pulse while playing (calm, per design rules).
+ */
 
-export default function SpeakerButton({
-    text,
-    audioUrl = null,
-    lang = 'es-ES',
-    size = 'md',
-    className = '',
-}: {
+import { useState } from 'react'
+import { Volume2 } from 'lucide-react'
+import { speak, cancelSpeech } from '@/lib/speech'
+
+type Props = {
     text: string
-    audioUrl?: string | null
     lang?: string
     size?: 'sm' | 'md' | 'lg'
-    className?: string
-}) {
-    const { speak, stop, speaking, supported } = useSpeech(lang)
-    if (!supported) return null
+    onStart?: () => void
+    onEnd?: () => void
+}
 
-    const dims = size === 'sm' ? 'h-7 w-7' : size === 'lg' ? 'h-11 w-11' : 'h-9 w-9'
-    const icon = size === 'sm' ? 'h-3.5 w-3.5' : size === 'lg' ? 'h-5 w-5' : 'h-4 w-4'
+export default function SpeakerButton({ text, lang = 'es-ES', size = 'md', onStart, onEnd }: Props) {
+    const [playing, setPlaying] = useState(false)
+
+    const box = size === 'sm' ? 'h-7 w-7' : size === 'lg' ? 'h-16 w-16' : 'h-10 w-10'
+    const icon = size === 'sm' ? 'h-3.5 w-3.5' : size === 'lg' ? 'h-6 w-6' : 'h-4 w-4'
+
+    const play = (e: React.MouseEvent) => {
+        e.stopPropagation()
+        if (!text) return
+        cancelSpeech()
+        setPlaying(true)
+        onStart?.()                       // ← unlock immediately, even if onEnd is late
+        speak(text, lang, {
+            onEnd: () => {
+                setPlaying(false)
+                onEnd?.()
+            },
+        })
+        // safety net: if the engine never fires onEnd, don't stay "playing" forever
+        setTimeout(() => setPlaying(false), Math.max(1500, text.length * 120))
+    }
 
     return (
         <button
-            type="button"
-            onClick={(e) => { e.stopPropagation(); speaking ? stop() : speak(text, { audioUrl }) }}
-            className={`flex ${dims} items-center justify-center rounded-full border transition-all ${
-                speaking
-                    ? 'border-glow/60 bg-glow/20 text-glow'
-                    : 'border-white/10 bg-night-900/60 text-cream/60 hover:border-glow/40 hover:text-glow'
-            } active:scale-95 ${className}`}
-            title={speaking ? 'Stop' : 'Listen'}
-            aria-label={speaking ? 'Stop audio' : `Listen: ${text}`}
+            onClick={play}
+            aria-label={`Listen: ${text}`}
+            className={`flex ${box} flex-shrink-0 items-center justify-center rounded-full border transition-all ${
+                playing
+                    ? 'border-violet-500/60 bg-violet-600/20 text-violet-300 animate-pulse'
+                    : 'border-white/10 bg-white/5 text-cream/70 hover:bg-white/10 hover:text-cream'
+            }`}
         >
-            {speaking ? <Square className={icon} /> : <Volume2 className={icon} />}
+            <Volume2 className={icon} />
         </button>
     )
 }

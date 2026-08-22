@@ -8,16 +8,16 @@ import "./globals.css";
 const baloo = Baloo_2({ subsets: ['latin'], variable: '--font-display', weight: ['600', '700', '800'] })
 const nunito = Nunito({ subsets: ['latin'], variable: '--font-body', weight: ['400', '600', '700', '800'] })
 
+export const viewport = {
+  width: 'device-width',
+  initialScale: 1,
+  maximumScale: 1,
+  userScalable: false,
+}
 export const metadata: Metadata = {
   title: 'Ecla',
   description: 'One curriculum. Four ways to learn.',
   icons: [{ url: '/favicon.svg', type: 'image/svg+xml' }],
-  viewport: {
-    width: 'device-width',
-    initialScale: 1,
-    maximumScale: 1,
-    userScalable: false,
-  },
 };
 
 export default function RootLayout({
