@@ -1,23 +1,24 @@
 /**
- * Lessons Route — ECLA schema adapter (Phase 2: Multi-dimensional evidence)
+ * Lessons Route — ECLA schema adapter (Phase 2 + Phase 3 merged)
  *
- * GET  /api/v1/lessons/:conceptId → competency + its LearningExperiences as "subLessons"
- * POST /api/v1/lessons/complete   → writes dimensional evidence:
- *      UserExperienceProgress + CompetencyMastery (with dimensional scores) + StreakLog + User.xpTotal
+ * GET  /api/v1/lessons/:conceptId → competency + experiences as "subLessons"
+ * POST /api/v1/lessons/complete   → evidence → mastery (counts + DIMENSIONAL
+ *      scores + level) + overallScore + streak + XP
+ * POST /api/v1/lessons/grade      → FUNCTIONAL JUDGE (Art. 16):
+ *      decides whether MEANING was communicated when the form layer is unsure.
+ *      Never teaches, never invents facts (Art. 23). temp 0 + JSON mode.
  *
- * Phase 2 additions:
- * - Each experience type updates a specific dimension in CompetencyMastery
- * - STORY → comprehensionScore
- * - DRILL → retrievalScore
- * - IMMERSION → interactionScore
- * - PROFESSIONAL → applicationScore
- * - MISSION → transferScore
- * - overallScore = weighted average of all dimensions
+ * Phase 2 addition in /complete:
+ * - Each experience type writes one dimension (0-100), blended with history:
+ *   STORY→comprehension · DRILL→retrieval · IMMERSION→interaction ·
+ *   PROFESSIONAL→application · MISSION→transfer
+ * - overallScore = mean of all non-null dimensions (feeds learner profile)
  */
 
 import { Router, Request, Response, NextFunction } from 'express'
 import { prisma } from '../lib/prisma'
-import { getOrSyncUserFast } from '../lib/auth'
+import { getOrSyncUserFast, requireAuth } from '../lib/auth'
+import { groq } from '../lib/groq'
 import { AppError } from '../lib/errors'
 import { lessonCompleteSchema } from '../lib/schemas'
 
@@ -32,31 +33,81 @@ const TYPE_ICON: Record<string, string> = {
     STORY: 'book-open', DRILL: 'puzzle', IMMERSION: 'ear', PROFESSIONAL: 'lightbulb', MISSION: 'message-circle',
 }
 
+/**
+ * Experience type → mastery dimension it produces evidence for (§7.5).
+ * Modes as adaptive engine: each delivery mode trains one dimension.
+ */
+const DIMENSION_BY_TYPE: Record<string, string> = {
+    STORY: 'comprehensionScore',
+    DRILL: 'retrievalScore',
+    IMMERSION: 'interactionScore',
+    PROFESSIONAL: 'applicationScore',
+    MISSION: 'transferScore',
+}
+
+/**
+ * Blend a new evidence score into the running dimension score.
+ * First evidence = the score itself; afterwards a 60/40 moving average
+ * so dimensions move with sustained performance, not single attempts.
+ */
+function blend(old: number | null | undefined, score: number): number {
+    return old == null ? score : Math.round(old * 0.6 + score * 0.4)
+}
+
 function normalizeTeach(blocks: any[]): any[] {
     return (blocks ?? [])
         .map((b: any) => {
             if (!b || typeof b !== 'object') return null
+            // `pattern` blocks carry examples[], not text → render as explain
             if (b.type === 'pattern') {
                 const list = Array.isArray(b.examples) ? b.examples : []
                 return { type: 'explain', text: 'Patterns: ' + list.join(' · ') }
             }
             const mapped = { ...b, type: TEACH_TYPE[b.type] ?? b.type }
+            // drop explain-style blocks with nothing to render
             if (mapped.type === 'explain' && !mapped.text) return null
             return mapped
         })
         .filter(Boolean) as any[]
 }
 
-function normalizeExercise(ex: any): any {
-    switch (ex?.type) {
+/**
+ * Map seed exercise types to player-renderable types.
+ * Carries accept/acceptedAnswers for Phase-3 tolerant grading.
+ * Returns null for types the player can't render (filtered out).
+ */
+function normalizeExercise(ex: any): any | null {
+    if (!ex || typeof ex !== 'object') return null
+    const accept: string[] = Array.isArray(ex.accept)
+        ? ex.accept
+        : Array.isArray(ex.acceptedAnswers)
+            ? ex.acceptedAnswers
+            : []
+
+    switch (ex.type) {
         case 'recognition':
         case 'meaning':
         case 'selection':
-            return { type: 'mcq', prompt: ex.prompt, options: ex.options ?? [], answer: ex.answer ?? '' }
+            if (!Array.isArray(ex.options) || ex.options.length < 2 || !ex.answer) return null
+            return { type: 'mcq', prompt: ex.prompt, options: ex.options, answer: ex.answer, accept }
         case 'recall':
-            return { type: 'fill_blank', prompt: ex.prompt ?? 'Complete the expression.', answer: ex.answer ?? '' }
+            if (!ex.answer) return null
+            return { type: 'fill_blank', prompt: ex.prompt ?? 'Complete the expression.', answer: ex.answer, accept }
+        case 'listening': {
+            const audio = ex.audio ?? ex.answer ?? ex.input?.target
+            if (!audio) return null
+            return { type: 'listen_type', prompt: ex.prompt ?? 'Listen and type what you hear.', audio, answer: audio, accept }
+        }
+        case 'mcq':
+        case 'fill_blank':
+        case 'translate':
+        case 'listen_choose':
+        case 'listen_type':
+        case 'match':
+            return { ...ex, accept }
+        // transformation / roleplay / future engine types — not renderable yet
         default:
-            return ex
+            return null
     }
 }
 
@@ -92,7 +143,7 @@ router.get('/api/v1/lessons/:conceptId', async (req: Request, res: Response, nex
                 type: e.type,
                 xpReward: perPartXp,
                 teach: normalizeTeach(content.teach),
-                exercises: (content.exercises ?? []).map(normalizeExercise),
+                exercises: (content.exercises ?? []).map(normalizeExercise).filter(Boolean),
                 realLife: content.realLife ?? null,
             }
         })
@@ -107,7 +158,7 @@ router.get('/api/v1/lessons/:conceptId', async (req: Request, res: Response, nex
                 conceptId: comp.id,
                 conceptName: comp.title,
                 canDo: comp.canDo,
-                mode: (req.query.mode as string) ?? user.preferredMode,
+                mode: typeof req.query.mode === 'string' ? req.query.mode : user.preferredMode,
                 xpReward: comp.xpReward,
                 grammarNote: realization?.grammarNote ?? null,
                 variant: {
@@ -124,8 +175,51 @@ router.get('/api/v1/lessons/:conceptId', async (req: Request, res: Response, nex
 })
 
 /**
+ * POST /api/v1/lessons/grade — FUNCTIONAL JUDGE (Art. 16)
+ *
+ * Called ONLY when the client form-layer is unsure (open typed answers).
+ * Accept when the learner communicates the same core meaning as ANY reference,
+ * allowing minor grammar errors, missing words, wrong order, missing accents.
+ * Reject when meaning differs, is opposite, or key information is missing.
+ */
+router.post('/api/v1/lessons/grade', async (req: Request, res: Response, next: NextFunction) => {
+    try {
+        requireAuth(req)
+        const { answer, expected, accept } = req.body ?? {}
+        if (typeof answer !== 'string' || typeof expected !== 'string') {
+            throw new AppError('Invalid grade request', 400)
+        }
+
+        const completion = await groq.chat.completions.create({
+            model: 'openai/gpt-oss-20b',
+            temperature: 0,
+            max_tokens: 60,
+            reasoning_effort: 'low',
+            response_format: { type: 'json_object' } as any,
+            messages: [
+                {
+                    role: 'system',
+                    content:
+                        'You are a strict Spanish assessment function. Reply with JSON only: {"accept":true|false,"reason":"max 8 words"}.' +
+                        'Accept when the learner answer communicates the same core meaning as ANY reference, allowing minor grammar errors, missing words, wrong order, missing accents/punctuation.' +
+                        'Reject when the meaning differs, is opposite, or key information is missing.' +
+                        `References: ${JSON.stringify([expected, ...(Array.isArray(accept) ? accept : [])])}`,
+                },
+                { role: 'user', content: answer },
+            ],
+        } as any)
+
+        const text = completion.choices[0]?.message?.content ?? '{}'
+        const match = text.match(/\{[\s\S]*\}/)
+        const parsed = JSON.parse(match?.[0] ?? '{}')
+        res.json({ correct: parsed.accept === true, reason: String(parsed.reason ?? '') })
+    } catch (error) { next(error) }
+})
+
+/**
  * Complete one part (experience) of a competency.
- * Phase 2: writes dimensional evidence based on experience type.
+ * Evidence-based: mastery counts + LEVEL per §6.4, DIMENSIONAL scores per §7.5,
+ * retention review per §6.5, streak + XP.
  */
 router.post('/api/v1/lessons/complete', async (req: Request, res: Response, next: NextFunction) => {
     try {
@@ -148,28 +242,22 @@ router.post('/api/v1/lessons/complete', async (req: Request, res: Response, next
                     lastAttemptAt: new Date(),
                 },
                 create: {
-                    userId: user.id,
-                    experienceId: subLessonId,
-                    status: 'completed',
-                    score: correctCount,
-                    attempts: 1,
-                    xpEarned,
-                    completedAt: new Date(),
-                    lastAttemptAt: new Date(),
+                    userId: user.id, experienceId: subLessonId, status: 'completed',
+                    score: correctCount, attempts: 1, xpEarned,
+                    completedAt: new Date(), lastAttemptAt: new Date(),
                 },
             })
         }
 
-        // 2) Get experience type to determine which dimension to update
+        // 2) Which dimension does this experience produce evidence for?
         const experience = subLessonId
-            ? await prisma.learningExperience.findUnique({ where: { id: subLessonId } })
+            ? await prisma.learningExperience.findUnique({ where: { id: subLessonId }, select: { type: true } })
             : null
-
-        // 3) Calculate dimension score for this experience (0-100)
         const totalAttempts = correctCount + incorrectCount
         const dimensionScore = totalAttempts > 0 ? Math.round((correctCount / totalAttempts) * 100) : null
+        const dimensionField = experience ? DIMENSION_BY_TYPE[experience.type] ?? null : null
 
-        // 4) Competency mastery — update dimensional scores + level
+        // 3) Recompute level from completion evidence
         const exps = await prisma.learningExperience.findMany({
             where: { competencyId: conceptId }, select: { id: true, type: true },
         })
@@ -183,12 +271,11 @@ router.post('/api/v1/lessons/complete', async (req: Request, res: Response, next
         const missionDone = exps.some(e => e.type === 'MISSION' && completedSet.has(e.id))
         const level = allDone ? (missionDone ? 'TRANSFERRED' : 'CONTROLLED') : 'DEVELOPING'
 
-        // Get existing mastery or create new
+        // 4) Existing mastery (for blending the dimension score)
         const existing = await prisma.competencyMastery.findUnique({
             where: { userId_competencyId: { userId: user.id, competencyId: conceptId } },
         })
 
-        // Build update data with dimensional scores
         const updateData: any = {
             successCount: { increment: correctCount },
             failureCount: { increment: incorrectCount },
@@ -196,61 +283,30 @@ router.post('/api/v1/lessons/complete', async (req: Request, res: Response, next
             transferCount: missionDone && allDone ? { increment: 1 } : undefined,
             level,
             lastAssessedAt: new Date(),
-            nextReviewAt: new Date(Date.now() + 2 * 24 * 3600 * 1000),
+            nextReviewAt: new Date(Date.now() + 2 * 24 * 3600 * 1000), // §6.5: Day 1 → Day 2
+        }
+        // Dimensional evidence: blend new score into the matching dimension
+        if (dimensionField && dimensionScore !== null) {
+            updateData[dimensionField] = blend((existing as any)?.[dimensionField], dimensionScore)
         }
 
-        // Update the dimension corresponding to this experience type
-        if (experience && dimensionScore !== null) {
-            switch (experience.type) {
-                case 'STORY':
-                    updateData.comprehensionScore = existing
-                        ? { increment: (dimensionScore - (existing.comprehensionScore ?? 0)) }
-                        : dimensionScore
-                    break
-                case 'DRILL':
-                    updateData.retrievalScore = existing
-                        ? { increment: (dimensionScore - (existing.retrievalScore ?? 0)) }
-                        : dimensionScore
-                    break
-                case 'IMMERSION':
-                    updateData.interactionScore = existing
-                        ? { increment: (dimensionScore - (existing.interactionScore ?? 0)) }
-                        : dimensionScore
-                    break
-                case 'PROFESSIONAL':
-                    updateData.applicationScore = existing
-                        ? { increment: (dimensionScore - (existing.applicationScore ?? 0)) }
-                        : dimensionScore
-                    break
-                case 'MISSION':
-                    updateData.transferScore = existing
-                        ? { increment: (dimensionScore - (existing.transferScore ?? 0)) }
-                        : dimensionScore
-                    break
-            }
+        const createData: any = {
+            userId: user.id, competencyId: conceptId, level,
+            exposureCount: 1, successCount: correctCount, failureCount: incorrectCount,
+            lastAssessedAt: new Date(),
+            nextReviewAt: new Date(Date.now() + 2 * 24 * 3600 * 1000),
+        }
+        if (dimensionField && dimensionScore !== null) {
+            createData[dimensionField] = dimensionScore
         }
 
         await prisma.competencyMastery.upsert({
             where: { userId_competencyId: { userId: user.id, competencyId: conceptId } },
             update: updateData,
-            create: {
-                userId: user.id,
-                competencyId: conceptId,
-                level,
-                exposureCount: 1,
-                successCount: correctCount,
-                failureCount: incorrectCount,
-                comprehensionScore: experience?.type === 'STORY' ? dimensionScore : null,
-                retrievalScore: experience?.type === 'DRILL' ? dimensionScore : null,
-                interactionScore: experience?.type === 'IMMERSION' ? dimensionScore : null,
-                applicationScore: experience?.type === 'PROFESSIONAL' ? dimensionScore : null,
-                transferScore: experience?.type === 'MISSION' ? dimensionScore : null,
-                lastAssessedAt: new Date(),
-                nextReviewAt: new Date(Date.now() + 2 * 24 * 3600 * 1000),
-            },
+            create: createData,
         })
 
-        // 5) Recompute overallScore as weighted average
+        // 5) overallScore = mean of all non-null dimensions (learner profile)
         const mastery = await prisma.competencyMastery.findUnique({
             where: { userId_competencyId: { userId: user.id, competencyId: conceptId } },
         })
@@ -262,12 +318,10 @@ router.post('/api/v1/lessons/complete', async (req: Request, res: Response, next
                 mastery.applicationScore,
                 mastery.transferScore,
             ].filter((s): s is number => s !== null)
-
             if (scores.length > 0) {
-                const overallScore = Math.round(scores.reduce((sum, s) => sum + s, 0) / scores.length)
                 await prisma.competencyMastery.update({
                     where: { id: mastery.id },
-                    data: { overallScore },
+                    data: { overallScore: Math.round(scores.reduce((sum, s) => sum + s, 0) / scores.length) },
                 })
             }
         }
