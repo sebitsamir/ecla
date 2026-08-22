@@ -417,16 +417,18 @@ function buildSubLesson(competency: any, target: Target, stage: Stage, order: nu
             break;
         case "UNDERSTAND":
             activities.push(
-                makeActivity(competency, target, stage, 0, {
-                    type: "meaning_discovery",
-                    title: "Discover the meaning",
-                    purpose: "Connect the expression directly to communicative meaning.",
-                    prompt: `What is the speaker trying to do when they say: ${example}?`,
+                makeActivity(competency, target, stage, 1, {
+                    type: "comprehension",
+                    title: "Meaning in a second context",
+                    purpose: "Confirm that meaning survives a new but familiar situation.",
+                    prompt: "Choose what the learner should understand from the exchange.",
                     input: {
+                        scenarioVariant: "new_context_same_function",
+                        target: example,
                         options: [
                             `They are trying to ${canDo.toLowerCase()}.`,
                             "They are ending the conversation.",
-                            "They are talking about something unrelated.",
+                            "They are asking for help.",
                         ],
                     },
                     expectedOutput: `They are trying to ${canDo.toLowerCase()}.`,
