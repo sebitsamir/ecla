@@ -21,6 +21,7 @@ import {
 import NightBackground from '@/components/NightBackground'
 import Firefly from '@/components/Firefly'
 import SpeakerButton from '@/components/SpeakerButton'
+import MissionRunner from '@/components/MissionRunner'
 import { useEquippedGlow } from '@/lib/useEquippedGlow'
 import { gradeLocal } from '@/lib/grading'
 import { cancelSpeech } from '@/lib/speech'
@@ -65,6 +66,8 @@ function LearnPageContent() {
     const [partNumber, setPartNumber] = useState(1)
     const [wasReview, setWasReview] = useState(false)
     const [earnedXp, setEarnedXp] = useState(0)
+    const [missionOpen, setMissionOpen] = useState(false)
+
 
     // ── Exercise state ──
     const [phase, setPhase] = useState<LessonPhase>('encounter')
@@ -268,7 +271,7 @@ function LearnPageContent() {
             if (res.ok) {
                 setCompletedIds(prev => new Set([...prev, activeSub.id])); setEarnedXp(xp)
                 window.dispatchEvent(new Event('ecla:progress-updated'))
-                window.dispatchEvent(new Event('luma:progress-updated'))
+                window.dispatchEvent(new Event('ecla:progress-updated'))
             }
         } catch (e) { console.error(e) } finally { setSaving(false); setPhase('celebration') }
     }
@@ -421,8 +424,8 @@ function LearnPageContent() {
                                             onClick={speakState === 'recording' ? stopSpeaking : startSpeaking}
                                             disabled={speakState === 'processing' || isRevealed}
                                             className={`relative flex h-20 w-20 sm:h-24 sm:w-24 items-center justify-center rounded-full transition-all disabled:opacity-50 ${speakState === 'recording'
-                                                    ? 'bg-coral text-night-900 mic-pulse'
-                                                    : 'bg-glow text-night-900 hover:bg-glow-bright active:scale-95'
+                                                ? 'bg-coral text-night-900 mic-pulse'
+                                                : 'bg-glow text-night-900 hover:bg-glow-bright active:scale-95'
                                                 }`}
                                         >
                                             {speakState === 'recording' ? <Square className="h-7 w-7 sm:h-8 sm:w-8" />
@@ -573,8 +576,14 @@ function LearnPageContent() {
                         <div className="rounded-2xl border border-white/10 bg-night-800/80 p-5 sm:p-8 text-center space-y-5">
                             <Firefly mood="proud" size={80} glow={glowColors} />
                             <p className="text-sm sm:text-base text-cream/80">Use your new ability in a real interaction with Ecla.</p>
-                            <button onClick={() => router.push(`/chat?seed=${encodeURIComponent(activeSub.realLife!.chatSeed || '')}`)} className="w-full py-3.5 rounded-xl bg-pro text-night-900 font-bold flex items-center justify-center gap-2">
-                                <MessageCircle className="h-5 w-5" /> Start Mission Chat
+                            <button
+                                onClick={() => setMissionOpen(true)}
+                                className="w-full py-3 rounded-xl bg-purple-400 text-night-900 font-bold text-sm transition-all hover:brightness-110 flex items-center justify-center gap-2"
+                            >
+                                <Target className="h-4 w-4" /> Start Mission
+                            </button>
+                            <button onClick={() => router.push(`/chat?seed={encodeURIComponent(activeSub.realLife!.chatSeed || '')}`)} className="w-full py-3 rounded-xl border border-white/10 text-cream/60 text-sm flex items-center justify-center gap-2">
+                                <MessageCircle className="h-4 w-4" /> Prefer chat? Practice with Ecla
                             </button>
                             <button onClick={completePart} disabled={saving} className="w-full py-3 rounded-xl border border-white/10 text-cream/60 text-sm">
                                 {saving ? 'Saving…' : 'Skip & Finish Part'}
@@ -583,6 +592,18 @@ function LearnPageContent() {
                     </div>
                 )}
             </div>
+
+            {/* ── Mission Runner overlay (Phase 6) ── */}
+            {missionOpen && (
+                <MissionRunner
+                    competencyId={lesson.conceptId}
+                    onClose={() => {
+                        setMissionOpen(false)
+                        window.dispatchEvent(new Event('ecla:progress-updated'))
+                        window.dispatchEvent(new Event('ecla:progress-updated'))
+                    }}
+                />
+            )}
         </main>
     )
 }
