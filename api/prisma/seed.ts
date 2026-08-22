@@ -1024,7 +1024,37 @@ const units: UnitSeed[] = [
 ];
 
 // ============================================================
-// EXPERIENCE GENERATION
+// RUNTIME SANITIZER — cleans trailing whitespace / dirty strings
+// so codes like "PA1.SOC.GRT.01 " match prerequisite refs "PA1.SOC.GRT.01"
+// ============================================================
+const t = (s: unknown): string => (typeof s === "string" ? s.trim() : "");
+const tArr = (a: unknown): string[] => (Array.isArray(a) ? a.map(t).filter(Boolean) : []);
+
+function sanitizeUnits(raw: UnitSeed[]): UnitSeed[] {
+    return raw.map(u => ({
+        title: t(u.title),
+        description: t(u.description),
+        competencies: u.competencies.map(c => ({
+            ...c,
+            code: t(c.code),
+            title: t(c.title),
+            canDo: t(c.canDo),
+            domain: t(c.domain),
+            patterns: tArr(c.patterns),
+            examples: tArr(c.examples),
+            grammarNote: c.grammarNote ? t(c.grammarNote) : undefined,
+            pronunciationNote: c.pronunciationNote ? t(c.pronunciationNote) : undefined,
+            culturalNote: c.culturalNote ? t(c.culturalNote) : undefined,
+            prerequisites: (c.prerequisites ?? []).map(t).filter(Boolean),
+            vocabulary: c.vocabulary.map(v => ({ ...v, word: t(v.word), translation: t(v.translation) })),
+        })),
+    }));
+}
+
+const UNITS = sanitizeUnits(units);
+
+// ============================================================
+// EXPERIENCE GENERATION (enhanced with accept[] + listening practice)
 // ============================================================
 
 function buildExperienceContent(
@@ -1032,6 +1062,8 @@ function buildExperienceContent(
     type: ExperienceType
 ) {
     const examples = competency.examples;
+    const example = examples[0] ?? "";
+    const accept = examples.slice(1); // variants for tolerant grading (Phase 1)
 
     switch (type) {
         case ExperienceType.STORY:
@@ -1051,12 +1083,20 @@ function buildExperienceContent(
                         type: "recognition",
                         prompt: `Which expression helps you ${competency.canDo.toLowerCase()}?`,
                         options: examples.slice(0, 4),
-                        answer: examples[0] ?? null,
+                        answer: example,
+                        accept,
+                    },
+                    {
+                        type: "listening",
+                        prompt: "Listen and type what you hear.",
+                        audio: example,
+                        answer: example,
+                        accept,
                     },
                 ],
                 realLife: {
                     prompt: competency.canDo,
-                    chatSeed: examples[0] ?? "",
+                    chatSeed: example,
                 },
             };
 
@@ -1069,18 +1109,24 @@ function buildExperienceContent(
                             competency.grammarNote ??
                             `Practice the core language needed to ${competency.canDo.toLowerCase()}.`,
                     },
+                    {
+                        type: "pattern",
+                        examples: competency.patterns.slice(0, 6),
+                    },
                 ],
                 exercises: [
                     {
                         type: "mcq",
                         prompt: `Which expression can you use to ${competency.canDo.toLowerCase()}?`,
                         options: examples.slice(0, 4),
-                        answer: examples[0] ?? null,
+                        answer: example,
+                        accept,
                     },
                     {
                         type: "recall",
                         prompt: `Complete the target expression.`,
-                        answer: examples[0] ?? null,
+                        answer: example,
+                        accept,
                     },
                 ],
             };
@@ -1097,15 +1143,23 @@ function buildExperienceContent(
                 ],
                 exercises: [
                     {
+                        type: "listening",
+                        prompt: "Listen and type what you hear.",
+                        audio: example,
+                        answer: example,
+                        accept,
+                    },
+                    {
                         type: "meaning",
                         prompt: `What would you use when you need to ${competency.canDo.toLowerCase()}?`,
                         options: examples.slice(0, 4),
-                        answer: examples[0] ?? null,
+                        answer: example,
+                        accept,
                     },
                 ],
                 realLife: {
                     prompt: competency.canDo,
-                    chatSeed: examples[0] ?? "",
+                    chatSeed: example,
                 },
             };
 
@@ -1122,7 +1176,8 @@ function buildExperienceContent(
                         type: "selection",
                         prompt: `Choose the expression you could use in a polite interaction.`,
                         options: examples.slice(0, 4),
-                        answer: examples[0] ?? null,
+                        answer: example,
+                        accept,
                     },
                 ],
             };
@@ -1138,7 +1193,7 @@ function buildExperienceContent(
                 exercises: [],
                 realLife: {
                     prompt: competency.canDo,
-                    chatSeed: examples[0] ?? "",
+                    chatSeed: example,
                 },
             };
     }
@@ -1202,13 +1257,13 @@ async function main() {
     console.log(`✓ Course: ${course.title}`);
 
     // ------------------------------------------------------------
-    // 3. CREATE UNITS + COMPETENCIES
+    // 3. CREATE UNITS + COMPETENCIES (uses sanitized UNITS)
     // ------------------------------------------------------------
 
     const competencyIds = new Map<string, string>();
 
-    for (let unitIndex = 0; unitIndex < units.length; unitIndex++) {
-        const unitData = units[unitIndex];
+    for (let unitIndex = 0; unitIndex < UNITS.length; unitIndex++) {
+        const unitData = UNITS[unitIndex];
 
         const unit = await prisma.unit.upsert({
             where: {
@@ -1301,15 +1356,14 @@ async function main() {
             });
 
             // ----------------------------------------------------------
-            // VOCABULARY
+            // VOCABULARY (trimmed words → clean slugs)
             // ----------------------------------------------------------
 
             for (const vocab of data.vocabulary) {
+                const slug = vocab.word.toLowerCase().replace(/[^a-z0-9áéíóúüñ]+/gi, "-").replace(/^-+|-+$/g, "");
                 const vocabulary = await prisma.vocabulary.upsert({
                     where: {
-                        id: `${spanish.id}-${vocab.word
-                            .toLowerCase()
-                            .replace(/[^a-z0-9áéíóúüñ]+/gi, "-")}`,
+                        id: `${spanish.id}-${slug}`,
                     },
                     update: {
                         word: vocab.word,
@@ -1317,9 +1371,7 @@ async function main() {
                         difficulty: vocab.difficulty ?? 1,
                     },
                     create: {
-                        id: `${spanish.id}-${vocab.word
-                            .toLowerCase()
-                            .replace(/[^a-z0-9áéíóúüñ]+/gi, "-")}`,
+                        id: `${spanish.id}-${slug}`,
                         languageId: spanish.id,
                         word: vocab.word,
                         translation: vocab.translation,
@@ -1415,12 +1467,12 @@ async function main() {
     }
 
     // ------------------------------------------------------------
-    // 4. PREREQUISITE GRAPH
+    // 4. PREREQUISITE GRAPH (sanitized codes now resolve)
     // ------------------------------------------------------------
 
     console.log("\nCreating prerequisite graph...");
 
-    for (const unitData of units) {
+    for (const unitData of UNITS) {
         for (const competencyData of unitData.competencies) {
             const competencyId = competencyIds.get(competencyData.code);
 
@@ -1459,10 +1511,10 @@ async function main() {
     console.log("✓ Prerequisite graph created");
 
     // ------------------------------------------------------------
-    // 5. MISSIONS
+    // 5. MISSIONS (stable IDs converging with seedSublessons)
     // ------------------------------------------------------------
 
-    console.log("\n🎯 Creating gateway missions...");
+    console.log("\nCreating gateway missions...");
 
     const gatewayCompetencies = [
         "PA1.GAT.SUR.01",
@@ -1480,66 +1532,62 @@ async function main() {
             throw new Error(`Gateway competency ${code} not found`);
         }
 
-        const existingMission = await prisma.mission.findFirst({
-            where: {
+        // Stable ID converging with seedSublessons.ts gateway missions —
+        // re-runs update the same row instead of creating duplicates
+        await prisma.mission.upsert({
+            where: { id: `${competency.id}-gateway` },
+            update: {
                 competencyId: competency.id,
+                title: `${competency.title} Mission`,
+                objective: competency.canDo,
+                scenario:
+                    "Complete a short real-life interaction using the language you have learned.",
+                difficulty: competency.difficulty,
+                successCriteria: {
+                    competencyCode: competency.code,
+                    requirements: [
+                        competency.canDo,
+                        "Use appropriate basic expressions.",
+                        "Complete the communication goal.",
+                    ],
+                },
+                configuration: {
+                    type: "guided_real_life",
+                    allowHints: true,
+                    maxAttempts: 3,
+                },
+            },
+            create: {
+                id: `${competency.id}-gateway`,
+                competencyId: competency.id,
+                title: `${competency.title} Mission`,
+                objective: competency.canDo,
+                scenario:
+                    "Complete a short real-life interaction using the language you have learned.",
+                difficulty: competency.difficulty,
+                successCriteria: {
+                    competencyCode: competency.code,
+                    requirements: [
+                        competency.canDo,
+                        "Use appropriate basic expressions.",
+                        "Complete the communication goal.",
+                    ],
+                },
+                configuration: {
+                    type: "guided_real_life",
+                    allowHints: true,
+                    maxAttempts: 3,
+                },
             },
         });
-
-        if (existingMission) {
-            await prisma.mission.update({
-                where: {
-                    id: existingMission.id,
-                },
-                data: {
-                    title: `${competency.title} Mission`,
-                    objective: competency.canDo,
-                    scenario:
-                        "Complete a short real-life interaction using the language you have learned.",
-                    difficulty: competency.difficulty,
-                    successCriteria: {
-                        competencyCode: competency.code,
-                        requirements: [
-                            competency.canDo,
-                            "Use appropriate basic expressions.",
-                            "Complete the communication goal.",
-                        ],
-                    },
-                    configuration: {
-                        type: "guided_real_life",
-                        allowHints: true,
-                        maxAttempts: 3,
-                    },
-                },
-            });
-        } else {
-            await prisma.mission.create({
-                data: {
-                    competencyId: competency.id,
-                    title: `${competency.title} Mission`,
-                    objective: competency.canDo,
-                    scenario:
-                        "Complete a short real-life interaction using the language you have learned.",
-                    difficulty: competency.difficulty,
-                    successCriteria: {
-                        competencyCode: competency.code,
-                        requirements: [
-                            competency.canDo,
-                            "Use appropriate basic expressions.",
-                            "Complete the communication goal.",
-                        ],
-                    },
-                    configuration: {
-                        type: "guided_real_life",
-                        allowHints: true,
-                        maxAttempts: 3,
-                    },
-                },
-            });
-        }
     }
 
     console.log("✓ Gateway missions created");
+
+    // ------------------------------------------------------------
+    // CLEANUP: Purge legacy vocab rows with trailing dashes
+    // ------------------------------------------------------------
+    await prisma.vocabulary.deleteMany({ where: { id: { endsWith: '-' } } });
 
     // ------------------------------------------------------------
     // 6. SUMMARY
@@ -1571,7 +1619,7 @@ async function main() {
     console.log("       ECLA PRE-A1 SEED COMPLETE");
     console.log("========================================");
     console.log(`Languages:             ${languageCount}`);
-    console.log(`Courses:              ${courseCount}`);
+    console.log(`Courses:               ${courseCount}`);
     console.log(`Units:                 ${unitCount}`);
     console.log(`Competencies:          ${competencyCount}`);
     console.log(`Realizations:          ${realizationCount}`);

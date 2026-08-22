@@ -72,17 +72,16 @@ function normalizeTeach(blocks: any[]): any[] {
 }
 
 /**
- * Map seed exercise types to player-renderable types.
- * Carries accept/acceptedAnswers for Phase-3 tolerant grading.
- * Returns null for types the player can't render (filtered out).
+ * Map seed activity types → player types.
+ * PRODUCTION types (recall/translate/guided_speaking/free_retrieval/shadowing)
+ * become `speak`: the mic is the PRIMARY input; typing is a fallback.
+ * Form vs function: the spoken transcript is graded tolerantly (gradeLocal + judge).
  */
 function normalizeExercise(ex: any): any | null {
     if (!ex || typeof ex !== 'object') return null
     const accept: string[] = Array.isArray(ex.accept)
         ? ex.accept
-        : Array.isArray(ex.acceptedAnswers)
-            ? ex.acceptedAnswers
-            : []
+        : Array.isArray(ex.acceptedAnswers) ? ex.acceptedAnswers : []
 
     switch (ex.type) {
         case 'recognition':
@@ -91,8 +90,15 @@ function normalizeExercise(ex: any): any | null {
             if (!Array.isArray(ex.options) || ex.options.length < 2 || !ex.answer) return null
             return { type: 'mcq', prompt: ex.prompt, options: ex.options, answer: ex.answer, accept }
         case 'recall':
+        case 'translate':
+        case 'guided_speaking':
+        case 'free_retrieval':
+        case 'shadowing':
+        case 'speak':
             if (!ex.answer) return null
-            return { type: 'fill_blank', prompt: ex.prompt ?? 'Complete the expression.', answer: ex.answer, accept }
+            return { type: 'speak', prompt: ex.prompt ?? `How do you say: "${ex.answer}"?`, answer: ex.answer, accept }
+        case 'completion':
+            return { type: 'fill_blank', prompt: ex.prompt ?? 'Complete the expression.', answer: ex.answer ?? '', accept }
         case 'listening': {
             const audio = ex.audio ?? ex.answer ?? ex.input?.target
             if (!audio) return null
@@ -100,14 +106,12 @@ function normalizeExercise(ex: any): any | null {
         }
         case 'mcq':
         case 'fill_blank':
-        case 'translate':
         case 'listen_choose':
         case 'listen_type':
         case 'match':
             return { ...ex, accept }
-        // transformation / roleplay / future engine types — not renderable yet
         default:
-            return null
+            return null // transformation/roleplay — engine types, not renderable yet
     }
 }
 
@@ -117,7 +121,10 @@ router.get('/api/v1/lessons/:conceptId', async (req: Request, res: Response, nex
 
         const comp = await prisma.competency.findUnique({
             where: { id: req.params.conceptId },
-            include: { experiences: { orderBy: { orderIndex: 'asc' } } },
+            include: {
+                experiences: { orderBy: { orderIndex: 'asc' } },
+                vocabulary: { include: { vocabulary: true } },   // needed for meaning lookup
+            },
         })
         if (!comp) throw new AppError('Lesson not found', 404)
 
@@ -125,11 +132,27 @@ router.get('/api/v1/lessons/:conceptId', async (req: Request, res: Response, nex
             where: { competencyId: comp.id },
         })
 
+        // ── Meaning lookup: Spanish example → English via the competency's vocab ──
+        const norm = (s: string) => s.toLowerCase().normalize('NFD')
+            .replace(/[\u0300-\u036f]/g, '').replace(/[¿¡?!.,;:()"']/g, '').replace(/\s+/g, ' ').trim()
+        const vocabByNorm = new Map<string, string>()
+        for (const link of comp.vocabulary ?? []) vocabByNorm.set(norm(link.vocabulary.word), link.vocabulary.translation)
+        const meaningOf = (text: string | null | undefined): string | null => {
+            if (!text) return null
+            const n = norm(text)
+            if (vocabByNorm.has(n)) return vocabByNorm.get(n)!
+            const words = n.split(' ')
+            if (words.length > 1) {                       // word-by-word fallback for chunks
+                const parts = words.map(w => vocabByNorm.get(w))
+                if (parts.every(Boolean)) return parts.join(' ')
+            }
+            return null
+        }
+
         const progress = await prisma.userExperienceProgress.findMany({
             where: { userId: user.id, experienceId: { in: comp.experiences.map(e => e.id) } },
         })
         const completedIds = progress.filter(p => p.status === 'completed').map(p => p.experienceId)
-
         const perPartXp = Math.max(5, Math.round(comp.xpReward / Math.max(1, comp.experiences.length)))
 
         const subLessons = comp.experiences.map((e: any) => {
@@ -143,7 +166,34 @@ router.get('/api/v1/lessons/:conceptId', async (req: Request, res: Response, nex
                 type: e.type,
                 xpReward: perPartXp,
                 teach: normalizeTeach(content.teach),
-                exercises: (content.exercises ?? []).map(normalizeExercise).filter(Boolean),
+                exercises: (content.exercises ?? [])
+                    .map((ex: any) => {
+                        const n = normalizeExercise(ex)
+                        if (!n) return null
+                        // Trim + dedupe options → kills visually-duplicate choices ("Mira." vs "Mira. ")
+                        if (Array.isArray(n.options)) {
+                            const seen = new Set<string>()
+                            n.options = n.options
+                                .map((o: any) => String(o).trim())
+                                .filter((o: string) => {
+                                    if (!o) return false
+                                    const k = o.toLowerCase()
+                                    if (seen.has(k)) return false
+                                    seen.add(k); return true
+                                })
+                            // guarantee the answer is always among the options
+                            if (n.answer && !n.options.some((o: string) => o.toLowerCase() === String(n.answer).toLowerCase())) {
+                                n.options.push(String(n.answer).trim())
+                            }
+                        }
+                        if (typeof n.answer === 'string') n.answer = n.answer.trim()
+                        if (typeof n.prompt === 'string') n.prompt = n.prompt.trim()
+                        if (typeof n.audio === 'string') n.audio = n.audio.trim()
+                        // Attach the REAL meaning (translation), not the exercise instruction
+                        n.meaning = meaningOf(n.answer) ?? meaningOf(n.audio) ?? null
+                        return n
+                    })
+                    .filter(Boolean),
                 realLife: content.realLife ?? null,
             }
         })
@@ -153,11 +203,15 @@ router.get('/api/v1/lessons/:conceptId', async (req: Request, res: Response, nex
             return ((e?.content as any)?.teach?.[0]?.text) ?? null
         }
 
+        const firstExample = ((realization?.examples as any[]) ?? [])[0] ?? null
+
         res.json({
             lesson: {
                 conceptId: comp.id,
                 conceptName: comp.title,
                 canDo: comp.canDo,
+                // The true meaning of the core phrase; falls back to the can-do (communicative meaning)
+                coreMeaning: meaningOf(firstExample) ?? comp.canDo,
                 mode: typeof req.query.mode === 'string' ? req.query.mode : user.preferredMode,
                 xpReward: comp.xpReward,
                 grammarNote: realization?.grammarNote ?? null,
