@@ -2,26 +2,38 @@
 
 /**
  * InteractionDock — the learner's control surface for the current beat.
- * - choice → ChoiceGrid
- * - speak  → prompt + HintLadder + MicButton (+ typing fallback for
- *            accessibility / denied mic; flows through the same grading)
- * - listen → quiet affordance hint (the tap lives on the bubble)
- * The dock owns only its local UI state; all pedagogy lives in useSceneEngine.
+ *
+ * Phase 8 additions:
+ * - `repairOpen` / `onRepair` props from the engine; when true, renders
+ *   the RepairDock (try again / ask to repeat / hear example) instead of
+ *   the mic UI — giving the learner agency over recovery (Arts. 11/18).
+ * - `showHints` prop: at low support levels, the dock hides the hint
+ *   ladder and the "hear an example" repair option.
+ * - `unexpected` beat kind: rendered like `speak` but with the gloss
+ *   folded into the prompt; repair counts as evidence.
  */
 import { useEffect, useState } from 'react'
 import { Keyboard, Send } from 'lucide-react'
 import ChoiceGrid from './ChoiceGrid'
 import HintLadder from './HintLadder'
 import MicButton from './MicButton'
+import RepairDock, { type RepairAction } from './RepairDock'
 import type { SceneBeat, SceneOption } from '@/lib/sceneTypes'
 import type { MicError, MicState } from '@/hooks/useMic'
 
-export default function InteractionDock({ beat, hintLevel, micState, micError, onPick, onMicStart, onMicStop, onTyped }: {
+export default function InteractionDock({
+    beat, hintLevel, repairOpen, showHints = true,
+    micState, micError,
+    onPick, onRepair, onMicStart, onMicStop, onTyped,
+}: {
     beat: SceneBeat | undefined
     hintLevel: number
+    repairOpen: boolean
+    showHints?: boolean
     micState: MicState
     micError: MicError
     onPick: (option: SceneOption) => void
+    onRepair: (action: RepairAction) => void
     onMicStart: () => void
     onMicStop: () => void
     onTyped: (text: string) => void
@@ -43,14 +55,23 @@ export default function InteractionDock({ beat, hintLevel, micState, micError, o
         )
     }
 
-    if (beat.kind === 'speak') {
+    // Phase 8: `speak` and `unexpected` share the same interaction surface.
+    if (beat.kind === 'speak' || beat.kind === 'unexpected') {
+        const prompt = beat.kind === 'unexpected'
+            ? `They said: "${beat.es}"${beat.gloss ? ` (${beat.gloss})` : ''}. Respond however you can — or repair.`
+            : beat.prompt
+        const hints = beat.kind === 'speak' ? (beat.hints ?? []) : []
+
         return (
             <div className="px-4 sm:px-6 pb-6 text-center space-y-3">
-                <p className="text-sm text-cream/70">{beat.prompt}</p>
+                <p className="text-sm text-cream/70">{prompt}</p>
 
-                <HintLadder hints={beat.hints ?? []} level={hintLevel} />
+                {/* Hints only when support is still scaffolded (Art. 12). */}
+                {showHints && <HintLadder hints={hints} level={hintLevel} />}
 
-                {!typeMode ? (
+                {repairOpen ? (
+                    <RepairDock onRepair={onRepair} showExample={showHints} />
+                ) : !typeMode ? (
                     <>
                         <MicButton
                             state={micState}
@@ -95,7 +116,7 @@ export default function InteractionDock({ beat, hintLevel, micState, micError, o
     if (beat.kind === 'listen') {
         return (
             <p className="pb-5 text-center text-[11px] text-cream/40">
-                Tap “tap to listen” on the message above.
+                Tap "tap to listen" on the message above.
             </p>
         )
     }

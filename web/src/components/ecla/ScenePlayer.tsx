@@ -5,6 +5,10 @@
  * Composes SceneBackdrop + SceneLog + InteractionDock + EvidenceCard around
  * the useSceneEngine state machine. Owns only the "saving" UI state;
  * evidence persistence is the page's job (onDone).
+ *
+ * Phase 8: passes `repairOpen`, `onRepair`, and `showHints` from the engine
+ * to the InteractionDock so the learner's agency on failure (repair/retry/
+ * example) and support-fading are honored.
  */
 import { useState } from 'react'
 import { useSceneEngine } from '@/hooks/useSceneEngine'
@@ -52,6 +56,9 @@ export default function ScenePlayer({ scene, support = 'medium', getToken, onSta
                 <InteractionDock
                     beat={engine.beat}
                     hintLevel={engine.hintLevel}
+                    repairOpen={engine.repairOpen}
+                    showHints={engine.showHints}
+                    onRepair={engine.repairChoice}
                     micState={engine.micState}
                     micError={engine.micError}
                     onPick={engine.pick}

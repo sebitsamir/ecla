@@ -27,6 +27,23 @@ export type Environment = 'cafe' | 'street' | 'shop' | 'home' | 'hotel' | 'offic
 export type SceneOption = { label: string; correct?: boolean }
 
 /**
+ * A harder follow-up spliced into the beat queue when the learner
+ * nails the parent beat on the first clean try (Phase 8 branching).
+ * useSceneEngine inserts it as a full `speak` beat right after the parent.
+ */
+export type ChallengeSpec = {
+    /** The NPC who poses the challenge. */
+    character: CharacterId
+    /** The NPC's line — doubles as their repeat line during repair. */
+    es: string
+    prompt: string
+    expected: string[]
+    accept?: string[]
+    hints?: string[]
+    replyOnSuccess?: string
+}
+
+/**
  * One moment in a scene. Kinds:
  * - action:         narrator stage direction (auto-advances)
  * - say:            NPC speaks (auto TTS, then advances)
@@ -34,6 +51,8 @@ export type SceneOption = { label: string; correct?: boolean }
  * - transfer-intro: "Same ability. New situation." — swaps the setting
  * - choice:         meaning-discovery / recognition options
  * - speak:          mic-first production; graded by useGrader
+ * - unexpected:     NPC speaks slightly beyond comfort (Phase 8);
+ *                   responding OR repairing both count as evidence (Arts. 14/15)
  */
 export type SceneBeat =
     | { kind: 'action'; text: string; stage?: StageName }
@@ -54,6 +73,24 @@ export type SceneBeat =
         open?: boolean
         /** NPC's natural reply when the learner succeeds — the world reacts. */
         replyOnSuccess?: string
+        /**
+         * What the NPC actually said that the learner is answering (Phase 8).
+         * Used when the learner asks them to repeat during repair.
+         */
+        npcLine?: string
+        /** First-try clean success → insert this harder follow-up (Phase 8 branching). */
+        challenge?: ChallengeSpec
+        stage?: StageName
+    }
+    | {
+        kind: 'unexpected'
+        character: CharacterId
+        /** The NPC's line, slightly beyond the learner's comfort zone. */
+        es: string
+        /** Hidden gloss shown in the dock so the learner grasps the stakes. */
+        gloss?: string
+        /** Tolerated responses; falls back to the line itself when absent. */
+        accept?: string[]
         stage?: StageName
     }
 
