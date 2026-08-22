@@ -15,6 +15,7 @@ import adminRoutes from './routes/admin'
 import voiceRoutes from './routes/voice'
 import learnerRoutes from './routes/learner'
 import adaptiveRoutes from './routes/adaptive'
+import missionRoutes from './routes/missions'
 
 const app = express()
 
@@ -56,6 +57,7 @@ app.use(adminRoutes)
 app.use(voiceRoutes)
 app.use(learnerRoutes)
 app.use(adaptiveRoutes)
+app.use(missionRoutes)
 
 // 404
 app.use((_req: Request, res: Response) => {
