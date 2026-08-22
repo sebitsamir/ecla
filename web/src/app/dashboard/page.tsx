@@ -38,7 +38,7 @@
  * 
  * Progress Sync:
  * - Listens to 'ecla:progress-updated' event (legacy code)
- * - Listens to 'luma:progress-updated' event (lesson page dispatches this)
+ * - Listens to 'ecla:progress-updated' event (lesson page dispatches this)
  * - Refreshes on window focus (user returns from another tab)
  * - This ensures dashboard stays in sync with course progress
  * 
@@ -185,11 +185,11 @@ export default function DashboardPage() {
   useEffect(() => {
     const handleUpdate = () => fetchDashboard()
     window.addEventListener('ecla:progress-updated', handleUpdate)
-    window.addEventListener('luma:progress-updated', handleUpdate)
+    window.addEventListener('ecla:progress-updated', handleUpdate)
     window.addEventListener('focus', handleUpdate)
     return () => {
       window.removeEventListener('ecla:progress-updated', handleUpdate)
-      window.removeEventListener('luma:progress-updated', handleUpdate)
+      window.removeEventListener('ecla:progress-updated', handleUpdate)
       window.removeEventListener('focus', handleUpdate)
     }
   }, [fetchDashboard])
