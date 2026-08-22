@@ -1,594 +1,1008 @@
-import { PrismaClient } from '@prisma/client'
+import { Prisma, PrismaClient, ExperienceType } from "@prisma/client";
 
-const prisma = new PrismaClient()
+/**
+ * ECLA — Sub-Lesson Content Seeder (CONTENT LAYER)
+ *
+ * Division of labor:
+ *   seed.ts           → structure: language, course, units, competencies,
+ *                       realizations, vocabulary, prerequisites, base experiences
+ *   seedSublessons.ts → depth: 9-stage engine payload + assessment contract +
+ *                       missions + player-native legacy bridge exercises
+ *
+ * Merge decisions (v1.0):
+ *   1. STAGES / support / record keys cleaned — stage switch now actually matches.
+ *   2. IDs aligned with seed.ts:
+ *        experience: `${competency.id}-${type}`   (overwrites, no duplicates)
+ *        mission:    `${competency.id}-gateway`   (converges with seed.ts)
+ *   3. Legacy bridge exercises are player-native + gradable (match, fill_blank,
+ *      listen_choose, listen_type, mcq, translate) with accept[] for Phase 1.
+ *   4. Engine payload (subLessons, assessment, mission config) preserved —
+ *      the current player ignores it; Phases 2–4 will consume it.
+ *
+ * Deterministic + idempotent: safe to re-run any time.
+ */
+import { phases } from './content/phases'
+import { validatePhases } from './content/validate'
+import type { CompetencyContent } from './content/types'
+
+/** Retry transient Neon connection drops (P1017/P1008) with backoff */
+async function withRetry<T>(fn: () => Promise<T>, attempts = 4): Promise<T> {
+    for (let i = 0; i < attempts; i++) {
+        try {
+            return await fn()
+        } catch (e: any) {
+            const retryable = ['P1017', 'P1008', 'P1011'].includes(e?.code) ||
+                String(e?.message ?? '').includes('closed the connection')
+            if (!retryable || i === attempts - 1) throw e
+            const wait = 2000 * (i + 1)
+            console.warn(`DB connection dropped — retrying in ${wait}ms (${i + 2}/${attempts})…`)
+            await new Promise(r => setTimeout(r, wait))
+        }
+    }
+    throw new Error('unreachable')
+}
+const prisma = new PrismaClient();
+
+const VERSION = "ecla-sublessons-v1.0";
+
+// ── The reusable 9-stage formula (§11) ──
+const STAGES = [
+    "ENCOUNTER",
+    "UNDERSTAND",
+    "NOTICE",
+    "RECOGNIZE",
+    "RETRIEVE",
+    "PRODUCE",
+    "INTERACT",
+    "TRANSFER",
+    "RETAIN",
+] as const;
+
+type Stage = (typeof STAGES)[number];
+type JsonObject = Record<string, unknown>;
+type VocabItem = { word: string; translation: string };
+
+type Target = {
+    chunks: string[];
+    patterns: string[];
+    examples: string[];
+    vocabulary: string[];
+    vocabItems: VocabItem[];
+    grammar?: string;
+    pronunciation?: string;
+    culture?: string;
+};
+
+type Activity = {
+    id: string;
+    stage: Stage;
+    type: string;
+    title: string;
+    purpose: string;
+    prompt?: string;
+    input?: unknown;
+    expectedOutput?: unknown;
+    constraints?: string[];
+    evaluation?: JsonObject;
+};
+
+type SubLesson = {
+    id: string;
+    order: number;
+    stage: Stage;
+    title: string;
+    objective: string;
+    learnerAction: string;
+    support: "maximum" | "high" | "medium" | "low" | "minimal";
+    activities: Activity[];
+};
+
+// ─────────────────────────── utils ───────────────────────────
+
+function slug(value: string): string {
+    return value
+        .normalize("NFD")
+        .replace(/[\u0300-\u036f]/g, "")
+        .toLowerCase()
+        .replace(/[^a-z0-9]+/g, "-")
+        .replace(/^-|-$/g, "");
+}
+
+function cleanStrings(value: unknown): string[] {
+    if (!Array.isArray(value)) return [];
+    return value.filter((x): x is string => typeof x === "string" && x.trim().length > 0);
+}
+
+function cleanVocabWords(value: unknown): string[] {
+    if (!Array.isArray(value)) return [];
+    return value
+        .map((item) => {
+            if (typeof item === "string") return item;
+            if (item && typeof item === "object" && "word" in item) {
+                const w = (item as { word?: unknown }).word;
+                return typeof w === "string" ? w : null;
+            }
+            return null;
+        })
+        .filter((x): x is string => Boolean(x));
+}
+
+function cleanVocabItems(value: unknown): VocabItem[] {
+    if (!Array.isArray(value)) return [];
+    const out: VocabItem[] = [];
+    for (const item of value) {
+        if (item && typeof item === "object" && "word" in item && "translation" in item) {
+            const v = item as { word?: unknown; translation?: unknown };
+            if (typeof v.word === "string" && typeof v.translation === "string") {
+                out.push({ word: v.word, translation: v.translation });
+            }
+        }
+    }
+    return out;
+}
+
+function first<T>(items: T[], fallback: T): T {
+    return items[0] ?? fallback;
+}
+
+function unique<T>(items: T[]): T[] {
+    return [...new Set(items)];
+}
+
+// Deterministic RNG so re-seeds are byte-identical
+function hashSeed(s: string): number {
+    let h = 1779033703 ^ s.length;
+    for (let i = 0; i < s.length; i++) {
+        h = Math.imul(h ^ s.charCodeAt(i), 3432918353);
+        h = (h << 13) | (h >>> 19);
+    }
+    return h >>> 0;
+}
+function mulberry32(a: number): () => number {
+    return () => {
+        a |= 0; a = (a + 0x6d2b79f5) | 0;
+        let t = Math.imul(a ^ (a >>> 15), 1 | a);
+        t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t;
+        return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+    };
+}
+function shuffle<T>(r: () => number, arr: T[]): T[] {
+    const a = [...arr];
+    for (let i = a.length - 1; i > 0; i--) {
+        const j = Math.floor(r() * (i + 1));
+        [a[i], a[j]] = [a[j], a[i]];
+    }
+    return a;
+}
+
+/** Blank one content word from a pattern → fill_blank exercise. */
+function blankPattern(p: string): { prompt: string; answer: string; accept: string[] } | null {
+    const words = p.split(" ");
+    if (words.length < 2) return null;
+    const cands = words
+        .map((w, i) => ({ w, i }))
+        .filter(({ w, i }) => i > 0 && w.replace(/[^a-záéíóúñü]+/gi, "").length >= 3);
+    if (!cands.length) return null;
+    const pick = cands[cands.length - 1];
+    return {
+        prompt: words.map((w, i) => (i === pick.i ? "___" : w)).join(" "),
+        answer: pick.w,
+        accept: [],
+    };
+}
+
+// ─────────────────────── target assembly ───────────────────────
+
+function targetFromCompetency(competency: any, realization: any, vocabulary: any[]): Target {
+    return {
+        chunks: unique([...cleanStrings(realization?.patterns), ...cleanStrings(competency?.patterns)]),
+        patterns: unique([...cleanStrings(realization?.patterns), ...cleanStrings(competency?.patterns)]),
+        examples: unique([...cleanStrings(realization?.examples), ...cleanStrings(competency?.examples)]),
+        vocabulary: unique([...vocabulary.map((v) => v.word).filter(Boolean), ...cleanVocabWords(competency?.vocabulary)]),
+        vocabItems: unique(cleanVocabItems(vocabulary).map((v) => JSON.stringify(v))).map((s) => JSON.parse(s)),
+        grammar: realization?.grammarNote ?? competency?.grammarNote ?? undefined,
+        pronunciation: realization?.pronunciationNote ?? competency?.pronunciationNote ?? undefined,
+        culture: realization?.culturalNote ?? competency?.culturalNote ?? undefined,
+    };
+}
+
+function targetExample(target: Target): string {
+    return first(target.examples, first(target.patterns, "the target expression"));
+}
+
+function targetChunkList(target: Target): string[] {
+    return target.chunks.length ? target.chunks.slice(0, 6) : target.examples.slice(0, 6);
+}
+
+// ─────────────── legacy bridge exercises (player-native) ───────────────
+
+/**
+ * Renderable + gradable exercises for the CURRENT lesson player.
+ * Mode-differentiated ordering; every item carries accept[] (Phase-1 ready).
+ * The engine payload (subLessons) carries the pedagogical depth; this bridge
+ * keeps today's player fully functional.
+ */
+function legacyExercises(type: ExperienceType, target: Target, r: () => number): any[] {
+    const vocab = target.vocabItems;
+    const example = targetExample(target);
+    const ex: any[] = [];
+
+    const match: any[] = vocab.length >= 3
+        ? [{ type: "match", pairs: shuffle(r, vocab).slice(0, 5).map((v) => ({ a: v.word, b: v.translation })) }]
+        : [];
+
+    const blanks: any[] = [];
+    for (const p of target.patterns.slice(0, 2)) {
+        const b = blankPattern(p);
+        if (b) blanks.push({ type: "fill_blank", prompt: b.prompt, answer: b.answer, accept: b.accept });
+    }
+
+    const pool = shuffle(r, [...target.examples, ...target.patterns]);
+    const listenChoose: any[] = pool.length >= 2
+        ? [{ type: "listen_choose", prompt: "Listen and choose what you hear", audio: pool[0], options: pool.slice(0, 4), answer: pool[0], accept: [] }]
+        : [];
+
+    const listenType: any[] = target.examples[0]
+        ? [{ type: "listen_type", audio: example, answer: example, accept: target.examples.slice(1) }]
+        : [];
+
+    const mcqs: any[] = [];
+    for (const v of shuffle(r, vocab).slice(0, 2)) {
+        const d = shuffle(r, vocab.filter((x) => x.word !== v.word).map((x) => x.translation)).slice(0, 3);
+        if (d.length === 3) {
+            mcqs.push({
+                type: "mcq",
+                prompt: `What does “${v.word}” mean?`,
+                options: shuffle(r, [v.translation, ...d]),
+                answer: v.translation,
+                accept: [],
+            });
+        }
+    }
+
+    const translates: any[] = vocab
+        .slice(0, 2)
+        .map((v) => ({ type: "translate", prompt: `How do you say “${v.translation}”?`, answer: v.word, accept: [] }));
+
+    switch (type) {
+        case ExperienceType.STORY: ex.push(...listenChoose, ...mcqs, ...blanks, ...listenType); break;
+        case ExperienceType.DRILL: ex.push(...match, ...blanks, ...mcqs, ...translates); break;
+        case ExperienceType.IMMERSION: ex.push(...listenType, ...listenChoose, ...match); break;
+        case ExperienceType.PROFESSIONAL: ex.push(...translates, ...mcqs, ...blanks); break;
+        case ExperienceType.MISSION: ex.push(...listenChoose, ...mcqs); break; // warm-ups only
+    }
+    return ex.slice(0, 6);
+}
+
+// ─────────────────────── support ladder (§3.4) ───────────────────────
+
+function supportFor(stage: Stage): SubLesson["support"] {
+    switch (stage) {
+        case "ENCOUNTER": return "maximum";
+        case "UNDERSTAND": return "maximum";
+        case "NOTICE": return "high";
+        case "RECOGNIZE": return "high";
+        case "RETRIEVE": return "medium";
+        case "PRODUCE": return "medium";
+        case "INTERACT": return "low";
+        case "TRANSFER": return "minimal";
+        case "RETAIN": return "minimal";
+    }
+}
+
+// ─────────────────── evaluation contract (form vs function) ───────────────────
+
+function baseEvaluation(stage: Stage, competency: any): JsonObject {
+    const functionCriteria = [
+        "intended_meaning_communicated",
+        "appropriate_response_or_action",
+        "task_continued_when_possible",
+    ];
+    const formCriteria = ["target_language_used", "intelligible_output"];
+
+    if (String(competency.domain).toUpperCase().includes("INTERACTION") || String(competency.code).includes("INT")) {
+        functionCriteria.push("interaction_maintained");
+    }
+    if (
+        String(competency.code).includes("REP") ||
+        String(competency.code).includes("UND") ||
+        String(competency.title).toLowerCase().includes("repair")
+    ) {
+        functionCriteria.push("misunderstanding_repaired");
+    }
+
+    return {
+        stage,
+        form: { criteria: formCriteria, weight: stage === "TRANSFER" ? 0.35 : 0.5 },
+        function: { criteria: functionCriteria, weight: stage === "TRANSFER" || stage === "INTERACT" ? 0.65 : 0.5 },
+        masteryEvidence: stage === "RETAIN" || stage === "TRANSFER",
+    };
+}
+
+function makeActivity(
+    competency: any,
+    target: Target,
+    stage: Stage,
+    index: number,
+    data: Omit<Activity, "id" | "stage" | "evaluation">,
+): Activity {
+    return {
+        ...data,
+        id: `${slug(competency.code)}-${stage.toLowerCase()}-${index + 1}`,
+        stage,
+        evaluation: baseEvaluation(stage, competency),
+    };
+}
+
+// ─────────────────────── 9-stage sub-lesson builder ───────────────────────
+
+function stageTitle(stage: Stage): string {
+    const titles: Record<Stage, string> = {
+        ENCOUNTER: "Encounter",
+        UNDERSTAND: "Understand",
+        NOTICE: "Notice",
+        RECOGNIZE: "Recognize",
+        RETRIEVE: "Retrieve",
+        PRODUCE: "Produce",
+        INTERACT: "Interact",
+        TRANSFER: "Transfer",
+        RETAIN: "Retain",
+    };
+    return titles[stage];
+}
+
+function stageObjective(stage: Stage, canDo: string): string {
+    const objectives: Record<Stage, string> = {
+        ENCOUNTER: `Meet language that is useful for: ${canDo}`,
+        UNDERSTAND: `Understand the communicative meaning needed to: ${canDo}`,
+        NOTICE: `Notice the reusable language pattern used to: ${canDo}`,
+        RECOGNIZE: `Recognize the target when hearing or seeing it in context while trying to: ${canDo}`,
+        RETRIEVE: `Retrieve useful language from memory in order to: ${canDo}`,
+        PRODUCE: `Produce understandable language independently enough to: ${canDo}`,
+        INTERACT: `Use the competency with another person to: ${canDo}`,
+        TRANSFER: `Transfer the competency to an unfamiliar but appropriate situation: ${canDo}`,
+        RETAIN: `Retrieve and use the competency after delay: ${canDo}`,
+    };
+    return objectives[stage];
+}
+
+function learnerAction(stage: Stage): string {
+    const actions: Record<Stage, string> = {
+        ENCOUNTER: "listen and notice the situation",
+        UNDERSTAND: "infer and confirm meaning",
+        NOTICE: "notice the useful pattern and pronunciation",
+        RECOGNIZE: "identify the target from meaningful alternatives",
+        RETRIEVE: "recall the target without looking",
+        PRODUCE: "create an understandable response",
+        INTERACT: "respond to a partner and keep the exchange moving",
+        TRANSFER: "solve a new situation with minimal support",
+        RETAIN: "retrieve the competency after a delay",
+    };
+    return actions[stage];
+}
+
+function buildSubLesson(competency: any, target: Target, stage: Stage, order: number): SubLesson {
+    const canDo = competency.canDo as string;
+    const example = targetExample(target);
+    const chunks = targetChunkList(target);
+    const activities: Activity[] = [];
+
+    switch (stage) {
+        case "ENCOUNTER":
+            activities.push(
+                makeActivity(competency, target, stage, 0, {
+                    type: "context",
+                    title: "Meet the language in context",
+                    purpose: "Give the learner a meaningful first encounter before explanation.",
+                    input: {
+                        scenario: `A short, realistic situation where the learner needs to ${canDo.toLowerCase()}.`,
+                        targetLanguage: example,
+                        translationPolicy: "hidden_by_default",
+                    },
+                    constraints: [
+                        "use only language appropriate to the learner's level",
+                        "do not begin with grammar terminology",
+                        "make the communicative purpose obvious from context",
+                    ],
+                }),
+                makeActivity(competency, target, stage, 1, {
+                    type: "listening",
+                    title: "First hearing",
+                    purpose: "Let the learner hear the target naturally before producing it.",
+                    prompt: "Listen once for the situation. Listen again for the target expression.",
+                    input: { utterances: chunks.slice(0, 3), speed: "slow_natural" },
+                    expectedOutput: "identify_the_target_in_context",
+                }),
+            );
+            break;
+        case "UNDERSTAND":
+            activities.push(
+                makeActivity(competency, target, stage, 0, {
+                    type: "meaning_discovery",
+                    title: "Discover the meaning",
+                    purpose: "Connect the expression directly to communicative meaning.",
+                    prompt: `What is the speaker trying to do when they say: ${example}?`,
+                    input: {
+                        options: [
+                            `They are trying to ${canDo.toLowerCase()}.`,
+                            "They are ending the conversation.",
+                            "They are talking about something unrelated.",
+                        ],
+                    },
+                    expectedOutput: `They are trying to ${canDo.toLowerCase()}.`,
+                }),
+                makeActivity(competency, target, stage, 1, {
+                    type: "comprehension",
+                    title: "Meaning in a second context",
+                    purpose: "Confirm that meaning survives a new but familiar situation.",
+                    prompt: "Choose what the learner should understand from the exchange.",
+                    input: { scenarioVariant: "new_context_same_function", target: example },
+                    expectedOutput: "correct_communicative_intent",
+                }),
+            );
+            break;
+        case "NOTICE":
+            activities.push(
+                makeActivity(competency, target, stage, 0, {
+                    type: "noticing",
+                    title: "Notice the useful pattern",
+                    purpose: "Help the learner see the reusable form without overloading them.",
+                    prompt: "Look at the expression. What part stays useful when the situation changes?",
+                    input: { patterns: chunks.slice(0, 5), grammar: target.grammar ?? null },
+                    expectedOutput: "identify_reusable_pattern",
+                    constraints: ["meaning first", "short explanation", "no unnecessary terminology"],
+                }),
+                makeActivity(competency, target, stage, 1, {
+                    type: "pronunciation",
+                    title: "Make it intelligible",
+                    purpose: "Build intelligible pronunciation rather than imitation of a native accent.",
+                    prompt: "Listen, notice stress and rhythm, then repeat.",
+                    input: {
+                        target: example,
+                        note: target.pronunciation ?? "Prioritize clear vowels, stress, and understandable rhythm.",
+                    },
+                    expectedOutput: "intelligible_repetition",
+                }),
+            );
+            break;
+        case "RECOGNIZE":
+            activities.push(
+                makeActivity(competency, target, stage, 0, {
+                    type: "recognition",
+                    title: "Recognize the function",
+                    purpose: "Distinguish the target from plausible but wrong alternatives.",
+                    prompt: `Which expression helps you ${canDo.toLowerCase()}?`,
+                    input: {
+                        options: unique([...chunks.slice(0, 3), "Hasta luego.", "No entiendo.", "Gracias."]).slice(0, 5),
+                    },
+                    expectedOutput: example,
+                }),
+                makeActivity(competency, target, stage, 1, {
+                    type: "listening_discrimination",
+                    title: "Hear it among alternatives",
+                    purpose: "Strengthen listening recognition rather than visual recognition only.",
+                    input: { target: example, distractors: chunks.slice(1, 4), presentation: "audio_first" },
+                    expectedOutput: "target_identified_from_audio",
+                }),
+            );
+            break;
+        case "RETRIEVE":
+            activities.push(
+                makeActivity(competency, target, stage, 0, {
+                    type: "recall",
+                    title: "Retrieve from memory",
+                    purpose: "Move the learner from recognition to active retrieval.",
+                    prompt: `Without looking at the answer, say what you would use to ${canDo.toLowerCase()}.`,
+                    input: { cue: canDo, support: "meaning_only" },
+                    expectedOutput: {
+                        accepted: targetChunkList(target),
+                        minimum: "communicatively_appropriate_target",
+                    },
+                }),
+                makeActivity(competency, target, stage, 1, {
+                    type: "completion",
+                    title: "Complete the pattern",
+                    purpose: "Practice controlled manipulation without turning the task into a translation test.",
+                    prompt: "Complete the expression for the new situation.",
+                    input: { sentenceFrame: first(target.patterns, example), variableSlot: "contextual_element" },
+                    expectedOutput: "grammatical_and_communicative_completion",
+                }),
+            );
+            break;
+        case "PRODUCE":
+            activities.push(
+                makeActivity(competency, target, stage, 0, {
+                    type: "guided_speaking",
+                    title: "Say it yourself",
+                    purpose: "Produce the target with decreasing support.",
+                    prompt: `Say something that allows you to ${canDo.toLowerCase()}.`,
+                    input: { cue: canDo, support: chunks.slice(0, 2) },
+                    expectedOutput: { function: canDo, examples: target.examples.slice(0, 4) },
+                    constraints: [
+                        "meaning matters more than exact wording",
+                        "accept valid equivalent beginner phrasing",
+                        "evaluate pronunciation for intelligibility",
+                    ],
+                }),
+                makeActivity(competency, target, stage, 1, {
+                    type: "free_retrieval",
+                    title: "Produce without the sentence frame",
+                    purpose: "Check whether the learner can retrieve the function independently.",
+                    prompt: "The situation is given, but the target phrase is not.",
+                    input: { scenario: `You need to ${canDo.toLowerCase()}.` },
+                    expectedOutput: "independent_communicative_response",
+                }),
+            );
+            break;
+        case "INTERACT":
+            activities.push(
+                makeActivity(competency, target, stage, 0, {
+                    type: "guided_interaction",
+                    title: "Use it with a partner",
+                    purpose: "Turn production into actual interaction.",
+                    prompt: "Respond to the partner and continue the exchange for at least one turn.",
+                    input: {
+                        partnerRole: "supportive_native_or_ai_partner",
+                        opening: example,
+                        followUpPolicy: "natural_short_response",
+                    },
+                    expectedOutput: "appropriate_interactive_response",
+                    constraints: [
+                        "partner does not say Correct every turn",
+                        "partner responds naturally",
+                        "allow repair when comprehension breaks down",
+                    ],
+                }),
+                makeActivity(competency, target, stage, 1, {
+                    type: "role_play",
+                    title: "Handle a small variation",
+                    purpose: "Prevent memorization from being mistaken for communicative ability.",
+                    input: { variation: "same_function_new_person_place_or_object", targetFunction: canDo },
+                    expectedOutput: "successful_exchange",
+                }),
+            );
+            break;
+        case "TRANSFER":
+            activities.push(
+                makeActivity(competency, target, stage, 0, {
+                    type: "simulation",
+                    title: "Use it in a new situation",
+                    purpose: "Test whether the competency transfers beyond the practiced example.",
+                    prompt: `Complete a new situation where you need to ${canDo.toLowerCase()}.`,
+                    input: {
+                        context: "unseen_but_level_appropriate",
+                        speakerVariation: true,
+                        lexicalVariation: true,
+                        support: "minimal",
+                    },
+                    expectedOutput: "task_completed_with_communicative_success",
+                    constraints: [
+                        "no exact memorized answer required",
+                        "do not introduce unrelated grammar",
+                        "accept natural equivalent wording",
+                    ],
+                }),
+                makeActivity(competency, target, stage, 1, {
+                    type: "unexpected_interaction",
+                    title: "Handle an unexpected change",
+                    purpose: "Measure adaptability when the situation is not identical to practice.",
+                    input: { change: "partner_changes_one_relevant_detail", targetFunction: canDo, support: "minimal" },
+                    expectedOutput: "adapted_response_or_repair",
+                }),
+            );
+            break;
+        case "RETAIN":
+            activities.push(
+                makeActivity(competency, target, stage, 0, {
+                    type: "spaced_retrieval",
+                    title: "Retrieve after a delay",
+                    purpose: "Check durable access rather than immediate lesson performance.",
+                    prompt: `Without reviewing the lesson, use Spanish to ${canDo.toLowerCase()}.`,
+                    input: { delayPolicy: [1, 2, 4, 7, 14, 30], cue: "meaning_or_situation_only" },
+                    expectedOutput: "independent_retrieval",
+                }),
+                makeActivity(competency, target, stage, 1, {
+                    type: "mixed_context_review",
+                    title: "Use it again in a different context",
+                    purpose: "Confirm retention plus transfer.",
+                    input: { context: "different_from_initial_learning", targetFunction: canDo },
+                    expectedOutput: "retained_and_transferable_use",
+                }),
+            );
+            break;
+    }
+
+    return {
+        id: `${slug(competency.code)}-${stage.toLowerCase()}`,
+        order,
+        stage,
+        title: stageTitle(stage),
+        objective: stageObjective(stage, canDo),
+        learnerAction: learnerAction(stage),
+        support: supportFor(stage),
+        activities,
+    };
+}
+
+// ─────────────────────── assessment contract (§6.4/6.5) ───────────────────────
+
+function assessmentFor(competency: any, target: Target): JsonObject {
+    const code = competency.code as string;
+    const canDo = competency.canDo as string;
+    const interaction = code.includes("INT") || String(competency.domain).toUpperCase() === "INTERACTION";
+    const repair = code.includes("REP") || code.includes("UND") || String(competency.title).toLowerCase().includes("repair");
+
+    return {
+        frameworkVersion: VERSION,
+        principle: "Evidence of ability, not lesson completion.",
+        form: { dimensions: ["grammar", "vocabulary", "pronunciation"], diagnosticOnly: false },
+        function: {
+            dimensions: [
+                "meaning_communicated",
+                "appropriate_response",
+                "task_continued",
+                ...(interaction ? ["interaction"] : []),
+                ...(repair ? ["repair"] : []),
+            ],
+        },
+        evidence: {
+            controlled: `${canDo} under strong support`,
+            guided: `${canDo} with contextual support`,
+            spontaneous: `${canDo} without a sentence frame`,
+            unexpected: `${canDo} after a small contextual change`,
+            delayed: `${canDo} after spaced delay`,
+            transfer: `${canDo} in an unseen context`,
+        },
+        mastery: {
+            minimumEvidence: ["controlled", "guided", "spontaneous", "transfer", "delayed"],
+            interactionRequired: interaction,
+            repairRequired: repair,
+            exactWordingRequired: false,
+            intelligibilityRequired: true,
+            repeatedContextsRequired: true,
+        },
+        retention: { scheduleDays: [1, 2, 4, 7, 14, 30], rescheduleOnFailure: true, rescheduleOnSuccess: true },
+        languageTargets: {
+            chunks: target.chunks.slice(0, 12),
+            patterns: target.patterns.slice(0, 12),
+            vocabulary: target.vocabulary.slice(0, 20),
+            grammar: target.grammar ?? null,
+            pronunciation: target.pronunciation ?? null,
+            culture: target.culture ?? null,
+        },
+    };
+}
+
+// ─────────────────────── experience content (dual contract) ───────────────────────
+
+function buildExperienceContent(competency: any, target: Target, type: ExperienceType): JsonObject {
+    const canDo = competency.canDo as string;
+    const r = mulberry32(hashSeed(`${competency.code}:${type}`));
+    const example = targetExample(target);
+
+    const subLessons = STAGES.map((stage, index) => buildSubLesson(competency, target, stage, index + 1));
+
+    const core = {
+        schema: VERSION,
+        language: "es",
+        level: "PRE_A1",
+        competency: { code: competency.code, title: competency.title, canDo, domain: competency.domain },
+        pedagogy: {
+            sequence: STAGES,
+            supportRemoval: "maximum -> minimal",
+            formFunctionSplit: true,
+            transferRequired: true,
+            retentionRequired: true,
+        },
+        languageTargets: {
+            chunks: target.chunks,
+            patterns: target.patterns,
+            examples: target.examples,
+            vocabulary: target.vocabulary,
+            grammar: target.grammar ?? null,
+            pronunciation: target.pronunciation ?? null,
+            culture: target.culture ?? null,
+        },
+        subLessons,
+    };
+
+    // Legacy-compatible bridge: the CURRENT player consumes teach/exercises/realLife;
+    // the future engine consumes subLessons + assessment.
+    switch (type) {
+        case ExperienceType.STORY:
+            return {
+                ...core,
+                modePurpose: "context_and_meaning",
+                teach: [
+                    { type: "story", text: `You enter a simple situation where you need to ${canDo.toLowerCase()}.` },
+                    { type: "context", text: `Listen for the language people use to ${canDo.toLowerCase()}.` },
+                ],
+                exercises: legacyExercises(type, target, r),
+                realLife: { prompt: canDo, chatSeed: example, evaluation: "function_first" },
+            };
+        case ExperienceType.DRILL:
+            return {
+                ...core,
+                modePurpose: "retrieval_and_automaticity",
+                teach: [
+                    { type: "rule", text: target.grammar ?? `Practice the language needed to ${canDo.toLowerCase()}.` },
+                    { type: "pattern", examples: target.patterns.slice(0, 6) },
+                ],
+                exercises: legacyExercises(type, target, r),
+                realLife: { prompt: canDo, chatSeed: example, evaluation: "function_first" },
+            };
+        case ExperienceType.IMMERSION:
+            return {
+                ...core,
+                modePurpose: "spontaneous_interaction",
+                teach: [
+                    { type: "context", text: target.culture ?? `Notice how people naturally ${canDo.toLowerCase()} in context.` },
+                ],
+                exercises: legacyExercises(type, target, r),
+                realLife: {
+                    prompt: `You are in a natural conversation. ${canDo}`,
+                    chatSeed: example,
+                    partnerBehavior: "natural_not_teacher_like",
+                    evaluation: "communicative_success_plus_form_diagnostics",
+                },
+            };
+        case ExperienceType.PROFESSIONAL:
+            return {
+                ...core,
+                modePurpose: "purposeful_application",
+                teach: [
+                    { type: "context", text: `Use clear, polite language when you need to ${canDo.toLowerCase()}.` },
+                ],
+                exercises: legacyExercises(type, target, r),
+                realLife: { prompt: `A practical/workplace variation: ${canDo}`, chatSeed: example, register: "polite_clear_beginner" },
+            };
+        case ExperienceType.MISSION:
+            return {
+                ...core,
+                modePurpose: "transfer_assessment",
+                teach: [{ type: "mission", text: `Complete a real-world task: ${canDo}` }],
+                exercises: legacyExercises(type, target, r), // warm-ups; the mission itself is realLife
+                realLife: {
+                    prompt: canDo,
+                    chatSeed: example,
+                    support: "minimal",
+                    unexpectedVariation: true,
+                    evaluation: "evidence_rubric",
+                },
+            };
+    }
+}
+
+/** Merge hand-written content over generic generation (legacy bridge + engine payload). */
+function applyOverride(base: any, o: CompetencyContent | undefined, type: ExperienceType, target: Target): any {
+    if (!o) return base
+    if (o.pronunciation?.length) base.teach.push(...o.pronunciation.map(p => ({ type: 'tip', text: `${p.target}: ${p.note}` })))
+    if (o.culture) base.teach.push({ type: 'context', text: o.culture })
+    if (o.listening?.length) base.exercises.push(...o.listening.map(l => ({ type: 'listening', prompt: l.action, audio: l.utterance, answer: l.utterance, accept: [] })))
+
+    switch (type) {
+        case ExperienceType.STORY:
+            if (o.story) {
+                base.teach[0] = { type: 'story', text: o.story.beat }   // surfaces as variant.storyBeat
+                if (o.story.dialogue?.length) base.teach.splice(1, 0, ...o.story.dialogue.map(d => ({ type: 'example', es: d.line, en: '' })))
+            }
+            break
+        case ExperienceType.DRILL:
+            if (o.drill?.length) {
+                base.exercises = o.drill.map(d => d.kind === 'mcq'
+                    ? { type: 'mcq', prompt: d.prompt, options: unique([d.answer, ...(d.accept ?? []), ...target.examples]).slice(0, 4), answer: d.answer, accept: d.accept ?? [] }
+                    : d.kind === 'shadowing'
+                        ? { type: 'listening', prompt: d.prompt ?? 'Listen and repeat.', audio: d.answer, answer: d.answer, accept: d.accept ?? [] }
+                        : { type: 'recall', prompt: d.prompt, answer: d.answer, accept: d.accept ?? [] })
+            }
+            break
+        case ExperienceType.IMMERSION:
+            if (o.immersion?.script?.length) {
+                const lines = o.immersion.script.map(s => s.line)
+                base.teach[0] = { type: 'context', text: o.immersion.variationNote ?? 'Listen to a natural exchange.' }
+                base.exercises.push({ type: 'listening', prompt: 'Listen. Type the last line you hear.', audio: lines[lines.length - 1], answer: lines[lines.length - 1], accept: lines })
+            }
+            break
+        case ExperienceType.PROFESSIONAL:
+            if (o.professional) {
+                base.teach[0] = { type: 'context', text: o.professional.scenario }
+                if (o.professional.registerNote) base.teach.push({ type: 'tip', text: o.professional.registerNote })
+            }
+            break
+        case ExperienceType.MISSION:
+            if (o.mission) {
+                base.realLife = {
+                    ...base.realLife, prompt: o.mission.scenario,
+                    acceptableResponses: o.mission.acceptableResponses,
+                    unexpectedEvent: o.mission.unexpectedEvent ?? null,
+                    support: 'minimal', unexpectedVariation: !!o.mission.unexpectedEvent,
+                    evaluation: 'evidence_rubric',
+                }
+            }
+            break
+    }
+    return base
+}
+
+// ─────────────────────────── main ───────────────────────────
 
 async function main() {
-    console.log('Seeding sub-lessons for all concepts...')
+    console.log("ECLA — seeding competency sub-lessons (merged v1.0)...\n");
 
-    const course = await prisma.course.findFirst({
-        where: { isPublished: true },
-        include: { units: { include: { concepts: { orderBy: { orderIndex: 'asc' } } } } },
-    })
-    if (!course) throw new Error('No published course')
+    const competencies = await prisma.competency.findMany({
+        where: { level: "PRE_A1" },
+        include: {
+            realizations: { include: { language: true }, where: { language: { code: "es" } } },
+            vocabulary: { include: { vocabulary: true } },
+        },
+        orderBy: [{ unitId: "asc" }, { orderIndex: "asc" }],
+    });
 
-    const allConcepts = course.units.flatMap(u => u.concepts)
-    console.log(`  Found ${allConcepts.length} concepts to seed`)
-
-    // ───────────────────────────────────────────────────────────
-    // CONCEPT 1: Ser vs Estar (Emotions)
-    // ───────────────────────────────────────────────────────────
-    const concept1 = allConcepts.find(c => c.id === 'concept-ser-estar-emotions')
-    if (concept1) {
-        const subs = [
-            {
-                title: 'Understand: feelings use ESTAR',
-                icon: 'book-open',
-                xpReward: 5,
-                teach: [
-                    { type: 'explain', text: 'Emotions are temporary — you feel happy today, maybe sad tomorrow. In Spanish, temporary states always use "estar," never "ser." This is the single biggest rule in the whole language.' },
-                    { type: 'explain', text: 'Conjugation of "estar" with "yo": estoy. With "tú": estás. With "él/ella": está. With "nosotros": estamos. With "ellos/ellas": están.' },
-                    { type: 'example', es: 'Estoy feliz hoy.', en: 'I am happy today.' },
-                    { type: 'example', es: 'Ella está triste.', en: 'She is sad.' },
-                    { type: 'example', es: 'Estamos cansados.', en: 'We are tired.' },
-                    { type: 'vocab', items: [
-                        { word: 'feliz', translation: 'happy' },
-                        { word: 'triste', translation: 'sad' },
-                        { word: 'cansado', translation: 'tired' },
-                        { word: 'aburrido', translation: 'bored' },
-                        { word: 'ocupado', translation: 'busy' },
-                    ]},
-                    { type: 'tip', text: 'Look for time words like "hoy" (today), "ahora" (now), "esta mañana" (this morning). They almost always mean "estar," because they point to a specific moment.' },
-                ],
-                exercises: [
-                    { type: 'mcq', prompt: 'I am happy (right now).', options: ['Soy feliz', 'Estoy feliz'], answer: 'Estoy feliz', whyExplanation: 'Happiness right now is a temporary state — use "estar," not "ser."' },
-                    { type: 'mcq', prompt: 'She is tired today.', options: ['Ella es cansada hoy', 'Ella está cansada hoy'], answer: 'Ella está cansada hoy', whyExplanation: '"Hoy" (today) is the giveaway — a feeling tied to a specific day is temporary, so "está."' },
-                    { type: 'fill_blank', prompt: 'Nosotros ___ ocupados. (estar)', answer: 'estamos', whyExplanation: 'Nosotros form of "estar" is "estamos." Busy-ness is always a temporary state.' },
-                    { type: 'listen_choose', audio: 'Estoy triste.', options: ['I am sad.', 'I am boring.', 'I am tired.'], answer: 'I am sad.', whyExplanation: '"Estoy triste" — "triste" means sad, and "estoy" confirms it\'s a temporary feeling.' },
-                    { type: 'translate', prompt: 'We are happy today.', answer: 'Estamos felices hoy', whyExplanation: '"Nosotros" form is "estamos." Emotions are temporary, so "estar" is correct.' },
-                    { type: 'match', pairs: [
-                        { a: 'Estoy feliz', b: 'I am happy' },
-                        { a: 'Estás triste', b: 'You are sad' },
-                        { a: 'Está cansado', b: 'He is tired' },
-                        { a: 'Estamos aburridos', b: 'We are bored' },
-                    ], whyExplanation: 'Match each conjugation of "estar" with its English translation. Notice how the verb changes but the emotion stays the same.' },
-                ],
-                realLife: {
-                    prompt: 'Right now, say out loud: "Estoy [emotion] porque [reason]." Example: "Estoy cansado porque trabajé mucho."',
-                    chatSeed: 'Quiero practicar emociones con "estar": estoy feliz, estoy cansado, estoy triste. Dame ejemplos de cómo usar "estar" con diferentes emociones.',
-                },
-            },
-            {
-                title: 'Hear the feelings',
-                icon: 'ear',
-                xpReward: 5,
-                teach: [
-                    { type: 'explain', text: 'Native speakers often drop the subject pronoun (yo, tú, él). The verb ending itself tells you who is feeling the emotion. Train your ear to catch "estoy" vs "está" vs "están."' },
-                    { type: 'example', es: '¿Cómo estás? — Estoy bien.', en: '"How are you?" — "I am fine."' },
-                    { type: 'example', es: 'Están muy contentos hoy.', en: 'They are very happy today.' },
-                    { type: 'tip', text: 'Tap 🔊 on every example below at least twice. Your ear learns the rhythm faster than your eyes learn the rule.' },
-                ],
-                exercises: [
-                    { type: 'listen_choose', audio: 'Estoy cansado.', options: ['I am tired.', 'You are tired.', 'He is tired.'], answer: 'I am tired.', whyExplanation: '"Estoy" = "yo" form of estar, so it means "I am."' },
-                    { type: 'listen_choose', audio: 'Ella está triste.', options: ['She is sad.', 'He is sad.', 'They are sad.'], answer: 'She is sad.', whyExplanation: '"Está" + "ella" confirms she is sad. "Está" is the él/ella/usted form.' },
-                    { type: 'listen_type', audio: 'Estamos felices hoy.', answer: 'Estamos felices hoy.', whyExplanation: 'Listen carefully to the "nosotros" form: "estamos." This is how you say "we are (feeling)" in Spanish.' },
-                    { type: 'mcq', prompt: '"They are bored" in Spanish is…', options: ['Están aburridos', 'Estamos aburridos', 'Estoy aburrido'], answer: 'Están aburridos', whyExplanation: '"Ellos/ellas" form of estar is "están." "Aburridos" matches the plural subject.' },
-                    { type: 'listen_choose', audio: '¿Estás ocupado?', options: ['Are you busy?', 'Is he busy?', 'Are we busy?'], answer: 'Are you busy?', whyExplanation: '"Estás" is the "tú" (you) form of estar.' },
-                    { type: 'fill_blank', prompt: 'Listen and type: "___ (están) muy contentos."', answer: 'Están', whyExplanation: '"Están" is the "ellos/ellas" form. The audio says "Están muy contentos" — they are very happy.' },
-                ],
-                realLife: {
-                    prompt: 'Ask someone "¿Cómo estás?" and answer yourself with three different emotions throughout the day.',
-                    chatSeed: 'Practica escuchar frases con emociones: ¿Cómo estás? Estoy feliz, está cansado, están contentos.',
-                },
-            },
-            {
-                title: 'Watch out: meaning-changing adjectives',
-                icon: 'alert-triangle',
-                xpReward: 5,
-                teach: [
-                    { type: 'explain', text: 'A handful of adjectives actually CHANGE their meaning depending on whether you use "ser" or "estar." These are the ones that trip up even advanced learners, so learn them as exceptions now.' },
-                    { type: 'example', es: 'Estoy aburrido. (not "soy aburrido")', en: 'I am bored. (If you said "soy aburrido," you\'d be saying "I am a boring person"!)' },
-                    { type: 'example', es: 'Juan es aburrido.', en: 'Juan is boring (as a personality trait).' },
-                    { type: 'example', es: 'Estoy listo para salir.', en: 'I am ready to leave.' },
-                    { type: 'example', es: 'Juan es listo.', en: 'Juan is smart (as a trait).' },
-                    { type: 'vocab', items: [
-                        { word: 'aburrido (estar) = bored', translation: 'vs ser aburrido = boring' },
-                        { word: 'listo (estar) = ready', translation: 'vs ser listo = smart' },
-                        { word: 'malo (estar) = sick/ill', translation: 'vs ser malo = a bad person' },
-                        { word: 'verde (estar) = unripe', translation: 'vs ser verde = green color' },
-                    ]},
-                    { type: 'tip', text: 'The pattern: "estar" version is a state or situation; "ser" version is a personality trait or permanent quality.' },
-                ],
-                exercises: [
-                    { type: 'mcq', prompt: '"I am bored" (feeling right now, not a boring person)', options: ['Soy aburrido', 'Estoy aburrido'], answer: 'Estoy aburrido', whyExplanation: 'Boredom is a temporary feeling — "estar aburrido." "Soy aburrido" would mean "I am a boring person."' },
-                    { type: 'mcq', prompt: '"Juan is smart" (as a personality trait)', options: ['Juan está listo', 'Juan es listo'], answer: 'Juan es listo', whyExplanation: 'Smartness as a trait uses "ser listo." "Estar listo" would mean "Juan is ready (to do something)."' },
-                    { type: 'fill_blank', prompt: 'Mi hermano ___ enfermo hoy. (ser or estar)', answer: 'está', whyExplanation: 'Sickness is always temporary — use "estar enfermo." "Ser enfermo" would mean "he is a sick person" as a trait, which is wrong.' },
-                    { type: 'listen_choose', audio: 'Estoy aburrido en clase.', options: ['I am bored in class.', 'I am boring in class.'], answer: 'I am bored in class.', whyExplanation: '"Estoy aburrido" = I feel bored. The context (in class) confirms it\'s a current feeling.' },
-                    { type: 'translate', prompt: 'The apple is unripe (not ready to eat).', answer: 'La manzana está verde', whyExplanation: '"Verde" with "estar" means unripe. With "ser" it would mean green in color.' },
-                    { type: 'match', pairs: [
-                        { a: 'Estoy aburrido', b: 'I am bored (feeling)' },
-                        { a: 'Soy aburrido', b: 'I am boring (trait)' },
-                        { a: 'Estoy listo', b: 'I am ready (state)' },
-                        { a: 'Soy listo', b: 'I am smart (trait)' },
-                    ], whyExplanation: 'Notice how the same adjective changes meaning completely with ser vs estar. Memorize these as vocabulary chunks.' },
-                ],
-                realLife: {
-                    prompt: 'Say out loud: one thing you are bored of right now, one thing you are ready for, and describe someone as smart (not ready).',
-                    chatSeed: 'Practica los adjetivos que cambian de significado con ser vs estar: aburrido, listo, malo, verde.',
-                },
-            },
-            {
-                title: 'Use it: talk about your feelings today',
-                icon: 'message-circle',
-                xpReward: 5,
-                teach: [
-                    { type: 'explain', text: 'Real feeling-sentences follow: subject (optional) + estoy/está/están + emotion + optional reason. You can now describe how you feel AND why.' },
-                    { type: 'example', es: 'Estoy cansado porque trabajo mucho.', en: 'I am tired because I work a lot.' },
-                    { type: 'example', es: 'Estoy feliz hoy, es mi cumpleaños.', en: 'I am happy today, it is my birthday.' },
-                ],
-                exercises: [
-                    { type: 'translate', prompt: 'I am happy because it is Friday.', answer: 'Estoy feliz porque es viernes', whyExplanation: '"Estoy" for the feeling, "porque" (because) introduces the reason. "Viernes" = Friday.' },
-                    { type: 'translate', prompt: 'She is tired after work.', answer: 'Ella está cansada después del trabajo', whyExplanation: '"Estar + cansada" matches the feminine subject. "Después del trabajo" = after work.' },
-                    { type: 'mcq', prompt: '"We are busy today" in Spanish is…', options: ['Estamos ocupados hoy', 'Somos ocupados hoy', 'Están ocupados hoy'], answer: 'Estamos ocupados hoy', whyExplanation: '"Nosotros" form of estar is "estamos." Being busy is always a state, so "estar."' },
-                    { type: 'fill_blank', prompt: 'Mi amigo ___ (estar) triste ___ (porque) perdió su trabajo.', answer: 'está porque', whyExplanation: '"Está" for the temporary emotion, "porque" to give the reason. "Perdió" = lost.' },
-                    { type: 'listen_choose', audio: 'Estoy cansado porque trabajé mucho hoy.', options: ['I am tired because I worked a lot today.', 'I am boring because I work a lot today.'], answer: 'I am tired because I worked a lot today.', whyExplanation: '"Estoy cansado" = I feel tired (temporary). "Trabajé" = I worked (past tense).' },
-                    { type: 'match', pairs: [
-                        { a: 'Estoy feliz', b: 'I am happy' },
-                        { a: 'Ella está triste', b: 'She is sad' },
-                        { a: 'Estamos cansados', b: 'We are tired' },
-                        { a: 'Están aburridos', b: 'They are bored' },
-                    ], whyExplanation: 'Practice the full conjugation of "estar" with emotions. This is how you\'ll express feelings in Spanish.' },
-                ],
-                realLife: {
-                    prompt: 'Describe your morning, afternoon, and evening feelings in Spanish. Use "porque" to explain why you felt that way.',
-                    chatSeed: 'Hablemos de cómo me siento en diferentes momentos del día usando "estar" + emociones + "porque" + razón.',
-                },
-            },
-        ]
-
-        for (let i = 0; i < subs.length; i++) {
-            const s = subs[i] as any
-            await prisma.subLesson.upsert({
-                where: { conceptId_orderIndex: { conceptId: concept1.id, orderIndex: i } },
-                update: { title: s.title, icon: s.icon, xpReward: s.xpReward, teach: s.teach, exercises: s.exercises, realLife: s.realLife },
-                create: { conceptId: concept1.id, orderIndex: i, title: s.title, icon: s.icon, xpReward: s.xpReward, teach: s.teach, exercises: s.exercises, realLife: s.realLife },
-            })
-        }
-        console.log(`  ✓ Seeded ${subs.length} sub-lessons into "${concept1.name}"`)
+    if (competencies.length === 0) {
+        throw new Error("No PRE_A1 competencies found. Run seed.ts first, then seedSublessons.ts.");
     }
 
-    // ───────────────────────────────────────────────────────────
-    // CONCEPT 2: Ser vs Estar (Locations & Events)
-    // ───────────────────────────────────────────────────────────
-    const concept2 = allConcepts.find(c => c.id === 'concept-ser-estar-locations')
-    if (concept2) {
-        const subs = [
-            {
-                title: 'Understand: places vs events',
-                icon: 'book-open',
-                xpReward: 5,
-                teach: [
-                    { type: 'explain', text: 'Here is the one rule that trips up almost every learner: physical location = "estar," but where an event takes place = "ser." A hospital is a place ("está"), but a wedding is an event ("es").' },
-                    { type: 'explain', text: 'Ask yourself: is this a THING that sits somewhere, or an EVENT that happens somewhere? Thing = estar. Event = ser.' },
-                    { type: 'example', es: 'El hospital está lejos.', en: 'The hospital is far. (a thing, located somewhere)' },
-                    { type: 'example', es: 'La boda es en Madrid.', en: 'The wedding is in Madrid. (an event that takes place)' },
-                    { type: 'example', es: 'La reunión es en la oficina.', en: 'The meeting is at the office. (an event)' },
-                    { type: 'vocab', items: [
-                        { word: 'el aeropuerto', translation: 'the airport' },
-                        { word: 'la boda', translation: 'the wedding' },
-                        { word: 'el hospital', translation: 'the hospital' },
-                        { word: 'la reunión', translation: 'the meeting' },
-                        { word: 'la fiesta', translation: 'the party' },
-                    ]},
-                    { type: 'tip', text: 'Events are things with a start time and an end time: meetings, weddings, parties, concerts, classes. Places are buildings or locations on a map.' },
-                ],
-                exercises: [
-                    { type: 'mcq', prompt: 'The hospital is far.', options: ['El hospital es lejos', 'El hospital está lejos'], answer: 'El hospital está lejos', whyExplanation: 'A hospital is a building, a physical location — always "estar."' },
-                    { type: 'fill_blank', prompt: 'The wedding ___ in Madrid. (event)', answer: 'es', whyExplanation: 'A wedding is an event that takes place — "ser," not "estar."' },
-                    { type: 'mcq', prompt: 'The party is at my house.', options: ['La fiesta es en mi casa', 'La fiesta está en mi casa'], answer: 'La fiesta es en mi casa', whyExplanation: 'A party is an event with a start and end time — "ser," even though it sounds like a location.' },
-                    { type: 'listen_choose', audio: 'El aeropuerto está cerca.', options: ['The airport is near.', 'The airport takes place near.'], answer: 'The airport is near.', whyExplanation: '"Está" confirms it\'s a location, not an event.' },
-                    { type: 'translate', prompt: 'The concert is in the park.', answer: 'El concierto es en el parque', whyExplanation: 'Concert = event = "ser." "En el parque" = in the park.' },
-                    { type: 'match', pairs: [
-                        { a: 'El hospital está', b: 'The hospital is (located)' },
-                        { a: 'La boda es', b: 'The wedding takes place' },
-                        { a: 'La reunión es', b: 'The meeting takes place' },
-                        { a: 'La fiesta es', b: 'The party takes place' },
-                    ], whyExplanation: 'Notice the pattern: events always use "es" (ser), physical places always use "está" (estar).' },
-                ],
-                realLife: {
-                    prompt: 'Look around you right now. Say out loud one place using "está" and one event you have this week using "es."',
-                    chatSeed: 'Quiero practicar la diferencia entre "ser" (eventos) y "estar" (lugares físicos). Dame ejemplos de eventos y lugares.',
-                },
-            },
-            {
-                title: 'Hear location vs event',
-                icon: 'ear',
-                xpReward: 5,
-                teach: [
-                    { type: 'explain', text: 'Native speakers say "es" and "está" almost identically in fast speech. Train your ear to hear the difference by listening for the SUBJECT: events (boda, reunión, fiesta, concierto) = "es." Places (hospital, aeropuerto, parque) = "está."' },
-                    { type: 'example', es: '¿Dónde es la reunión? — Es en la oficina.', en: '"Where is the meeting?" — "At the office."' },
-                    { type: 'example', es: '¿Dónde está el baño? — Está al fondo.', en: '"Where is the bathroom?" — "At the back."' },
-                    { type: 'tip', text: 'If the question starts with "¿Dónde es...?" the answer will be an event. If "¿Dónde está...?" it\'s a physical location.' },
-                ],
-                exercises: [
-                    { type: 'listen_choose', audio: '¿Dónde es la boda?', options: ['Where does the wedding take place?', 'Where is the wedding located?'], answer: 'Where does the wedding take place?', whyExplanation: '"Es" = event question. A wedding is an event.' },
-                    { type: 'listen_choose', audio: '¿Dónde está el hospital?', options: ['Where is the hospital located?', 'Where does the hospital take place?'], answer: 'Where is the hospital located?', whyExplanation: '"Está" = location question. A hospital is a physical place.' },
-                    { type: 'listen_type', audio: 'La reunión es en la oficina central.', answer: 'La reunión es en la oficina central.', whyExplanation: 'Listen for "es" — this tells you it\'s an event (meeting) taking place at a location.' },
-                    { type: 'mcq', prompt: '"Where is the concert?" (event)', options: ['¿Dónde es el concierto?', '¿Dónde está el concierto?'], answer: '¿Dónde es el concierto?', whyExplanation: 'A concert is an event, so "¿Dónde es...?" is correct.' },
-                    { type: 'listen_choose', audio: 'El aeropuerto está muy lejos.', options: ['The airport is very far (located).', 'The airport takes place very far.'], answer: 'The airport is very far (located).', whyExplanation: '"Está" = physical location of the airport.' },
-                    { type: 'fill_blank', prompt: 'Listen and type: "La clase ___ (es/está) en el aula 5."', answer: 'es', whyExplanation: '"Clase" (class) is an event that takes place, so it uses "ser" (es).' },
-                ],
-                realLife: {
-                    prompt: 'Ask yourself out loud: "¿Dónde es la próxima fiesta?" then "¿Dónde está el supermercado?" Notice how your brain switches.',
-                    chatSeed: 'Practica escuchar preguntas con "¿Dónde es?" (eventos) y "¿Dónde está?" (lugares).',
-                },
-            },
-            {
-                title: 'Watch out: the wedding trap',
-                icon: 'alert-triangle',
-                xpReward: 5,
-                teach: [
-                    { type: 'explain', text: 'Almost every English speaker says "la boda está en..." the first few times — it SOUNDS like a location, so your brain reaches for "estar." But a wedding is an event. This is the single most common mistake in Spanish, and the fix is to memorize "la boda es" as a chunk.' },
-                    { type: 'example', es: 'La boda ES en Segovia. (not "está")', en: 'The wedding takes place in Segovia.' },
-                    { type: 'example', es: 'El concierto ES en el parque. (not "está")', en: 'The concert takes place in the park.' },
-                    { type: 'example', es: 'La clase ES a las diez.', en: 'The class takes place at ten o\'clock.' },
-                    { type: 'vocab', items: [
-                        { word: 'la boda', translation: 'the wedding → ES' },
-                        { word: 'el concierto', translation: 'the concert → ES' },
-                        { word: 'la clase', translation: 'the class → ES' },
-                        { word: 'la fiesta', translation: 'the party → ES' },
-                        { word: 'la reunión', translation: 'the meeting → ES' },
-                    ]},
-                    { type: 'tip', text: 'Memorize this phrase exactly: "La boda ES en..." Say it out loud ten times. Your brain will stop reaching for "está."' },
-                ],
-                exercises: [
-                    { type: 'mcq', prompt: 'The wedding is in Segovia.', options: ['La boda es en Segovia', 'La boda está en Segovia'], answer: 'La boda es en Segovia', whyExplanation: 'A wedding is an event, always "es." This is THE classic trap in Spanish.' },
-                    { type: 'fill_blank', prompt: 'El concierto ___ en el parque esta noche.', answer: 'es', whyExplanation: 'Concert = event = "es." Not "está," even though it sounds like a location.' },
-                    { type: 'mcq', prompt: 'The class is at 10.', options: ['La clase es a las diez', 'La clase está a las diez'], answer: 'La clase es a las diez', whyExplanation: 'A class is an event with a scheduled time — "ser" is correct.' },
-                    { type: 'listen_choose', audio: 'La fiesta es en mi casa el sábado.', options: ['The party takes place at my house on Saturday.', 'The party is located at my house on Saturday.'], answer: 'The party takes place at my house on Saturday.', whyExplanation: '"Es" = the party is an event.' },
-                    { type: 'translate', prompt: 'The meeting is at the office at 3.', answer: 'La reunión es en la oficina a las tres', whyExplanation: 'Meeting = event = "es." "A las tres" = at 3 o\'clock.' },
-                    { type: 'match', pairs: [
-                        { a: 'La boda es', b: 'Wedding (event)' },
-                        { a: 'El concierto es', b: 'Concert (event)' },
-                        { a: 'El hospital está', b: 'Hospital (location)' },
-                        { a: 'La clase es', b: 'Class (event)' },
-                    ], whyExplanation: 'Memorize these event words with "es" as chunks. Your brain will learn to reach for "ser" automatically.' },
-                ],
-                realLife: {
-                    prompt: 'Say out loud three events you have this week, each starting with the event name and "es en..." or "es a las..."',
-                    chatSeed: 'Practica "la boda es", "la reunión es", "la fiesta es" — eventos, no lugares. Dame más ejemplos de eventos.',
-                },
-            },
-            {
-                title: 'Use it: give directions and event info',
-                icon: 'message-circle',
-                xpReward: 5,
-                teach: [
-                    { type: 'explain', text: 'Real conversations often mix locations and events in the same sentence. You now have enough to give someone directions AND tell them when something is happening.' },
-                    { type: 'example', es: 'La boda es en la finca, que está en las afueras.', en: 'The wedding is at the estate, which is located on the outskirts.' },
-                    { type: 'example', es: 'La reunión es a las tres en la oficina central.', en: 'The meeting is at three in the main office.' },
-                ],
-                exercises: [
-                    { type: 'translate', prompt: 'The wedding is in Madrid on Saturday.', answer: 'La boda es en Madrid el sábado', whyExplanation: 'Wedding = event = "es." Day of week uses "el" + day.' },
-                    { type: 'translate', prompt: 'The hospital is near the airport.', answer: 'El hospital está cerca del aeropuerto', whyExplanation: 'Both are physical places, so both use "estar." "Del" = "de + el."' },
-                    { type: 'mcq', prompt: '"The party takes place at my house" in Spanish…', options: ['La fiesta es en mi casa', 'La fiesta está en mi casa'], answer: 'La fiesta es en mi casa', whyExplanation: 'A party is an event — "es," not "está."' },
-                    { type: 'fill_blank', prompt: 'La clase ___ (ser) en el aula 205 ___ (a las) diez de la mañana.', answer: 'es a las', whyExplanation: '"Es" for the event (class), "a las" to indicate the time.' },
-                    { type: 'listen_choose', audio: 'La boda es en Segovia, pero el hotel está en Madrid.', options: ['The wedding is in Segovia, but the hotel is in Madrid.', 'The wedding takes place in Segovia, but the hotel is located in Madrid.'], answer: 'The wedding takes place in Segovia, but the hotel is located in Madrid.', whyExplanation: 'Both translations work, but notice: "es" = event location, "está" = physical location.' },
-                    { type: 'match', pairs: [
-                        { a: 'La boda es en Madrid', b: 'Wedding in Madrid (event)' },
-                        { a: 'El hospital está cerca', b: 'Hospital is near (location)' },
-                        { a: 'La reunión es a las tres', b: 'Meeting at 3 (event)' },
-                        { a: 'El aeropuerto está lejos', b: 'Airport is far (location)' },
-                    ], whyExplanation: 'Practice mixing events and locations in the same sentence, just like real Spanish conversations.' },
-                ],
-                realLife: {
-                    prompt: 'Chat with Ecla describing one event you have this week (when + where) and one place you go often (where it\'s located).',
-                    chatSeed: 'Hablemos de mis eventos de la semana (cuándo y dónde) y los lugares a los que voy (dónde están), mezclando "ser" y "estar".',
-                },
-            },
-        ]
+    // ── Content overrides: validate BEFORE merging (Art. 23 gate) ──
+    const knownCodes = new Set(competencies.map(c => String(c.code).trim()))
+    const report = validatePhases(phases, knownCodes)
+    if (!report.passed) {
+        throw new Error(`Content validation failed:\n- ${report.errors.join('\n- ')}`)
+    }
+    if (report.warnings.length) {
+        console.warn(`Content warnings (${report.warnings.length}):\n- ${report.warnings.slice(0, 10).join('\n- ')}`)
+    }
+    const CONTENT = new Map<string, CompetencyContent>()
+    for (const phase of phases) for (const c of phase.competencies) CONTENT.set(c.code, c)
 
-        for (let i = 0; i < subs.length; i++) {
-            const s = subs[i] as any
-            await prisma.subLesson.upsert({
-                where: { conceptId_orderIndex: { conceptId: concept2.id, orderIndex: i } },
-                update: { title: s.title, icon: s.icon, xpReward: s.xpReward, teach: s.teach, exercises: s.exercises, realLife: s.realLife },
-                create: { conceptId: concept2.id, orderIndex: i, title: s.title, icon: s.icon, xpReward: s.xpReward, teach: s.teach, exercises: s.exercises, realLife: s.realLife },
-            })
+    const types: ExperienceType[] = [
+        ExperienceType.STORY,
+        ExperienceType.DRILL,
+        ExperienceType.IMMERSION,
+        ExperienceType.PROFESSIONAL,
+        ExperienceType.MISSION,
+    ];
+
+    let experiences = 0;
+    let missions = 0;
+
+    for (const competency of competencies) {
+        const realization = competency.realizations[0];
+        if (!realization) throw new Error(`Missing Spanish realization for ${competency.code}`);
+
+        const vocabulary = competency.vocabulary.map((link: any) => link.vocabulary);
+        const target = targetFromCompetency(competency, realization, vocabulary);
+        console.log(`\n${competency.code} — ${competency.title}`);
+
+        for (let index = 0; index < types.length; index++) {
+            const type = types[index];
+            const override = CONTENT.get(String(competency.code).trim());
+            const content = applyOverride(buildExperienceContent(competency, target, type), override, type, target);
+
+            // ID aligned with seed.ts → upsert OVERWRITES, never duplicates
+            const id = `${competency.id}-${type.toLowerCase()}`;
+            const isMission = type === ExperienceType.MISSION;
+
+            await withRetry(() => prisma.learningExperience.upsert({
+                where: { id },
+                update: {
+                    competencyId: competency.id,
+                    title: `${competency.title} — ${type}`,
+                    description: competency.canDo,
+                    orderIndex: index + 1,
+                    content: content as Prisma.InputJsonValue,
+                    assessment: assessmentFor(competency, target) as Prisma.InputJsonValue,
+                    estimatedMinutes: isMission ? 8 : type === ExperienceType.DRILL ? 6 : 7,
+                },
+                create: {
+                    id,
+                    competencyId: competency.id,
+                    type,
+                    title: `${competency.title} — ${type}`,
+                    description: competency.canDo,
+                    orderIndex: index + 1,
+                    content: content as Prisma.InputJsonValue,
+                    assessment: assessmentFor(competency, target) as Prisma.InputJsonValue,
+                    estimatedMinutes: isMission ? 8 : type === ExperienceType.DRILL ? 6 : 7,
+                },
+            }));
+            experiences++;
+            console.log(`   ✓ ${type} (${STAGES.length} sub-lessons)`);
+
+            if (isMission) {
+                // Stable ID converging with seed.ts gateway missions
+                const missionId = `${competency.id}-gateway`;
+                await withRetry(() => prisma.mission.upsert({
+                    where: { id: missionId },
+                    update: {
+                        competencyId: competency.id,
+                        title: `${competency.title} — Mission`,
+                        objective: competency.canDo,
+                        scenario: `Complete a realistic situation in which you need to ${competency.canDo.toLowerCase()}.`,
+                        difficulty: competency.difficulty,
+                        successCriteria: {
+                            version: VERSION,
+                            function: ["communicates_intended_meaning", "responds_appropriately", "completes_task"],
+                            form: ["target_language_used", "intelligible"],
+                            transfer: true,
+                            exactWordingRequired: false,
+                        } as Prisma.InputJsonValue,
+                        configuration: {
+                            mode: "AI_ROLEPLAY",
+                            support: "minimal",
+                            allowEquivalentPhrasing: true,
+                            deliberateVariation: true,
+                            evaluateFormAndFunctionSeparately: true,
+                        } as Prisma.InputJsonValue,
+                    },
+                    create: {
+                        id: missionId,
+                        competencyId: competency.id,
+                        title: `${competency.title} — Mission`,
+                        objective: competency.canDo,
+                        scenario: `Complete a realistic situation in which you need to ${competency.canDo.toLowerCase()}.`,
+                        difficulty: competency.difficulty,
+                        successCriteria: {
+                            version: VERSION,
+                            function: ["communicates_intended_meaning", "responds_appropriately", "completes_task"],
+                            form: ["target_language_used", "intelligible"],
+                            transfer: true,
+                            exactWordingRequired: false,
+                        } as Prisma.InputJsonValue,
+                        configuration: {
+                            mode: "AI_ROLEPLAY",
+                            support: "minimal",
+                            allowEquivalentPhrasing: true,
+                            deliberateVariation: true,
+                            evaluateFormAndFunctionSeparately: true,
+                        } as Prisma.InputJsonValue,
+                    },
+                }));
+
+                if (override?.mission) {
+                    await withRetry(() => prisma.mission.update({
+                        where: { id: missionId },
+                        data: {
+                            scenario: override.mission.scenario,
+                            successCriteria: {
+                                version: VERSION,
+                                function: override.mission.successCriteria,
+                                form: ['target_language_used', 'intelligible'],
+                                transfer: true,
+                                exactWordingRequired: false,
+                                acceptableResponses: override.mission.acceptableResponses,
+                            } as Prisma.InputJsonValue,
+                            configuration: {
+                                mode: 'AI_ROLEPLAY',
+                                support: 'minimal',
+                                allowEquivalentPhrasing: true,
+                                deliberateVariation: true,
+                                unexpectedEvent: override.mission.unexpectedEvent ?? null,
+                                evaluateFormAndFunctionSeparately: true,
+                            } as Prisma.InputJsonValue,
+                        },
+                    }))
+                }
+                missions++;
+            }
         }
-        console.log(`  ✓ Seeded ${subs.length} sub-lessons into "${concept2.name}"`)
     }
 
-    // ───────────────────────────────────────────────────────────
-    // CONCEPT 3: Present Tense (-AR Verbs)
-    // ───────────────────────────────────────────────────────────
-    const concept3 = allConcepts.find(c => c.id === 'concept-present-ar')
-    if (concept3) {
-        const subs = [
-            {
-                title: 'Understand: the -AR pattern',
-                icon: 'book-open',
-                xpReward: 5,
-                teach: [
-                    { type: 'explain', text: 'Spanish verbs come in 3 families by their ending: -AR, -ER, -IR. The -AR family is the largest and most regular. Drop the -ar and add: -o (I), -as (you), -a (he/she), -amos (we), -áis (you all, Spain), -an (they).' },
-                    { type: 'explain', text: 'The "yo" form always ends in -o. This is the easiest ending to remember and the most useful in daily conversation.' },
-                    { type: 'example', es: 'Yo hablo español.', en: 'I speak Spanish.' },
-                    { type: 'example', es: 'Ella trabaja en Madrid.', en: 'She works in Madrid.' },
-                    { type: 'example', es: 'Nosotros estudiamos juntos.', en: 'We study together.' },
-                    { type: 'vocab', items: [
-                        { word: 'hablar', translation: 'to speak' },
-                        { word: 'trabajar', translation: 'to work' },
-                        { word: 'estudiar', translation: 'to study' },
-                        { word: 'explicar', translation: 'to explain' },
-                        { word: 'llevar', translation: 'to carry / to wear' },
-                    ]},
-                    { type: 'tip', text: 'Say "hablo, hablas, habla, hablamos, hablan" out loud. The rhythm of the endings is the same for every -AR verb you will ever learn.' },
-                ],
-                exercises: [
-                    { type: 'fill_blank', prompt: 'Yo ___ español. (hablar)', answer: 'hablo', whyExplanation: '-AR verbs drop -ar and add -o for "yo": hablar → hablo.' },
-                    { type: 'mcq', prompt: 'We work here.', options: ['Trabajamos aquí', 'Trabajan aquí'], answer: 'Trabajamos aquí', whyExplanation: '"Nosotros" (we) takes -amos: trabajar → trabajamos.' },
-                    { type: 'mcq', prompt: 'She studies Spanish every day.', options: ['Ella estudia español todos los días', 'Ella estudio español todos los días'], answer: 'Ella estudia español todos los días', whyExplanation: '"Ella" form takes -a: estudiar → estudia.' },
-                    { type: 'listen_choose', audio: 'Yo hablo con mi jefe.', options: ['I speak with my boss.', 'You speak with my boss.'], answer: 'I speak with my boss.', whyExplanation: '"Hablo" ends in -o, which is the "yo" (I) form.' },
-                    { type: 'translate', prompt: 'They carry the books to class.', answer: 'Ellos llevan los libros a clase', whyExplanation: '"Ellos" form takes -an: llevar → llevan. "A clase" = to class.' },
-                    { type: 'match', pairs: [
-                        { a: 'hablo', b: 'I speak' },
-                        { a: 'trabajas', b: 'you work' },
-                        { a: 'estudia', b: 'he/she studies' },
-                        { a: 'explicamos', b: 'we explain' },
-                    ], whyExplanation: 'Match each -AR conjugation with its English translation. Notice the pattern: -o, -as, -a, -amos, -an.' },
-                ],
-                realLife: {
-                    prompt: 'Say out loud three things you do every day, starting each sentence with "Yo..." and a -AR verb from the vocab list.',
-                    chatSeed: 'Quiero practicar verbos -AR regulares en presente: hablo, trabajo, estudio, explico, llevo.',
-                },
-            },
-            {
-                title: 'Hear the -AR endings',
-                icon: 'ear',
-                xpReward: 5,
-                teach: [
-                    { type: 'explain', text: 'Spanish drops the subject pronoun constantly. "Trabajo" alone means "I work" — you don\'t need "yo." Train your ear to identify the speaker by the ending alone.' },
-                    { type: 'example', es: 'Hablo, hablas, habla, hablamos, hablan.', en: 'I speak, you speak, he/she speaks, we speak, they speak.' },
-                    { type: 'example', es: '¿Trabajas hoy? — Sí, trabajo hasta las ocho.', en: '"Do you work today?" — "Yes, I work until eight."' },
-                    { type: 'tip', text: 'Tap 🔊 on every example. Your ear picks up the -o/-as/-a/-amos/-an pattern faster than your eyes.' },
-                ],
-                exercises: [
-                    { type: 'listen_choose', audio: 'Ellos trabajan mucho.', options: ['They work a lot.', 'We work a lot.', 'I work a lot.'], answer: 'They work a lot.', whyExplanation: '"Trabajan" ends in -an, the "ellos" (they) form.' },
-                    { type: 'listen_choose', audio: '¿Estudias español?', options: ['Do you study Spanish?', 'Does he study Spanish?', 'Do we study Spanish?'], answer: 'Do you study Spanish?', whyExplanation: '"Estudias" ends in -as, which is the "tú" (you) form.' },
-                    { type: 'listen_type', audio: 'Hablamos con la profesora.', answer: 'Hablamos con la profesora.', whyExplanation: 'Listen for the -amos ending. This is how you say "we speak" in Spanish.' },
-                    { type: 'mcq', prompt: '"They explain" in Spanish is…', options: ['explican', 'explicas', 'explica', 'explico'], answer: 'explican', whyExplanation: '"Ellos/ellas" form takes -an for all -AR verbs.' },
-                    { type: 'listen_choose', audio: 'Trabajo desde casa los viernes.', options: ['I work from home on Fridays.', 'She works from home on Fridays.'], answer: 'I work from home on Fridays.', whyExplanation: '"Trabajo" ends in -o, so it\'s "yo" (I). "Los viernes" = on Fridays.' },
-                    { type: 'fill_blank', prompt: 'Listen and type: "Ella ___ (explica) todo muy bien."', answer: 'explica', whyExplanation: '"Explica" ends in -a, the él/ella form. "Todo muy bien" = everything very well.' },
-                ],
-                realLife: {
-                    prompt: 'Close your eyes and say the full -AR ending set out loud, no notes: -o, -as, -a, -amos, -an.',
-                    chatSeed: 'Practica escuchar terminaciones -AR en presente para reconocer el sujeto sin el pronombre: hablo, hablas, habla, hablamos, hablan.',
-                },
-            },
-            {
-                title: 'Watch out: stem-changing -AR verbs',
-                icon: 'alert-triangle',
-                xpReward: 5,
-                teach: [
-                    { type: 'explain', text: 'A handful of common -AR verbs change their stem vowel in the yo/tú/él/ellos forms (but NOT in nosotros). These are called "boot verbs" because the changes fit inside a boot shape on the conjugation chart. Learn them as vocabulary, not as grammar.' },
-                    { type: 'example', es: 'pensar → pienso, piensas, piensa, pensamos, piensan', en: 'to think: I think, you think, he thinks, we think, they think' },
-                    { type: 'example', es: 'empezar → empiezo, empiezas, empieza, empezamos, empiezan', en: 'to start/begin' },
-                    { type: 'example', es: 'cerrar → cierro, cierras, cierra, cerramos, cierran', en: 'to close' },
-                    { type: 'vocab', items: [
-                        { word: 'pensar', translation: 'to think (e→ie)' },
-                        { word: 'empezar', translation: 'to start (e→ie)' },
-                        { word: 'cerrar', translation: 'to close (e→ie)' },
-                        { word: 'encontrar', translation: 'to find (o→ue)' },
-                        { word: 'costar', translation: 'to cost (o→ue)' },
-                    ]},
-                    { type: 'tip', text: 'Notice: "nosotros" never changes. Pensamos, empezamos, cerramos — always regular. Only the other forms change.' },
-                ],
-                exercises: [
-                    { type: 'mcq', prompt: 'I think it is true. (pensar)', options: ['Pienso que es verdad', 'Penso que es verdad'], answer: 'Pienso que es verdad', whyExplanation: '"Pensar" is e→ie stem-changing in the yo form: pienso, not penso.' },
-                    { type: 'fill_blank', prompt: 'La clase ___ a las ocho. (empezar)', answer: 'empieza', whyExplanation: 'Empezar is e→ie in the él/ella form: empieza.' },
-                    { type: 'listen_choose', audio: 'Cierro la puerta.', options: ['I close the door.', 'You close the door.', 'He closes the door.'], answer: 'I close the door.', whyExplanation: '"Cierro" ends in -o with the e→ie change — it\'s "yo" form of cerrar.' },
-                    { type: 'mcq', prompt: 'We think Spanish is fun. (nosotros)', options: ['Pensamos que el español es divertido', 'Pensamos que el español es divertida'], answer: 'Pensamos que el español es divertido', whyExplanation: '"Nosotros" form is always regular — pensamos. "Español" is masculine so "divertido."' },
-                    { type: 'translate', prompt: 'The movie starts at 7.', answer: 'La película empieza a las siete', whyExplanation: '"Empezar" is e→ie in él/ella form: empieza. "A las siete" = at 7.' },
-                    { type: 'match', pairs: [
-                        { a: 'pienso', b: 'I think' },
-                        { a: 'empiezas', b: 'you start' },
-                        { a: 'cierra', b: 'he/she closes' },
-                        { a: 'encontramos', b: 'we find' },
-                    ], whyExplanation: 'Notice how "encontramos" stays regular (no change) but the other forms change. This is the boot verb pattern.' },
-                ],
-                realLife: {
-                    prompt: 'Say out loud three opinions using "pienso que..." (I think that...) — about food, weather, and a TV show.',
-                    chatSeed: 'Practica verbos -AR con cambio radical: pienso, empiezo, cierro, encuentro, cuestan. Dame ejemplos de cada uno.',
-                },
-            },
-            {
-                title: 'Use it: describe your day with -AR verbs',
-                icon: 'message-circle',
-                xpReward: 5,
-                teach: [
-                    { type: 'explain', text: 'Real daily routine sentences combine regular and stem-changing -AR verbs. You now have enough to describe most of your morning and workday.' },
-                    { type: 'example', es: 'Pienso en el trabajo cuando empiezo el día.', en: 'I think about work when I start the day.' },
-                    { type: 'example', es: 'Trabajo mucho y hablo con muchos clientes.', en: 'I work a lot and speak with many clients.' },
-                ],
-                exercises: [
-                    { type: 'translate', prompt: 'I work in Madrid and I speak Spanish every day.', answer: 'Trabajo en Madrid y hablo español todos los días', whyExplanation: 'Both regular -AR verbs in yo form: trabajo, hablo.' },
-                    { type: 'translate', prompt: 'The class starts at ten.', answer: 'La clase empieza a las diez', whyExplanation: 'Empezar is e→ie in the él/ella form: empieza.' },
-                    { type: 'mcq', prompt: '"We close the store at eight" in Spanish…', options: ['Cerramos la tienda a las ocho', 'Cierran la tienda a las ocho'], answer: 'Cerramos la tienda a las ocho', whyExplanation: '"Nosotros" form of cerrar is always regular: cerramos.' },
-                    { type: 'fill_blank', prompt: 'Yo ___ (encontrar) las llaves en la mesa.', answer: 'encuentro', whyExplanation: '"Encontrar" is o→ue stem-changing in yo form: encuentro.' },
-                    { type: 'listen_choose', audio: 'Pienso en ti cuando empiezo el día.', options: ['I think about you when I start the day.', 'You think about me when you start the day.'], answer: 'I think about you when I start the day.', whyExplanation: '"Pienso" = I think (yo form with e→ie change). "Empiezo" = I start (also e→ie).' },
-                    { type: 'match', pairs: [
-                        { a: 'Trabajo mucho', b: 'I work a lot' },
-                        { a: 'Hablo español', b: 'I speak Spanish' },
-                        { a: 'Empiezo temprano', b: 'I start early' },
-                        { a: 'Cierro tarde', b: 'I close late' },
-                    ], whyExplanation: 'Practice combining regular and stem-changing -AR verbs in real sentences about your day.' },
-                ],
-                realLife: {
-                    prompt: 'Chat with Ecla for 2 minutes describing your workday in Spanish, using at least 5 different -AR verbs (mix regular and stem-changing).',
-                    chatSeed: 'Hablemos de mi rutina de trabajo en español usando verbos -AR regulares (hablar, trabajar, estudiar) y con cambio radical (pensar, empezar, cerrar, encontrar).',
-                },
-            },
-        ]
-
-        for (let i = 0; i < subs.length; i++) {
-            const s = subs[i] as any
-            await prisma.subLesson.upsert({
-                where: { conceptId_orderIndex: { conceptId: concept3.id, orderIndex: i } },
-                update: { title: s.title, icon: s.icon, xpReward: s.xpReward, teach: s.teach, exercises: s.exercises, realLife: s.realLife },
-                create: { conceptId: concept3.id, orderIndex: i, title: s.title, icon: s.icon, xpReward: s.xpReward, teach: s.teach, exercises: s.exercises, realLife: s.realLife },
-            })
-        }
-        console.log(`  ✓ Seeded ${subs.length} sub-lessons into "${concept3.name}"`)
-    }
-
-    // ───────────────────────────────────────────────────────────
-    // CONCEPT 4: Present Tense (-ER / -IR Verbs)
-    // ───────────────────────────────────────────────────────────
-    const concept4 = allConcepts.find(c => c.id === 'concept-present-er-ir')
-    if (concept4) {
-        const subs = [
-            {
-                title: 'Understand -ER / -IR verbs',
-                icon: 'book-open',
-                xpReward: 5,
-                teach: [
-                    { type: 'explain', text: 'Spanish verbs come in 3 families by their ending: -AR, -ER, -IR. -ER and -IR share almost the same endings in the present tense — learn them together and you get two families for the price of one.' },
-                    { type: 'explain', text: 'Drop the -er/-ir, then add: -o (I), -es (you), -e (he/she), -emos/-imos (we), -en (they). Only "we" is different between the two families.' },
-                    { type: 'example', es: 'Valentina come pan cada mañana.', en: 'Valentina eats bread every morning.' },
-                    { type: 'example', es: 'Ella vive en Madrid con su hermana.', en: 'She lives in Madrid with her sister.' },
-                    { type: 'example', es: 'Nosotros comemos juntos los domingos.', en: 'We eat together on Sundays.' },
-                    { type: 'vocab', items: [
-                        { word: 'comer', translation: 'to eat' },
-                        { word: 'beber', translation: 'to drink' },
-                        { word: 'vivir', translation: 'to live' },
-                        { word: 'escribir', translation: 'to write' },
-                        { word: 'leer', translation: 'to read' },
-                    ]},
-                    { type: 'tip', text: 'Say "comemos" and "vivimos" out loud back to back. Hear the only real difference: -emos vs -imos.' },
-                ],
-                exercises: [
-                    { type: 'listen_choose', audio: 'Valentina come pan cada mañana.', options: ['Valentina eats bread every morning.', 'Valentina drinks water every morning.', 'Valentina lives in Madrid.'], answer: 'Valentina eats bread every morning.', whyExplanation: '"Come" is 3rd person of "comer" (to eat) — "pan" (bread) confirms it, not a drink or a location.' },
-                    { type: 'mcq', prompt: 'Ella ___ en Sevilla. (vivir)', options: ['vive', 'vives', 'vivo', 'viven'], answer: 'vive', whyExplanation: '"Ella" (she) takes the -e ending: vive. "Viven" would be for "ellos/ellas" (they).' },
-                    { type: 'fill_blank', prompt: 'Nosotros ___ (comer) juntos los domingos.', answer: 'comemos', whyExplanation: '-ER verbs use -emos for "we" — comer → comemos.' },
-                    { type: 'fill_blank', prompt: 'Nosotros ___ (vivir) en la misma ciudad.', answer: 'vivimos', whyExplanation: '-IR verbs use -imos for "we" — vivir → vivimos. This is the ONE place -ER and -IR actually differ.' },
-                    { type: 'listen_type', audio: 'Yo bebo agua todos los días.', answer: 'Yo bebo agua todos los días.', whyExplanation: 'Listen for the -o ending on "bebo." This is the "yo" form of beber (to drink).' },
-                    { type: 'match', pairs: [
-                        { a: 'comer', b: 'to eat' },
-                        { a: 'beber', b: 'to drink' },
-                        { a: 'vivir', b: 'to live' },
-                        { a: 'leer', b: 'to read' },
-                    ], whyExplanation: 'Match each -ER/-IR verb with its English translation. These are the most common verbs in both families.' },
-                ],
-                realLife: {
-                    prompt: 'Say three true sentences about yourself out loud right now: "Como…", "Bebo…", "Vivo en…".',
-                    chatSeed: 'Quiero practicar verbos -ER y -IR en presente hablando de mi día: como, bebo, vivo, escribo, leo.',
-                },
-            },
-            {
-                title: 'Hear the endings',
-                icon: 'ear',
-                xpReward: 5,
-                teach: [
-                    { type: 'explain', text: 'In fast speech, the verb ending is often the ONLY clue to who is doing the action — Spanish frequently drops the subject pronoun (yo, tú, él). Train your ear on endings and you can follow real conversation.' },
-                    { type: 'example', es: 'Como, comes, come, comemos, comen.', en: 'I eat, you eat, he/she eats, we eat, they eat.' },
-                    { type: 'example', es: '¿Qué bebes? — Bebo café.', en: '"What do you drink?" — "I drink coffee."' },
-                    { type: 'tip', text: 'Tap 🔊 on every example below at least twice before answering. Your ear learns faster than your eyes here.' },
-                ],
-                exercises: [
-                    { type: 'listen_choose', audio: 'Ellos viven aquí.', options: ['They live here.', 'We live here.', 'I live here.'], answer: 'They live here.', whyExplanation: '"Viven" ends in -en, the "ellos/ellas" (they) ending.' },
-                    { type: 'listen_choose', audio: '¿Qué bebes?', options: ['What do you drink?', 'What do you eat?', 'Where do you live?'], answer: 'What do you drink?', whyExplanation: '"Bebes" comes from "beber" (to drink), -es ending = "tú" (you).' },
-                    { type: 'listen_type', audio: 'Ella escribe una carta.', answer: 'Ella escribe una carta.', whyExplanation: 'Listen for the -e ending on "escribe." This is the él/ella form of escribir (to write).' },
-                    { type: 'mcq', prompt: '"They eat" in Spanish is…', options: ['comen', 'comes', 'come', 'como'], answer: 'comen', whyExplanation: '-en is the "they" ending for both -ER and -IR verbs.' },
-                    { type: 'listen_choose', audio: 'Leemos el periódico por la mañana.', options: ['We read the newspaper in the morning.', 'I read the newspaper in the morning.', 'They read the newspaper in the morning.'], answer: 'We read the newspaper in the morning.', whyExplanation: '"Leemos" — -emos ending confirms "nosotros" (we).' },
-                    { type: 'fill_blank', prompt: 'Listen and type: "Yo ___ (vivo) en Madrid con mi familia."', answer: 'vivo', whyExplanation: '"Vivo" ends in -o, the "yo" form of vivir. "Con mi familia" = with my family.' },
-                ],
-                realLife: {
-                    prompt: 'Close your eyes and say the full -ER ending set out loud, no notes: -o, -es, -e, -emos, -en.',
-                    chatSeed: 'Dime frases cortas con verbos -ER y -IR para practicar el oído: como, bebes, vive, comemos, escriben.',
-                },
-            },
-            {
-                title: 'Watch out: irregular "yo" forms',
-                icon: 'alert-triangle',
-                xpReward: 5,
-                teach: [
-                    { type: 'explain', text: 'A handful of everyday -ER/-IR verbs break the pattern ONLY in the "yo" (I) form. You will hear and need these constantly, so learn them as exceptions now instead of getting confused later.' },
-                    { type: 'example', es: 'Tengo un hermano. (not "teno")', en: 'I have a brother.' },
-                    { type: 'example', es: 'Salgo de casa a las ocho.', en: 'I leave home at eight.' },
-                    { type: 'example', es: 'Hago la tarea por la noche.', en: 'I do homework at night.' },
-                    { type: 'vocab', items: [
-                        { word: 'tengo (tener)', translation: 'I have' },
-                        { word: 'salgo (salir)', translation: 'I leave / go out' },
-                        { word: 'hago (hacer)', translation: 'I do / make' },
-                        { word: 'pongo (poner)', translation: 'I put' },
-                    ]},
-                    { type: 'tip', text: 'Notice the pattern within the exception: tengo, salgo, hago, pongo all end in -go. Every other form (tú, él, nosotros...) follows the regular pattern you already know.' },
-                ],
-                exercises: [
-                    { type: 'mcq', prompt: 'Yo ___ un perro y un gato. (tener)', options: ['tengo', 'teno', 'tiene', 'tienes'], answer: 'tengo', whyExplanation: '"Tener" is irregular only in "yo": tengo. Everywhere else it follows the normal -ER pattern with a small vowel change (tienes, tiene).' },
-                    { type: 'fill_blank', prompt: 'Yo ___ (salir) de casa muy temprano.', answer: 'salgo', whyExplanation: 'Salir → salgo in "yo" only. Tú sales, él sale, follows the regular pattern.' },
-                    { type: 'listen_choose', audio: 'Hago la tarea antes de cenar.', options: ['I do homework before dinner.', 'You do homework before dinner.', 'She does homework before dinner.'], answer: 'I do homework before dinner.', whyExplanation: '"Hago" is unmistakably "yo" (I) — it is the exception form, so it only ever means "I do/make."' },
-                    { type: 'translate', prompt: 'I put the book on the table.', answer: 'Pongo el libro en la mesa', whyExplanation: '"Poner" is irregular in yo form: pongo. "En la mesa" = on the table.' },
-                    { type: 'listen_choose', audio: 'Tengo mucho trabajo hoy.', options: ['I have a lot of work today.', 'You have a lot of work today.', 'He has a lot of work today.'], answer: 'I have a lot of work today.', whyExplanation: '"Tengo" is the irregular yo form of tener. "Mucho trabajo" = a lot of work.' },
-                    { type: 'match', pairs: [
-                        { a: 'tengo', b: 'I have' },
-                        { a: 'salgo', b: 'I leave' },
-                        { a: 'hago', b: 'I do/make' },
-                        { a: 'pongo', b: 'I put' },
-                    ], whyExplanation: 'Memorize these -go endings as chunks. They\'re irregular only in yo form — everywhere else they\'re regular.' },
-                ],
-                realLife: {
-                    prompt: 'Say out loud: what you have (tengo…), what time you leave home (salgo a las…), and one thing you do every day (hago…).',
-                    chatSeed: 'Quiero practicar los verbos irregulares tengo, salgo, hago y pongo hablando de mi rutina diaria.',
-                },
-            },
-            {
-                title: 'Use it: talk about your day',
-                icon: 'message-circle',
-                xpReward: 5,
-                teach: [
-                    { type: 'explain', text: 'Real sentences follow: subject (optional) + verb + detail. You now have enough regular AND irregular verbs to describe a full normal day.' },
-                    { type: 'example', es: 'Vivo con mi familia y tengo dos hermanos.', en: 'I live with my family and I have two siblings.' },
-                    { type: 'example', es: 'Salgo a las ocho, como a la una, y escribo mensajes todo el día.', en: 'I leave at eight, eat at one, and write messages all day.' },
-                ],
-                exercises: [
-                    { type: 'translate', prompt: 'I live in Madrid and I have a dog.', answer: 'Vivo en Madrid y tengo un perro.', whyExplanation: 'Combines a regular -IR verb (vivo) with the irregular yo-form (tengo) — this is exactly how natives actually talk.' },
-                    { type: 'translate', prompt: 'I eat breakfast at eight and I leave at nine.', answer: 'Como el desayuno a las ocho y salgo a las nueve.', whyExplanation: 'Two verbs, two different patterns (como = regular, salgo = irregular) in one natural sentence.' },
-                    { type: 'mcq', prompt: '"We write" in Spanish is…', options: ['escribimos', 'escriben', 'escribes', 'escribo'], answer: 'escribimos', whyExplanation: '-IR verbs take -imos for "nosotros" — escribir → escribimos.' },
-                    { type: 'fill_blank', prompt: 'Yo ___ (hacer) ejercicio por la mañana y ___ (leer) por la noche.', answer: 'hago leo', whyExplanation: '"Hago" is irregular yo form of hacer. "Leo" is regular yo form of leer (no accent needed).' },
-                    { type: 'listen_choose', audio: 'Vivo con mi familia y tengo dos hermanos.', options: ['I live with my family and I have two siblings.', 'You live with your family and you have two siblings.'], answer: 'I live with my family and I have two siblings.', whyExplanation: '"Vivo" = I live (regular -IR). "Tengo" = I have (irregular yo form). Both are yo forms.' },
-                    { type: 'match', pairs: [
-                        { a: 'Yo como', b: 'I eat' },
-                        { a: 'Ella vive', b: 'She lives' },
-                        { a: 'Ellos beben', b: 'They drink' },
-                        { a: 'Yo tengo', b: 'I have' },
-                    ], whyExplanation: 'Practice combining regular and irregular -ER/-IR verbs in real sentences about your day.' },
-                ],
-                realLife: {
-                    prompt: 'Chat with Ecla for 2 minutes, in Spanish, describing your actual daily routine start to finish using at least 6 different verbs (mix regular and irregular).',
-                    chatSeed: 'Hablemos de mi rutina diaria en español, usando verbos -ER, -IR regulares (comer, beber, vivir, escribir, leer) y irregulares (tengo, salgo, hago, pongo).',
-                },
-            },
-        ]
-
-        for (let i = 0; i < subs.length; i++) {
-            const s = subs[i] as any
-            await prisma.subLesson.upsert({
-                where: { conceptId_orderIndex: { conceptId: concept4.id, orderIndex: i } },
-                update: { title: s.title, icon: s.icon, xpReward: s.xpReward, teach: s.teach, exercises: s.exercises, realLife: s.realLife },
-                create: { conceptId: concept4.id, orderIndex: i, title: s.title, icon: s.icon, xpReward: s.xpReward, teach: s.teach, exercises: s.exercises, realLife: s.realLife },
-            })
-        }
-        console.log(`  ✓ Seeded ${subs.length} sub-lessons into "${concept4.name}"`)
-    }
-
-    console.log('\nAll sub-lessons seeded successfully!')
+    console.log("\n━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━");
+    console.log("ECLA sub-lesson seed complete");
+    console.log(`   Competencies: ${competencies.length}`);
+    console.log(`   Experiences:  ${experiences}`);
+    console.log(`   Sub-lessons:  ${experiences * STAGES.length}`);
+    console.log(`   Missions:     ${missions}`);
+    console.log(`   Schema:       ${VERSION}`);
+    console.log("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n");
 }
 
 main()
-    .catch((e) => {
-        console.error('Seeding failed:', e)
-        process.exit(1)
+    .catch((error) => {
+        console.error("ECLA sub-lesson seed failed:");
+        console.error(error);
+        process.exitCode = 1;
     })
     .finally(async () => {
-        await prisma.$disconnect()
-    })
+        await prisma.$disconnect();
+    });
