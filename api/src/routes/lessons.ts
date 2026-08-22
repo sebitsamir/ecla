@@ -122,24 +122,20 @@ router.get('/api/v1/lessons/:conceptId', async (req: Request, res: Response, nex
         const comp = await prisma.competency.findUnique({
             where: { id: req.params.conceptId },
             include: {
-                unit: { include: { course: true } },
                 experiences: { orderBy: { orderIndex: 'asc' } },
-                vocabulary: { include: { vocabulary: true } },
+                vocabulary: { include: { vocabulary: true } },   // feeds ToolsPanel
             },
         })
         if (!comp) throw new AppError('Lesson not found', 404)
 
         const realization = await prisma.languageRealization.findFirst({ where: { competencyId: comp.id } })
-
+        const mastery = await prisma.competencyMastery.findUnique({
+            where: { userId_competencyId: { userId: user.id, competencyId: comp.id } },
+        })
         const progress = await prisma.userExperienceProgress.findMany({
             where: { userId: user.id, experienceId: { in: comp.experiences.map(e => e.id) } },
         })
         const completedIds = progress.filter(p => p.status === 'completed').map(p => p.experienceId)
-
-        const mastery = await prisma.competencyMastery.findUnique({
-            where: { userId_competencyId: { userId: user.id, competencyId: comp.id } },
-        })
-
         const perPartXp = Math.max(5, Math.round(comp.xpReward / Math.max(1, comp.experiences.length)))
 
         const subLessons = comp.experiences.map((e: any) => {
@@ -149,32 +145,40 @@ router.get('/api/v1/lessons/:conceptId', async (req: Request, res: Response, nex
                 conceptId: comp.id,
                 orderIndex: e.orderIndex,
                 title: e.title,
+                icon: TYPE_ICON[e.type] ?? 'book-open',
                 type: e.type,
                 xpReward: perPartXp,
-                // The 9-stage engine data (ENCOUNTER → RETAIN) written by seedSublessons
-                journey: content.subLessons ?? [],
-                assessment: e.assessment ?? null,
+                journey: content.subLessons ?? [],               // engine payload for later phases
                 teach: normalizeTeach(content.teach),
                 exercises: (content.exercises ?? []).map(normalizeExercise),
                 realLife: content.realLife ?? null,
             }
         })
 
+        const flavorOf = (type: string) => {
+            const e = comp.experiences.find(x => x.type === type)
+            return ((e?.content as any)?.teach?.[0]?.text) ?? null
+        }
+
         res.json({
             lesson: {
+                code: comp.code,                                 // ← scene lookup key
                 conceptId: comp.id,
                 conceptName: comp.title,
                 canDo: comp.canDo,
                 mode: typeof req.query.mode === 'string' ? req.query.mode : user.preferredMode,
                 xpReward: comp.xpReward,
                 grammarNote: realization?.grammarNote ?? null,
-                breadcrumb: {
-                    course: comp.unit?.course?.title ?? 'Spanish Pre-A1',
-                    unit: comp.unit?.title ?? '',
-                    competency: comp.title,
+                variant: {
+                    storyBeat: flavorOf('STORY'),
+                    culturalRef: flavorOf('IMMERSION'),
+                    formalPhrase: flavorOf('PROFESSIONAL'),
                 },
                 tools: {
-                    vocabulary: (comp as any).vocabulary.map((l: any) => ({ word: l.vocabulary.word, translation: l.vocabulary.translation })),
+                    vocabulary: (comp as any).vocabulary.map((l: any) => ({
+                        word: l.vocabulary.word,
+                        translation: l.vocabulary.translation,
+                    })),
                     grammar: realization?.grammarNote ?? null,
                     pronunciation: realization?.pronunciationNote ?? null,
                     culture: realization?.culturalNote ?? null,
