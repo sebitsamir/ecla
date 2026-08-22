@@ -13,6 +13,7 @@ import flashcardsRoutes from './routes/flashcards'
 import chatRoutes from './routes/chat'
 import adminRoutes from './routes/admin'
 import voiceRoutes from './routes/voice'
+import learnerRoutes from './routes/learner'
 
 const app = express()
 
@@ -52,6 +53,7 @@ app.use(flashcardsRoutes)
 app.use(chatRoutes)
 app.use(adminRoutes)
 app.use(voiceRoutes)
+app.use(learnerRoutes)
 
 // 404
 app.use((_req: Request, res: Response) => {

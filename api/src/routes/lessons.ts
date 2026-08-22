@@ -1,13 +1,18 @@
 /**
- * Lessons Route — ECLA schema adapter
- * 
- * GET  /api/v1/lessons/:conceptId  → competency + its LearningExperiences as "subLessons"
- * POST /api/v1/lessons/complete    → writes evidence:
- *      UserExperienceProgress + CompetencyMastery + StreakLog + User.xpTotal
- * 
- * Experience content from seed.ts already matches the lesson player shape
- * ({ teach, exercises, realLife }) — we only normalize type names so the
- * existing frontend renders everything without changes.
+ * Lessons Route — ECLA schema adapter (Phase 2: Multi-dimensional evidence)
+ *
+ * GET  /api/v1/lessons/:conceptId → competency + its LearningExperiences as "subLessons"
+ * POST /api/v1/lessons/complete   → writes dimensional evidence:
+ *      UserExperienceProgress + CompetencyMastery (with dimensional scores) + StreakLog + User.xpTotal
+ *
+ * Phase 2 additions:
+ * - Each experience type updates a specific dimension in CompetencyMastery
+ * - STORY → comprehensionScore
+ * - DRILL → retrievalScore
+ * - IMMERSION → interactionScore
+ * - PROFESSIONAL → applicationScore
+ * - MISSION → transferScore
+ * - overallScore = weighted average of all dimensions
  */
 
 import { Router, Request, Response, NextFunction } from 'express'
@@ -22,12 +27,24 @@ const router = Router()
 const TEACH_TYPE: Record<string, string> = {
     story: 'explain', explanation: 'explain', rule: 'explain', context: 'explain', mission: 'explain',
 }
+
 const TYPE_ICON: Record<string, string> = {
     STORY: 'book-open', DRILL: 'puzzle', IMMERSION: 'ear', PROFESSIONAL: 'lightbulb', MISSION: 'message-circle',
 }
 
 function normalizeTeach(blocks: any[]): any[] {
-    return (blocks ?? []).map(b => ({ ...b, type: TEACH_TYPE[b.type] ?? b.type }))
+    return (blocks ?? [])
+        .map((b: any) => {
+            if (!b || typeof b !== 'object') return null
+            if (b.type === 'pattern') {
+                const list = Array.isArray(b.examples) ? b.examples : []
+                return { type: 'explain', text: 'Patterns: ' + list.join(' · ') }
+            }
+            const mapped = { ...b, type: TEACH_TYPE[b.type] ?? b.type }
+            if (mapped.type === 'explain' && !mapped.text) return null
+            return mapped
+        })
+        .filter(Boolean) as any[]
 }
 
 function normalizeExercise(ex: any): any {
@@ -47,15 +64,6 @@ router.get('/api/v1/lessons/:conceptId', async (req: Request, res: Response, nex
     try {
         const user = await getOrSyncUserFast(req)
 
-        const competency = await prisma.competency.findUnique({
-            where: { id: req.params.conceptId },
-            include: {
-                experiences: { orderBy: { orderIndex: 'asc' } },
-                realizations: { where: { languageId: { equals: undefined } } as any, include: undefined as any } as any, // filled below
-            },
-        }).catch(() => null)
-
-        // realizations filtered separately (cleaner than nested where on relation)
         const comp = await prisma.competency.findUnique({
             where: { id: req.params.conceptId },
             include: { experiences: { orderBy: { orderIndex: 'asc' } } },
@@ -89,7 +97,6 @@ router.get('/api/v1/lessons/:conceptId', async (req: Request, res: Response, nex
             }
         })
 
-        // Per-mode flavor text from the matching experience's first teach block
         const flavorOf = (type: string) => {
             const e = comp.experiences.find(x => x.type === type)
             return ((e?.content as any)?.teach?.[0]?.text) ?? null
@@ -100,7 +107,7 @@ router.get('/api/v1/lessons/:conceptId', async (req: Request, res: Response, nex
                 conceptId: comp.id,
                 conceptName: comp.title,
                 canDo: comp.canDo,
-                mode: req.query.mode ?? user.preferredMode,
+                mode: (req.query.mode as string) ?? user.preferredMode,
                 xpReward: comp.xpReward,
                 grammarNote: realization?.grammarNote ?? null,
                 variant: {
@@ -118,8 +125,7 @@ router.get('/api/v1/lessons/:conceptId', async (req: Request, res: Response, nex
 
 /**
  * Complete one part (experience) of a competency.
- * Evidence-based: updates mastery counts + level per §6.4,
- * schedules retention review per §6.5, logs streak + XP.
+ * Phase 2: writes dimensional evidence based on experience type.
  */
 router.post('/api/v1/lessons/complete', async (req: Request, res: Response, next: NextFunction) => {
     try {
@@ -154,7 +160,16 @@ router.post('/api/v1/lessons/complete', async (req: Request, res: Response, next
             })
         }
 
-        // 2) Competency mastery — recompute level from evidence
+        // 2) Get experience type to determine which dimension to update
+        const experience = subLessonId
+            ? await prisma.learningExperience.findUnique({ where: { id: subLessonId } })
+            : null
+
+        // 3) Calculate dimension score for this experience (0-100)
+        const totalAttempts = correctCount + incorrectCount
+        const dimensionScore = totalAttempts > 0 ? Math.round((correctCount / totalAttempts) * 100) : null
+
+        // 4) Competency mastery — update dimensional scores + level
         const exps = await prisma.learningExperience.findMany({
             where: { competencyId: conceptId }, select: { id: true, type: true },
         })
@@ -168,17 +183,56 @@ router.post('/api/v1/lessons/complete', async (req: Request, res: Response, next
         const missionDone = exps.some(e => e.type === 'MISSION' && completedSet.has(e.id))
         const level = allDone ? (missionDone ? 'TRANSFERRED' : 'CONTROLLED') : 'DEVELOPING'
 
+        // Get existing mastery or create new
+        const existing = await prisma.competencyMastery.findUnique({
+            where: { userId_competencyId: { userId: user.id, competencyId: conceptId } },
+        })
+
+        // Build update data with dimensional scores
+        const updateData: any = {
+            successCount: { increment: correctCount },
+            failureCount: { increment: incorrectCount },
+            exposureCount: { increment: 1 },
+            transferCount: missionDone && allDone ? { increment: 1 } : undefined,
+            level,
+            lastAssessedAt: new Date(),
+            nextReviewAt: new Date(Date.now() + 2 * 24 * 3600 * 1000),
+        }
+
+        // Update the dimension corresponding to this experience type
+        if (experience && dimensionScore !== null) {
+            switch (experience.type) {
+                case 'STORY':
+                    updateData.comprehensionScore = existing
+                        ? { increment: (dimensionScore - (existing.comprehensionScore ?? 0)) }
+                        : dimensionScore
+                    break
+                case 'DRILL':
+                    updateData.retrievalScore = existing
+                        ? { increment: (dimensionScore - (existing.retrievalScore ?? 0)) }
+                        : dimensionScore
+                    break
+                case 'IMMERSION':
+                    updateData.interactionScore = existing
+                        ? { increment: (dimensionScore - (existing.interactionScore ?? 0)) }
+                        : dimensionScore
+                    break
+                case 'PROFESSIONAL':
+                    updateData.applicationScore = existing
+                        ? { increment: (dimensionScore - (existing.applicationScore ?? 0)) }
+                        : dimensionScore
+                    break
+                case 'MISSION':
+                    updateData.transferScore = existing
+                        ? { increment: (dimensionScore - (existing.transferScore ?? 0)) }
+                        : dimensionScore
+                    break
+            }
+        }
+
         await prisma.competencyMastery.upsert({
             where: { userId_competencyId: { userId: user.id, competencyId: conceptId } },
-            update: {
-                successCount: { increment: correctCount },
-                failureCount: { increment: incorrectCount },
-                exposureCount: { increment: 1 },
-                transferCount: missionDone && allDone ? { increment: 1 } : undefined,
-                level,
-                lastAssessedAt: new Date(),
-                nextReviewAt: new Date(Date.now() + 2 * 24 * 3600 * 1000), // §6.5: Day 1 → Day 2
-            },
+            update: updateData,
             create: {
                 userId: user.id,
                 competencyId: conceptId,
@@ -186,12 +240,39 @@ router.post('/api/v1/lessons/complete', async (req: Request, res: Response, next
                 exposureCount: 1,
                 successCount: correctCount,
                 failureCount: incorrectCount,
+                comprehensionScore: experience?.type === 'STORY' ? dimensionScore : null,
+                retrievalScore: experience?.type === 'DRILL' ? dimensionScore : null,
+                interactionScore: experience?.type === 'IMMERSION' ? dimensionScore : null,
+                applicationScore: experience?.type === 'PROFESSIONAL' ? dimensionScore : null,
+                transferScore: experience?.type === 'MISSION' ? dimensionScore : null,
                 lastAssessedAt: new Date(),
                 nextReviewAt: new Date(Date.now() + 2 * 24 * 3600 * 1000),
             },
         })
 
-        // 3) XP + streak
+        // 5) Recompute overallScore as weighted average
+        const mastery = await prisma.competencyMastery.findUnique({
+            where: { userId_competencyId: { userId: user.id, competencyId: conceptId } },
+        })
+        if (mastery) {
+            const scores = [
+                mastery.comprehensionScore,
+                mastery.retrievalScore,
+                mastery.interactionScore,
+                mastery.applicationScore,
+                mastery.transferScore,
+            ].filter((s): s is number => s !== null)
+
+            if (scores.length > 0) {
+                const overallScore = Math.round(scores.reduce((sum, s) => sum + s, 0) / scores.length)
+                await prisma.competencyMastery.update({
+                    where: { id: mastery.id },
+                    data: { overallScore },
+                })
+            }
+        }
+
+        // 6) XP + streak
         const today = new Date().toISOString().split('T')[0]
         await prisma.$transaction([
             prisma.user.update({
