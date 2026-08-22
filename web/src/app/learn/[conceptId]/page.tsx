@@ -18,7 +18,7 @@ import { useParams, useRouter, useSearchParams } from 'next/navigation'
 import { useAuth } from '@clerk/nextjs'
 import {
     Mic, Square, ChevronRight, ChevronLeft, Menu, SlidersHorizontal,
-    Lightbulb, AudioLines,
+    Lightbulb, AudioLines, Check, X
 } from 'lucide-react'
 import NightBackground from '@/components/NightBackground'
 import Firefly from '@/components/Firefly'
