@@ -1,617 +1,698 @@
 'use client'
 
 /**
- * ECLA Learn Page — competency-based lesson player
+ * ECLA Lesson Player — "personal language training room"
  *
- * Phases: Encounter → Practice → Use → Celebration
- * Speaking-first: production exercises (`speak`) use the MIC as primary input;
- * the Whisper transcript is graded tolerantly (gradeLocal + functional judge).
- * Typing remains as an accessibility fallback ("Prefer typing?").
+ * Three-zone cockpit: Lesson Journey (left) · Workspace (center) · Tools (right).
+ * Activity-driven renderer over the 9-stage engine data
+ * (ENCOUNTER → UNDERSTAND → NOTICE → RECOGNIZE → RETRIEVE → PRODUCE →
+ *  INTERACT → TRANSFER → RETAIN) written by seedSublessons.ts.
+ *
+ * Principles applied: Context → Language → Action → Communication → Evidence.
+ * Calm feedback (teaching, not judging). Mic-first production. Repair = success.
+ * Gamification stays in the top bar edges only. Firefly demoted to completion.
  */
 
 import { useEffect, useRef, useState, Suspense } from 'react'
 import { useParams, useRouter, useSearchParams } from 'next/navigation'
 import { useAuth } from '@clerk/nextjs'
 import {
-    X, Heart, ArrowRight, CheckCircle2, XCircle, Sparkles,
-    BookOpenCheck, Puzzle, Ear, Lightbulb, MessageCircle,
-    BookOpen, Music, GraduationCap, Target, Loader2,
-    Mic, Square, Keyboard, Eye, EyeOff,
+    Mic, Square, Volume2, ChevronRight, ChevronLeft, Menu, SlidersHorizontal,
+    BookOpen, Lightbulb, AudioLines, StickyNote, Check, Circle, Dot, X,
 } from 'lucide-react'
 import NightBackground from '@/components/NightBackground'
 import Firefly from '@/components/Firefly'
 import SpeakerButton from '@/components/SpeakerButton'
-import MissionRunner from '@/components/MissionRunner'
 import { useEquippedGlow } from '@/lib/useEquippedGlow'
 import { gradeLocal } from '@/lib/grading'
-import { cancelSpeech } from '@/lib/speech'
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL ?? 'http://localhost:4000'
 
-type LessonPhase = 'encounter' | 'practice' | 'use' | 'celebration'
-
-const MODE_THEMES: Record<string, { color: string; icon: any; label: string; purpose: string }> = {
-    STORY: { color: 'text-blue-400 border-blue-400/30 bg-blue-400/5', icon: BookOpen, label: 'Story', purpose: 'Context & Meaning' },
-    DRILL: { color: 'text-orange-400 border-orange-400/30 bg-orange-400/5', icon: Puzzle, label: 'Drill', purpose: 'Pattern & Automaticity' },
-    IMMERSION: { color: 'text-emerald-400 border-emerald-400/30 bg-emerald-400/5', icon: Ear, label: 'Immersion', purpose: 'Ear & Spontaneous' },
-    PROFESSIONAL: { color: 'text-amber-400 border-amber-400/30 bg-amber-400/5', icon: GraduationCap, label: 'Professional', purpose: 'Polite & Purposeful' },
-    MISSION: { color: 'text-purple-400 border-purple-400/30 bg-purple-400/5', icon: Target, label: 'Mission', purpose: 'Real-World Transfer' },
+const STAGE_MIN: Record<string, number> = {
+    ENCOUNTER: 1, UNDERSTAND: 2, NOTICE: 2, RECOGNIZE: 2, RETRIEVE: 2,
+    PRODUCE: 3, INTERACT: 4, TRANSFER: 4, RETAIN: 2,
+}
+const STAGE_HINT: Record<string, string> = {
+    ENCOUNTER: 'Meet the situation', UNDERSTAND: 'Understand the meaning', NOTICE: 'Notice the language',
+    RECOGNIZE: 'Recognize the pattern', RETRIEVE: 'Recall it', PRODUCE: 'Use it',
+    INTERACT: 'Communicate', TRANSFER: 'New situation', RETAIN: 'Remember later',
 }
 
-function shuffle<T>(arr: T[]): T[] {
-    const a = [...arr]
-    for (let i = a.length - 1; i > 0; i--) {
-        const j = Math.floor(Math.random() * (i + 1));
-        [a[i], a[j]] = [a[j], a[i]]
+type Feedback = { kind: 'good' | 'retry' | 'info'; text: string; heard?: string; target?: string } | null
+
+/* ── tiny mic hook: record → transcribe ── */
+function useMic(getToken: () => Promise<string | null>, onText: (t: string) => void, onFail?: () => void) {
+    const [state, setState] = useState<'idle' | 'recording' | 'processing'>('idle')
+    const recRef = useRef<MediaRecorder | null>(null)
+    const chunks = useRef<Blob[]>([])
+    const stop = () => { const r = recRef.current; if (r && r.state === 'recording') r.stop() }
+    const start = async () => {
+        try {
+            const stream = await navigator.mediaDevices.getUserMedia({ audio: true })
+            const rec = new MediaRecorder(stream)
+            recRef.current = rec; chunks.current = []
+            rec.ondataavailable = e => { if (e.data.size) chunks.current.push(e.data) }
+            rec.onstop = async () => {
+                stream.getTracks().forEach(t => t.stop())
+                setState('processing')
+                try {
+                    const token = await getToken()
+                    const res = await fetch(`${API_URL}/api/v1/voice/transcribe`, {
+                        method: 'POST', headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'audio/webm' },
+                        body: new Blob(chunks.current, { type: 'audio/webm' }),
+                    })
+                    const data = await res.json()
+                    setState('idle')
+                    if (data.text?.trim()) onText(data.text.trim()); else onFail?.()
+                } catch { setState('idle'); onFail?.() }
+            }
+            rec.start(); setState('recording')
+        } catch { setState('idle'); onFail?.() }
     }
-    return a
+    return { state, start, stop }
 }
 
-function LearnPageContent() {
+function LearnPlayer() {
     const params = useParams()
     const router = useRouter()
     const searchParams = useSearchParams()
     const modeParam = searchParams.get('mode')
-    const partParam = searchParams.get('part')
     const { getToken } = useAuth()
     const glowColors = useEquippedGlow()
 
-    // ── Lesson / part state ──
     const [lesson, setLesson] = useState<any>(null)
     const [loading, setLoading] = useState(true)
+    const [stageIdx, setStageIdx] = useState(0)
+    const [actIdx, setActIdx] = useState(0)
+    const [doneStages, setDoneStages] = useState<Set<number>>(new Set())
+    const [autoAdvance, setAutoAdvance] = useState(true)
+    const [feedback, setFeedback] = useState<Feedback>(null)
+    const [solved, setSolved] = useState(false)
+    const [journeyOpen, setJourneyOpen] = useState(false)
+    const [toolsOpen, setToolsOpen] = useState(false)
+    const [finished, setFinished] = useState(false)
     const [saving, setSaving] = useState(false)
-    const [subLessons, setSubLessons] = useState<any[]>([])
-    const [activeSubId, setActiveSubId] = useState<string | null>(null)
-    const [completedIds, setCompletedIds] = useState<Set<string>>(new Set())
-    const [partNumber, setPartNumber] = useState(1)
-    const [wasReview, setWasReview] = useState(false)
-    const [earnedXp, setEarnedXp] = useState(0)
-    const [missionOpen, setMissionOpen] = useState(false)
+    const counts = useRef({ correct: 0, incorrect: 0 })
 
-
-    // ── Exercise state ──
-    const [phase, setPhase] = useState<LessonPhase>('encounter')
-    const [currentIndex, setCurrentIndex] = useState(0)
-    const [userInput, setUserInput] = useState('')
-    const [isRevealed, setIsRevealed] = useState(false)
-    const [isCorrect, setIsCorrect] = useState(false)
-    const [gradeMethod, setGradeMethod] = useState<string | null>(null)
-    const [checking, setChecking] = useState(false)
-    const [correctCount, setCorrectCount] = useState(0)
-    const [hearts, setHearts] = useState(5)
-    const [showXpFloat, setShowXpFloat] = useState(false)
-    const [shakeCard, setShakeCard] = useState(false)
-    const [showMeaning, setShowMeaning] = useState(false)
-
-    // ── Speaking exercise state ──
-    const [inputMode, setInputMode] = useState<'speak' | 'type'>('speak')
-    const [speakState, setSpeakState] = useState<'idle' | 'recording' | 'processing'>('idle')
-    const [heard, setHeard] = useState<string | null>(null)
-    const [micError, setMicError] = useState(false)
-    const mediaRecorderRef = useRef<MediaRecorder | null>(null)
-    const chunksRef = useRef<Blob[]>([])
-    const autoStopRef = useRef<ReturnType<typeof setTimeout> | null>(null)
-
-    // ── Match state ──
-    const [matchPairs, setMatchPairs] = useState<any[]>([])
-    const [shuffledB, setShuffledB] = useState<any[]>([])
-    const [selectedA, setSelectedA] = useState<string | null>(null)
-    const [selectedB, setSelectedB] = useState<string | null>(null)
-    const [matchedIds, setMatchedIds] = useState<Set<string>>(new Set())
-    const [wrongPair, setWrongPair] = useState<{ a: string; b: string } | null>(null)
-
-    const floatTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
-
-    // ── Fetch lesson ──
     useEffect(() => {
-        async function fetchLesson() {
+        (async () => {
             try {
                 const token = await getToken()
-                const url = `${API_URL}/api/v1/lessons/${params.conceptId}${modeParam ? `?mode=${modeParam}` : ''}`
-                const res = await fetch(url, { headers: { Authorization: `Bearer ${token}` } })
-                if (!res.ok) throw new Error('Failed to load')
+                const res = await fetch(`${API_URL}/api/v1/lessons/${params.conceptId}${modeParam ? `?mode=${modeParam}` : ''}`, {
+                    headers: { Authorization: `Bearer ${token}` },
+                })
                 const data = await res.json()
                 setLesson(data.lesson)
-                const done = new Set<string>(data.lesson.completedSubLessonIds ?? [])
-                setCompletedIds(done)
-                const subs = data.lesson.subLessons ?? []
-                setSubLessons(subs)
-                const fromParam = partParam ? subs.find((s: any) => s.id === partParam) : undefined
-                const active = fromParam ?? subs.find((s: any) => !done.has(s.id)) ?? null
-                if (active) {
-                    setActiveSubId(active.id)
-                    setPartNumber(subs.indexOf(active) + 1)
-                    setWasReview(done.has(active.id))
-                    if (!active.exercises?.length && active.realLife) setPhase('use')
-                    else if (!active.exercises?.length) setPhase('celebration')
-                } else setPhase('celebration')
             } catch (e) { console.error(e) } finally { setLoading(false) }
-        }
-        fetchLesson()
-    }, [getToken, params.conceptId, modeParam, partParam])
+        })()
+    }, [getToken, params.conceptId, modeParam])
 
-    const activeSub = subLessons.find(s => s.id === activeSubId) ?? null
-    const exercises: any[] = activeSub?.exercises || []
-    const currentExercise = exercises[currentIndex]
-    const totalSubs = subLessons.length
-    const totalExercises = exercises.length
-    const allDone = totalSubs > 0 && subLessons.every(s => completedIds.has(s.id))
-    const partProgress = totalExercises > 0 ? ((currentIndex + (isRevealed ? 1 : 0)) / totalExercises) * 100 : 0
-    const partAccuracy = totalExercises > 0 ? Math.round((correctCount / totalExercises) * 100) : 100
-    const modeTheme = MODE_THEMES[activeSub?.type || lesson?.mode || 'STORY']
+    const mode = modeParam ?? lesson?.mode ?? 'STORY'
+    const experience = lesson?.subLessons?.find((s: any) => s.type === mode) ?? lesson?.subLessons?.[0]
+    const journey: any[] = experience?.journey ?? []
+    const stage = journey[stageIdx]
+    const activity = stage?.activities?.[actIdx]
 
-    function reveal(correct: boolean, method: string | null, penalize = true) {
-        setIsCorrect(correct); setIsRevealed(true); setGradeMethod(correct ? method : null)
-        if (correct) {
-            setCorrectCount(c => c + 1); setShowXpFloat(true)
-            if (floatTimer.current) clearTimeout(floatTimer.current)
-            floatTimer.current = setTimeout(() => setShowXpFloat(false), 1400)
-        } else if (penalize) {
-            setHearts(h => Math.max(0, h - 1)); setShakeCard(true)
-            setTimeout(() => setShakeCard(false), 450)
-        }
+    const advance = () => {
+        setFeedback(null); setSolved(false)
+        if (stage && actIdx < (stage.activities?.length ?? 1) - 1) { setActIdx(a => a + 1); return }
+        setDoneStages(prev => new Set([...prev, stageIdx]))
+        if (stageIdx < journey.length - 1) { setStageIdx(s => s + 1); setActIdx(0) }
+        else complete()
     }
 
-    /** Two-layer grading shared by typed AND spoken answers. */
-    const checkAnswer = async (value: string) => {
-        if (isRevealed || checking || !value?.trim()) return
-        if (!currentExercise || currentExercise.type === 'match') return
-
-        if (currentExercise.type === 'mcq' || currentExercise.type === 'listen_choose') {
-            const v = value.trim()
-            const ok = v === (currentExercise.answer ?? '').trim()
-                || (currentExercise.accept ?? []).some((a: string) => a.trim() === v)
-            reveal(ok, ok ? 'exact' : null)
-            return
-        }
-
-        const local = gradeLocal(value, currentExercise)
-        if (local.needsJudge) {
-            setChecking(true)
-            try {
-                const token = await getToken()
-                const r = await fetch(`${API_URL}/api/v1/lessons/grade`, {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
-                    body: JSON.stringify({ answer: value, expected: currentExercise.answer, accept: currentExercise.accept ?? [] }),
-                })
-                if (!r.ok) throw new Error('judge unavailable')
-                const j = await r.json()
-                reveal(j.correct === true, j.correct ? 'ai' : null)
-            } catch { reveal(false, null, false) } finally { setChecking(false) }
-            return
-        }
-        reveal(local.correct, local.correct ? local.method : null)
+    const back = () => {
+        setFeedback(null); setSolved(false)
+        if (actIdx > 0) setActIdx(a => a - 1)
+        else if (stageIdx > 0) { setStageIdx(s => s - 1); setActIdx(0) }
     }
 
-    // ── SPEAKING: record → transcribe → grade ──
-    const startSpeaking = async () => {
-        cancelSpeech() // never record over Ecla's voice
-        setHeard(null); setMicError(false)
-        try {
-            const stream = await navigator.mediaDevices.getUserMedia({ audio: true })
-            const rec = new MediaRecorder(stream)
-            mediaRecorderRef.current = rec
-            chunksRef.current = []
-            rec.ondataavailable = e => { if (e.data.size > 0) chunksRef.current.push(e.data) }
-            rec.onstop = async () => {
-                stream.getTracks().forEach(t => t.stop())
-                const blob = new Blob(chunksRef.current, { type: 'audio/webm' })
-                setSpeakState('processing')
-                try {
-                    const token = await getToken()
-                    const res = await fetch(`${API_URL}/api/v1/voice/transcribe`, {
-                        method: 'POST',
-                        headers: { Authorization: `Bearer ${token}`, 'Content-Type': blob.type },
-                        body: blob,
-                    })
-                    const data = await res.json()
-                    const text = (data.text ?? '').trim()
-                    setHeard(text || null)
-                    setSpeakState('idle')
-                    if (text) { setUserInput(text); checkAnswer(text) }
-                } catch {
-                    setSpeakState('idle'); setMicError(true)
-                }
-            }
-            rec.start()
-            setSpeakState('recording')
-            // safety: auto-stop after 10s
-            if (autoStopRef.current) clearTimeout(autoStopRef.current)
-            autoStopRef.current = setTimeout(() => stopSpeaking(), 10000)
-        } catch {
-            setMicError(true)      // permission denied → offer typing fallback
-            setSpeakState('idle')
-        }
-    }
-
-    const stopSpeaking = () => {
-        if (autoStopRef.current) clearTimeout(autoStopRef.current)
-        const rec = mediaRecorderRef.current
-        if (rec && rec.state === 'recording') rec.stop()
-    }
-
-    // ── Match exercise ──
-    const initMatchExercise = (pairs: { a: string; b: string }[]) => {
-        const items = (pairs ?? []).map((p, i) => ({ id: `pair-${i}`, a: p.a, b: p.b }))
-        setMatchPairs(items); setShuffledB(shuffle(items)); setMatchedIds(new Set())
-        setSelectedA(null); setSelectedB(null); setWrongPair(null)
-    }
-
-    const handleMatchClick = (side: 'a' | 'b', id: string) => {
-        if (matchedIds.has(id) || wrongPair) return
-        const resolve = (aId: string, bId: string) => {
-            if (aId === bId) {
-                const next = new Set([...matchedIds, aId]); setMatchedIds(next)
-                setSelectedA(null); setSelectedB(null)
-                if (next.size === matchPairs.length) setTimeout(() => reveal(true, 'exact'), 400)
-            } else {
-                setWrongPair({ a: aId, b: bId })
-                setTimeout(() => { setWrongPair(null); setSelectedA(null); setSelectedB(null) }, 500)
-            }
-        }
-        if (side === 'a') { if (selectedA === id) { setSelectedA(null); return }; setSelectedA(id); if (selectedB) resolve(id, selectedB) }
-        else { if (selectedB === id) { setSelectedB(null); return }; setSelectedB(id); if (selectedA) resolve(selectedA, id) }
-    }
-
-    const completePart = async () => {
-        if (!lesson || !activeSub) return
+    const complete = async () => {
+        if (!lesson || !experience) return
         setSaving(true)
-        const xp = wasReview ? 0 : activeSub.xpReward
         try {
             const token = await getToken()
-            const res = await fetch(`${API_URL}/api/v1/lessons/complete`, {
+            await fetch(`${API_URL}/api/v1/lessons/complete`, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
                 body: JSON.stringify({
-                    conceptId: lesson.conceptId, subLessonId: activeSub.id, mode: lesson.mode,
-                    correctCount, incorrectCount: Math.max(0, totalExercises - correctCount), xpEarned: xp,
+                    conceptId: lesson.conceptId, subLessonId: experience.id, mode,
+                    correctCount: counts.current.correct, incorrectCount: counts.current.incorrect,
+                    xpEarned: experience.xpReward,
                 }),
             })
-            if (res.ok) {
-                setCompletedIds(prev => new Set([...prev, activeSub.id])); setEarnedXp(xp)
-                window.dispatchEvent(new Event('ecla:progress-updated'))
-                window.dispatchEvent(new Event('ecla:progress-updated'))
-            }
-        } catch (e) { console.error(e) } finally { setSaving(false); setPhase('celebration') }
+            window.dispatchEvent(new Event('ecla:progress-updated'))
+            window.dispatchEvent(new Event('luma:progress-updated'))
+        } catch (e) { console.error(e) } finally { setSaving(false); setFinished(true) }
     }
 
-    const handleNext = () => {
-        if (currentIndex < totalExercises - 1) {
-            setCurrentIndex(i => i + 1)
-            setUserInput(''); setIsRevealed(false); setIsCorrect(false); setGradeMethod(null)
-            setHeard(null); setSpeakState('idle'); setInputMode('speak'); setMicError(false)
-            setMatchPairs([]); setShuffledB([]); setSelectedA(null); setSelectedB(null)
-            setMatchedIds(new Set()); setWrongPair(null); setShowMeaning(false)
-        } else if (activeSub?.realLife) setPhase('use')
-        else completePart()
+    /** calm feedback: what happened / why / next */
+    const report = (correct: boolean, f: Feedback) => {
+        if (correct) counts.current.correct++; else counts.current.incorrect++
+        setSolved(true)
+        setFeedback(f)
+        if (correct && autoAdvance) setTimeout(() => advance(), 1600)
     }
 
-    if (loading || !lesson) {
+    if (loading) return (
+        <main className="min-h-screen flex items-center justify-center font-body">
+            <NightBackground />
+            <p className="text-cream/50 text-sm">Preparing your training room…</p>
+        </main>
+    )
+
+    if (!lesson) return (
+        <main className="min-h-screen flex items-center justify-center font-body">
+            <NightBackground />
+            <p className="text-cream/60 text-sm">Lesson not found.</p>
+        </main>
+    )
+
+    /* ── Completion screen (evidence, not confetti) ── */
+    if (finished) {
+        const m = lesson.mastery
         return (
-            <main className="flex min-h-screen items-center justify-center font-body">
+            <main className="min-h-screen font-body">
                 <NightBackground />
-                <Firefly mood="thinking" size={100} glow={glowColors} />
+                <div className="mx-auto max-w-lg px-4 py-14">
+                    <div className="flex justify-center mb-6"><Firefly mood="proud" size={90} glow={glowColors} /></div>
+                    <h1 className="font-display text-2xl font-bold text-cream text-center mb-1">Lesson complete</h1>
+                    <p className="text-cream/60 text-center text-sm mb-8">{lesson.breadcrumb?.competency}</p>
+                    <div className="rounded-2xl border border-white/10 bg-night-800/70 p-5 mb-4">
+                        <p className="text-xs font-bold uppercase tracking-wider text-cream/40 mb-3">You can now</p>
+                        <ul className="space-y-2 text-sm text-cream/80">
+                            <li className="flex gap-2"><Check className="h-4 w-4 text-leaf flex-shrink-0 mt-0.5" /> {lesson.canDo}</li>
+                            <li className="flex gap-2"><Check className="h-4 w-4 text-leaf flex-shrink-0 mt-0.5" /> Recover when you don't understand</li>
+                            <li className="flex gap-2"><Check className="h-4 w-4 text-leaf flex-shrink-0 mt-0.5" /> Use it in a new situation</li>
+                        </ul>
+                    </div>
+                    {m && (
+                        <div className="rounded-2xl border border-white/10 bg-night-800/70 p-5 mb-6">
+                            <div className="flex items-center justify-between mb-3">
+                                <p className="text-xs font-bold uppercase tracking-wider text-cream/40">Evidence collected</p>
+                                <span className="text-xs font-bold text-violet-400">{m.level}</span>
+                            </div>
+                            {Object.entries(m.dimensions as Record<string, number | null>).map(([k, v]) => (
+                                <div key={k} className="flex items-center gap-3 mb-2">
+                                    <span className="w-28 text-xs text-cream/60 capitalize">{k}</span>
+                                    <div className="flex-1 h-1.5 rounded-full bg-white/5 overflow-hidden">
+                                        <div className="h-full rounded-full bg-violet-500" style={{ width: `${v ?? 0}%` }} />
+                                    </div>
+                                    <span className="w-8 text-right text-xs text-cream/50">{v == null ? '—' : `${v}%`}</span>
+                                </div>
+                            ))}
+                        </div>
+                    )}
+                    <button onClick={() => router.push('/course')} className="w-full py-3.5 rounded-xl bg-violet-600 hover:bg-violet-500 text-white font-bold text-sm">
+                        Continue
+                    </button>
+                </div>
             </main>
         )
     }
 
-    const coreSpanish = (currentExercise?.answer || currentExercise?.options?.[0] || activeSub?.exercises?.[0]?.answer || lesson.variant?.storyBeat || '').trim()
-    const coreEnglish = currentExercise?.meaning ?? lesson.coreMeaning ?? lesson.canDo
+    const progressPct = Math.round(((stageIdx + (solved ? 1 : 0)) / Math.max(1, journey.length)) * 100)
 
     return (
-        <main className="min-h-screen font-body">
-            <style>{`
-                @keyframes xp-float { 0% { opacity: 0; transform: translateY(0) scale(.6); } 20% { opacity: 1; transform: translateY(-10px) scale(1.1); } 80% { opacity: 1; transform: translateY(-40px) scale(1); } 100% { opacity: 0; transform: translateY(-60px) scale(.8); } }
-                .xp-float { animation: xp-float 1.4s ease-out forwards; }
-                @keyframes card-shake { 0%,100% { transform: translateX(0); } 25% { transform: translateX(-6px); } 75% { transform: translateX(6px); } }
-                .card-shake { animation: card-shake .4s ease-in-out; }
-                @keyframes fade-in { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: translateY(0); } }
-                .fade-in { animation: fade-in .5s ease-out both; }
-                @keyframes mic-pulse { 0% { box-shadow: 0 0 0 0 rgba(255,107,107,.45); } 100% { box-shadow: 0 0 0 22px rgba(255,107,107,0); } }
-                .mic-pulse { animation: mic-pulse 1.1s ease-out infinite; }
-            `}</style>
-            <NightBackground />
-
-            {/* ── Header ── */}
-            <header className="sticky top-0 z-40 backdrop-blur-md bg-night-950/80 border-b border-white/5">
-                <div className="mx-auto max-w-3xl px-3 sm:px-4 h-14 sm:h-16 flex items-center gap-2 sm:gap-3">
-                    <button onClick={() => router.push('/course')} className="rounded-lg p-2 text-cream/60 hover:bg-night-800 hover:text-cream flex-shrink-0">
-                        <X className="h-5 w-5" />
-                    </button>
-                    <div className="flex-1 relative h-2.5 sm:h-3">
-                        <div className="absolute inset-0 rounded-full bg-white/5 overflow-hidden">
-                            <div className="h-full rounded-full bg-glow transition-all ease-out duration-300" style={{ width: `${Math.min(100, phase === 'celebration' ? 100 : partProgress)}%` }} />
-                        </div>
-                    </div>
-                    <span className="text-[10px] sm:text-xs font-bold text-cream/50 whitespace-nowrap">Part {partNumber}/{totalSubs}</span>
-                    <div className="flex items-center gap-0.5 flex-shrink-0">
-                        {Array.from({ length: 5 }).map((_, i) => (
-                            <Heart key={i} className={`h-3.5 w-3.5 sm:h-4 sm:w-4 transition-all ${i < hearts ? 'fill-coral text-coral' : 'text-cream/15'}`} />
-                        ))}
+        <main className="min-h-screen font-body bg-[#0B0B10] text-white">
+            {/* ── Top bar ── */}
+            <header className="sticky top-0 z-40 border-b border-white/5 bg-[#0B0B10]/90 backdrop-blur">
+                <div className="mx-auto max-w-[1400px] px-4 h-14 flex items-center gap-4">
+                    <button onClick={() => setJourneyOpen(true)} className="lg:hidden text-cream/60"><Menu className="h-5 w-5" /></button>
+                    <span className="font-display font-bold text-lg tracking-tight">ECLA</span>
+                    <nav className="hidden md:flex items-center gap-1.5 text-xs text-cream/50 min-w-0">
+                        <span className="truncate">{lesson.breadcrumb?.course}</span>
+                        <ChevronRight className="h-3 w-3" />
+                        <span className="truncate">{lesson.breadcrumb?.unit}</span>
+                        <ChevronRight className="h-3 w-3" />
+                        <span className="text-cream/80 truncate">{lesson.breadcrumb?.competency}</span>
+                    </nav>
+                    <div className="ml-auto flex items-center gap-4 text-xs text-cream/60">
+                        <span>🔥 {lesson.mastery ? '—' : ''}</span>
+                        <button onClick={() => setToolsOpen(true)} className="xl:hidden text-cream/60"><SlidersHorizontal className="h-5 w-5" /></button>
                     </div>
                 </div>
             </header>
 
-            <div className="mx-auto max-w-3xl px-3 sm:px-4 py-4 sm:py-8 pb-10">
+            <div className="mx-auto max-w-[1400px] grid grid-cols-1 lg:grid-cols-[260px_1fr] xl:grid-cols-[260px_1fr_320px] gap-6 px-4 py-6">
 
-                {/* ── CELEBRATION ── */}
-                {phase === 'celebration' && (
-                    <div className="py-8 sm:py-12 text-center fade-in">
-                        <div className="mb-6 flex justify-center"><Firefly mood="proud" size={120} glow={glowColors} /></div>
-                        <h1 className="font-display text-2xl sm:text-3xl font-black text-cream mb-2">
-                            {!activeSub || allDone ? 'Ability demonstrated!' : `Part ${partNumber} complete!`}
-                        </h1>
-                        <p className="text-cream/60 text-sm sm:text-base mb-6 max-w-md mx-auto italic">"{lesson.canDo}"</p>
-                        <div className="grid grid-cols-3 gap-2 sm:gap-3 mb-8 max-w-md mx-auto">
-                            <div className="rounded-xl border border-glow/30 bg-night-800/70 p-3"><p className="text-[10px] sm:text-xs text-cream/40 mb-1">Earned</p><p className="font-display text-xl sm:text-2xl font-bold text-glow">+{earnedXp}</p></div>
-                            <div className="rounded-xl border border-leaf/30 bg-night-800/70 p-3"><p className="text-[10px] sm:text-xs text-cream/40 mb-1">Accuracy</p><p className="font-display text-xl sm:text-2xl font-bold text-leaf">{partAccuracy}%</p></div>
-                            <div className="rounded-xl border border-coral/30 bg-night-800/70 p-3"><p className="text-[10px] sm:text-xs text-cream/40 mb-1">Hearts</p><p className="font-display text-xl sm:text-2xl font-bold text-coral">{hearts}/5</p></div>
+                {/* ── Left: Lesson Journey ── */}
+                <aside className={`${journeyOpen ? 'fixed inset-0 z-50 bg-black/60 lg:static lg:bg-transparent' : 'hidden'} lg:block`} onClick={() => setJourneyOpen(false)}>
+                    <div className="bg-[#13131B] lg:bg-transparent h-full w-72 lg:w-auto p-5 lg:p-0 overflow-y-auto" onClick={e => e.stopPropagation()}>
+                        <div className="flex items-center justify-between mb-3">
+                            <p className="text-xs font-bold uppercase tracking-wider text-cream/50">Lesson journey</p>
+                            <span className="text-xs text-cream/50">{stageIdx + 1} / {journey.length}</span>
+                            <button className="lg:hidden" onClick={() => setJourneyOpen(false)}><X className="h-4 w-4 text-cream/50" /></button>
                         </div>
-                        <button onClick={() => router.push('/course')} className="w-full max-w-md py-4 rounded-xl bg-glow font-bold text-night-900 text-base hover:bg-glow-bright flex items-center justify-center gap-2 mx-auto">
-                            Back to Path <ArrowRight className="h-5 w-5" />
-                        </button>
+                        <div className="h-1.5 rounded-full bg-white/5 mb-5 overflow-hidden">
+                            <div className="h-full bg-violet-500 transition-all duration-500" style={{ width: `${progressPct}%` }} />
+                        </div>
+                        <ol className="space-y-1">
+                            {journey.map((s: any, i: number) => {
+                                const done = doneStages.has(i)
+                                const current = i === stageIdx
+                                return (
+                                    <li key={s.id}>
+                                        <button
+                                            onClick={() => { if (done || current) { setStageIdx(i); setActIdx(0); setFeedback(null); setSolved(false); setJourneyOpen(false) } }}
+                                            className={`w-full flex items-start gap-3 rounded-xl px-3 py-2.5 text-left transition-colors ${current ? 'bg-violet-600/15 border border-violet-500/30' : 'border border-transparent hover:bg-white/5'}`}
+                                        >
+                                            <span className={`mt-0.5 flex h-6 w-6 flex-shrink-0 items-center justify-center rounded-full text-[11px] font-bold ${done ? 'bg-green-600 text-white' : current ? 'bg-violet-600 text-white' : 'bg-white/10 text-cream/50'}`}>
+                                                {done ? <Check className="h-3.5 w-3.5" /> : i + 1}
+                                            </span>
+                                            <span className="flex-1 min-w-0">
+                                                <span className={`block text-sm font-semibold ${current ? 'text-white' : 'text-cream/70'}`}>{s.title}</span>
+                                                <span className="block text-[11px] text-cream/40">{STAGE_HINT[s.stage] ?? s.objective}</span>
+                                            </span>
+                                            <span className="text-[10px] text-cream/40">{STAGE_MIN[s.stage] ?? 2} min</span>
+                                        </button>
+                                    </li>
+                                )
+                            })}
+                        </ol>
                     </div>
-                )}
+                </aside>
 
-                {/* ── ENCOUNTER ── */}
-                {phase === 'encounter' && activeSub && (
-                    <div className="space-y-5 sm:space-y-6 fade-in">
-                        <div className="flex items-center gap-3 p-3.5 sm:p-4 rounded-xl border border-glow/20 bg-glow/5">
-                            <Target className="h-5 w-5 text-glow flex-shrink-0" />
-                            <p className="text-xs sm:text-sm text-cream/90"><span className="font-bold text-glow">Today's ability:</span> {lesson.canDo}</p>
-                        </div>
-                        <div className={`inline-flex items-center gap-2 px-3 py-1.5 rounded-full border ${modeTheme.color}`}>
-                            <modeTheme.icon className="h-4 w-4" />
-                            <span className="text-[10px] sm:text-xs font-bold uppercase tracking-wider">{modeTheme.label}</span>
-                            <span className="text-[10px] sm:text-xs opacity-70">· {modeTheme.purpose}</span>
-                        </div>
-                        <div className="relative rounded-2xl border border-white/10 bg-night-800/80 p-6 sm:p-8 backdrop-blur-sm flex flex-col items-center text-center space-y-5 min-h-[280px] justify-center">
-                            <p className="text-[10px] sm:text-xs font-bold uppercase tracking-wider text-cream/40">Listen & observe</p>
-                            <h2 className="font-display text-2xl sm:text-4xl font-black text-cream leading-tight">{coreSpanish}</h2>
-                            <SpeakerButton text={coreSpanish} lang="es-ES" size="lg" />
-                            <div className="w-full max-w-sm">
-                                <p className={`text-base sm:text-lg text-cream/60 ${showMeaning ? '' : 'blur-meaning'}`} style={showMeaning ? undefined : { filter: 'blur(6px)', userSelect: 'none' }}>{coreEnglish}</p>
-                                <button onClick={() => setShowMeaning(!showMeaning)} className="mt-3 text-xs font-bold text-glow flex items-center gap-1 mx-auto">
-                                    {showMeaning ? <><EyeOff className="h-3 w-3" /> Hide meaning</> : <><Eye className="h-3 w-3" /> Reveal meaning</>}
-                                </button>
+                {/* ── Center: Workspace ── */}
+                <section className="min-w-0">
+                    {stage && (
+                        <div className="mb-5 flex items-center justify-between">
+                            <div>
+                                <span className="inline-block rounded-md bg-violet-600 px-2 py-0.5 text-[10px] font-bold uppercase tracking-wider text-white mb-2">{stage.stage}</span>
+                                <h1 className="font-display text-2xl md:text-3xl font-bold leading-tight">
+                                    {stage.stage === 'PRODUCE' ? "Let's use it!" : stage.stage === 'ENCOUNTER' ? 'Meet the situation' : stage.stage === 'INTERACT' ? 'Talk with someone' : stage.stage === 'TRANSFER' ? 'A new situation' : stage.title}
+                                </h1>
+                                <p className="text-sm text-cream/50 mt-1">{stage.objective}</p>
                             </div>
                         </div>
-                        <button onClick={() => { setPhase('practice'); }} className="w-full py-4 rounded-xl font-bold text-night-900 text-base sm:text-lg bg-glow hover:bg-glow-bright flex items-center justify-center gap-2">
-                            Start Practice <ArrowRight className="h-5 w-5" />
+                    )}
+
+                    {activity && (
+                        <ActivityCard
+                            key={activity.id}
+                            activity={activity}
+                            lesson={lesson}
+                            getToken={getToken}
+                            report={report}
+                        />
+                    )}
+
+                    {/* ── Calm feedback layer ── */}
+                    {feedback && (
+                        <div className={`mt-4 rounded-xl border p-4 text-sm ${feedback.kind === 'good' ? 'border-green-600/30 bg-green-600/10 text-green-300' : feedback.kind === 'retry' ? 'border-amber-600/30 bg-amber-600/10 text-amber-200' : 'border-white/10 bg-white/5 text-cream/70'}`}>
+                            <p className="font-semibold">{feedback.text}</p>
+                            {feedback.heard && <p className="mt-1 text-cream/60">I heard: <span className="italic">"{feedback.heard}"</span></p>}
+                            {feedback.target && <p className="mt-1 text-cream/60">Target: <span className="font-semibold text-cream/80">{feedback.target}</span></p>}
+                        </div>
+                    )}
+
+                    {/* ── Bottom bar ── */}
+                    <div className="mt-6 flex items-center justify-between gap-3">
+                        <button onClick={back} disabled={stageIdx === 0 && actIdx === 0} className="flex items-center gap-1.5 rounded-xl border border-white/10 px-4 py-2.5 text-sm text-cream/60 hover:text-cream disabled:opacity-40">
+                            <ChevronLeft className="h-4 w-4" /> Previous
+                        </button>
+                        <label className="hidden sm:flex items-center gap-2 text-xs text-cream/50">
+                            Auto-advance
+                            <button onClick={() => setAutoAdvance(v => !v)} className={`h-5 w-9 rounded-full transition-colors ${autoAdvance ? 'bg-violet-600' : 'bg-white/10'}`}>
+                                <span className={`block h-4 w-4 rounded-full bg-white transition-transform ${autoAdvance ? 'translate-x-4' : 'translate-x-0.5'}`} />
+                            </button>
+                        </label>
+                        <button
+                            onClick={advance}
+                            disabled={!solved}
+                            className="flex items-center gap-2 rounded-xl bg-violet-600 hover:bg-violet-500 px-5 py-2.5 text-sm font-bold text-white disabled:opacity-40"
+                        >
+                            Continue
+                            {stageIdx < journey.length - 1 && <span className="hidden md:inline text-white/60 font-normal">Step {stageIdx + 2} · {journey[stageIdx + 1]?.title}</span>}
+                            <ChevronRight className="h-4 w-4" />
                         </button>
                     </div>
-                )}
+                </section>
 
-                {/* ── PRACTICE ── */}
-                {phase === 'practice' && activeSub && currentExercise && (
-                    <div className={`relative ${shakeCard ? 'card-shake' : ''} fade-in`}>
-                        <div className="flex items-center justify-between mb-3 sm:mb-4">
-                            <div className={`inline-flex items-center gap-2 px-3 py-1 rounded-full border ${modeTheme.color}`}>
-                                <modeTheme.icon className="h-3 w-3" />
-                                <span className="text-[10px] font-bold uppercase">{modeTheme.label}</span>
-                            </div>
-                            <span className="text-[10px] sm:text-xs text-cream/40">{currentIndex + 1} / {totalExercises}</span>
+                {/* ── Right: Tools ── */}
+                <aside className={`${toolsOpen ? 'fixed inset-0 z-50 bg-black/60 xl:static xl:bg-transparent' : 'hidden'} xl:block`} onClick={() => setToolsOpen(false)}>
+                    <div className="bg-[#13131B] xl:bg-transparent h-full w-80 xl:w-auto p-5 xl:p-0 overflow-y-auto space-y-4" onClick={e => e.stopPropagation()}>
+                        <div className="flex items-center justify-between">
+                            <p className="text-xs font-bold uppercase tracking-wider text-cream/50">Tools</p>
+                            <button className="xl:hidden" onClick={() => setToolsOpen(false)}><X className="h-4 w-4 text-cream/50" /></button>
                         </div>
 
-                        {showXpFloat && (
-                            <div className="pointer-events-none absolute left-1/2 -top-3 z-10 xp-float">
-                                <div className="inline-flex items-center gap-1 rounded-full bg-glow px-2.5 py-1 text-xs font-black text-night-900">
-                                    <Sparkles className="h-3 w-3" /> +{Math.max(1, Math.round(activeSub.xpReward / totalExercises))} XP
-                                </div>
+                        <div className="rounded-2xl border border-white/10 bg-[#13131B] p-4">
+                            <p className="text-xs font-bold uppercase tracking-wider text-cream/50 mb-3">Vocabulary</p>
+                            <ul className="space-y-2">
+                                {(lesson.tools?.vocabulary ?? []).slice(0, 5).map((v: any) => (
+                                    <li key={v.word} className="flex items-center gap-2 text-sm">
+                                        <SpeakerButton text={v.word} lang="es-ES" size="sm" />
+                                        <span className="text-cream/80">{v.word}</span>
+                                        <span className="ml-auto text-cream/40 text-xs">{v.translation}</span>
+                                    </li>
+                                ))}
+                            </ul>
+                        </div>
+
+                        {lesson.tools?.grammar && (
+                            <div className="rounded-2xl border border-white/10 bg-[#13131B] p-4">
+                                <p className="text-xs font-bold uppercase tracking-wider text-cream/50 mb-2 flex items-center gap-1.5"><Lightbulb className="h-3.5 w-3.5" /> Language help</p>
+                                <p className="text-sm text-cream/70 leading-relaxed">{lesson.tools.grammar}</p>
                             </div>
                         )}
 
-                        <div className="rounded-2xl border border-white/10 bg-night-800/70 p-4 sm:p-6 backdrop-blur-sm min-h-[380px] flex flex-col">
-                            <div className="flex-1">
-                                {(currentExercise.type === 'mcq' || currentExercise.type === 'fill_blank' || currentExercise.type === 'listen_type') && (
-                                    <h2 className="font-display text-base sm:text-lg font-bold text-cream leading-snug mb-4 sm:mb-5">{currentExercise.prompt}</h2>
-                                )}
-
-                                {/* ── SPEAK exercise: mic-first ── */}
-                                {currentExercise.type === 'speak' && inputMode === 'speak' && (
-                                    <div className="flex flex-col items-center gap-4 sm:gap-5 py-2 sm:py-4">
-                                        <h2 className="font-display text-base sm:text-lg font-bold text-cream leading-snug text-center">{currentExercise.prompt}</h2>
-
-                                        {heard && (
-                                            <div className="w-full max-w-sm rounded-xl border border-white/10 bg-night-900/60 px-4 py-3 text-center">
-                                                <p className="text-[10px] font-bold uppercase tracking-wider text-cream/40 mb-1">Ecla heard</p>
-                                                <p className="text-sm sm:text-base text-cream italic">"{heard}"</p>
-                                            </div>
-                                        )}
-
-                                        <button
-                                            onClick={speakState === 'recording' ? stopSpeaking : startSpeaking}
-                                            disabled={speakState === 'processing' || isRevealed}
-                                            className={`relative flex h-20 w-20 sm:h-24 sm:w-24 items-center justify-center rounded-full transition-all disabled:opacity-50 ${speakState === 'recording'
-                                                ? 'bg-coral text-night-900 mic-pulse'
-                                                : 'bg-glow text-night-900 hover:bg-glow-bright active:scale-95'
-                                                }`}
-                                        >
-                                            {speakState === 'recording' ? <Square className="h-7 w-7 sm:h-8 sm:w-8" />
-                                                : speakState === 'processing' ? <Loader2 className="h-7 w-7 sm:h-8 sm:w-8 animate-spin" />
-                                                    : <Mic className="h-7 w-7 sm:h-8 sm:w-8" />}
-                                        </button>
-
-                                        <p className="text-xs sm:text-sm text-cream/50 text-center min-h-[18px]">
-                                            {speakState === 'recording' ? 'Listening… tap to finish'
-                                                : speakState === 'processing' ? 'Checking what you said…'
-                                                    : micError ? 'Mic unavailable — you can type it instead.'
-                                                        : 'Tap the mic and say it in Spanish'}
-                                        </p>
-
-                                        <button onClick={() => { setInputMode('type'); setHeard(null); setMicError(false) }} className="flex items-center gap-1.5 text-[11px] sm:text-xs font-bold text-cream/40 hover:text-cream">
-                                            <Keyboard className="h-3.5 w-3.5" /> Prefer typing?
-                                        </button>
-                                    </div>
-                                )}
-
-                                {/* ── SPEAK exercise typed fallback ── */}
-                                {currentExercise.type === 'speak' && inputMode === 'type' && (
-                                    <div className="space-y-4">
-                                        <h2 className="font-display text-base sm:text-lg font-bold text-cream leading-snug">{currentExercise.prompt}</h2>
-                                        <input
-                                            type="text" value={userInput} onChange={e => setUserInput(e.target.value)} disabled={isRevealed || checking}
-                                            className={`w-full p-4 rounded-xl border-2 bg-night-900/50 text-cream text-base focus:outline-none ${isRevealed ? isCorrect ? 'border-leaf/50' : 'border-coral/50' : 'border-white/10 focus:border-glow'}`}
-                                            placeholder="Type it in Spanish…" autoFocus
-                                            onKeyDown={e => e.key === 'Enter' && !isRevealed && !checking && checkAnswer(userInput)}
-                                        />
-                                        {!isRevealed && (
-                                            <div className="flex gap-2">
-                                                <button onClick={() => checkAnswer(userInput)} disabled={!userInput.trim() || checking} className="flex-1 py-3.5 rounded-xl font-bold bg-glow text-night-900 disabled:opacity-40 flex items-center justify-center gap-2">
-                                                    {checking ? <><Loader2 className="w-4 h-4 animate-spin" /> Checking…</> : 'Check'}
-                                                </button>
-                                                <button onClick={() => { setInputMode('speak'); setUserInput('') }} className="px-4 rounded-xl border border-white/10 text-cream/60 hover:text-cream">
-                                                    <Mic className="h-4 w-4" />
-                                                </button>
-                                            </div>
-                                        )}
-                                    </div>
-                                )}
-
-                                {/* ── MCQ / listen_choose ── */}
-                                {(currentExercise.type === 'mcq' || currentExercise.type === 'listen_choose') && (
-                                    <div className="space-y-2 sm:space-y-3">
-                                        {currentExercise.type === 'listen_choose' && <div className="mb-4 flex justify-center"><SpeakerButton text={currentExercise.audio} lang="es-ES" size="lg" /></div>}
-                                        {(currentExercise.options || []).map((option: string, i: number) => {
-                                            const isCorrectOption = option === currentExercise.answer
-                                            const isSelected = userInput === option
-                                            let styles = 'border-white/10 bg-night-900/50 hover:border-white/25'
-                                            if (isRevealed) {
-                                                if (isCorrectOption) styles = 'border-leaf/50 bg-leaf/10 text-leaf'
-                                                else if (isSelected && !isCorrectOption) styles = 'border-coral/50 bg-coral/10 text-coral'
-                                                else styles = 'opacity-40'
-                                            }
-                                            return (
-                                                <button key={i} onClick={() => !isRevealed && checkAnswer(option)} disabled={isRevealed} className={`w-full p-3.5 sm:p-4 rounded-xl border-2 text-left transition-all flex items-center justify-between min-h-[48px] ${styles}`}>
-                                                    <span className="text-sm font-medium">{option}</span>
-                                                    {isRevealed && isCorrectOption && <CheckCircle2 className="h-5 w-5 text-leaf flex-shrink-0 ml-2" />}
-                                                </button>
-                                            )
-                                        })}
-                                    </div>
-                                )}
-
-                                {/* ── Typed exercises ── */}
-                                {(currentExercise.type === 'fill_blank' || currentExercise.type === 'listen_type') && (
-                                    <div className="space-y-4">
-                                        {currentExercise.type === 'listen_type' && <div className="mb-4 flex justify-center"><SpeakerButton text={currentExercise.audio} lang="es-ES" size="lg" /></div>}
-                                        <input
-                                            type="text" value={userInput} onChange={e => setUserInput(e.target.value)} disabled={isRevealed || checking}
-                                            className={`w-full p-4 rounded-xl border-2 bg-night-900/50 text-cream text-base focus:outline-none ${isRevealed ? isCorrect ? 'border-leaf/50' : 'border-coral/50' : 'border-white/10 focus:border-glow'}`}
-                                            placeholder="Type your answer…" autoFocus
-                                            onKeyDown={e => e.key === 'Enter' && !isRevealed && !checking && checkAnswer(userInput)}
-                                        />
-                                        {!isRevealed && (
-                                            <button onClick={() => checkAnswer(userInput)} disabled={!userInput.trim() || checking} className="w-full py-3.5 rounded-xl font-bold bg-glow text-night-900 disabled:opacity-40 flex items-center justify-center gap-2">
-                                                {checking ? <><Loader2 className="w-4 h-4 animate-spin" /> Checking…</> : 'Check Answer'}
-                                            </button>
-                                        )}
-                                    </div>
-                                )}
-
-                                {/* ── Match ── */}
-                                {currentExercise.type === 'match' && (() => {
-                                    if (matchPairs.length === 0 && currentExercise.pairs) initMatchExercise(currentExercise.pairs)
-                                    const tileStyles = (id: string, side: 'a' | 'b') => {
-                                        if (matchedIds.has(id)) return 'border-leaf/40 bg-leaf/10 text-leaf opacity-50'
-                                        if (wrongPair && ((side === 'a' && wrongPair.a === id) || (side === 'b' && wrongPair.b === id))) return 'border-coral bg-coral/20 text-coral'
-                                        if ((side === 'a' && selectedA === id) || (side === 'b' && selectedB === id)) return 'border-glow bg-glow/15 ring-2 ring-glow/30'
-                                        return 'border-white/10 bg-night-900/60 hover:border-white/25'
-                                    }
-                                    return (
-                                        <div className="grid grid-cols-2 gap-2 sm:gap-3">
-                                            <div className="space-y-2">{matchPairs.map(p => <button key={`a-${p.id}`} onClick={() => handleMatchClick('a', p.id)} disabled={matchedIds.has(p.id)} className={`w-full p-3 rounded-lg border-2 text-left text-xs sm:text-sm font-medium min-h-[44px] ${tileStyles(p.id, 'a')}`}>{p.a}</button>)}</div>
-                                            <div className="space-y-2">{shuffledB.map(p => <button key={`b-${p.id}`} onClick={() => handleMatchClick('b', p.id)} disabled={matchedIds.has(p.id)} className={`w-full p-3 rounded-lg border-2 text-left text-xs sm:text-sm font-medium min-h-[44px] ${tileStyles(p.id, 'b')}`}>{p.b}</button>)}</div>
-                                        </div>
-                                    )
-                                })()}
+                        {lesson.tools?.pronunciation && (
+                            <div className="rounded-2xl border border-white/10 bg-[#13131B] p-4">
+                                <p className="text-xs font-bold uppercase tracking-wider text-cream/50 mb-2 flex items-center gap-1.5"><AudioLines className="h-3.5 w-3.5" /> Pronunciation</p>
+                                <p className="text-sm text-cream/70 leading-relaxed">{lesson.tools.pronunciation}</p>
                             </div>
+                        )}
 
-                            {/* ── Feedback (form vs function) ── */}
-                            {isRevealed && currentExercise.type !== 'match' && (
-                                <div className="mt-5 space-y-3">
-                                    <div className={`rounded-lg p-3.5 sm:p-4 ${isCorrect ? 'bg-leaf/10 border border-leaf/30' : 'bg-coral/10 border border-coral/30'}`}>
-                                        <div className="flex items-start gap-2.5">
-                                            {isCorrect ? <CheckCircle2 className="h-5 w-5 text-leaf flex-shrink-0 mt-0.5" /> : <XCircle className="h-5 w-5 text-coral flex-shrink-0 mt-0.5" />}
-                                            <div className="flex-1 space-y-1.5 min-w-0">
-                                                <p className={`text-sm font-semibold ${isCorrect ? 'text-leaf' : 'text-coral'}`}>
-                                                    {isCorrect
-                                                        ? (['fuzzy', 'variant', 'ai'].includes(gradeMethod ?? '') ? 'Meaning communicated — that counts.' : 'Correct.')
-                                                        : 'Not quite.'}
-                                                </p>
-                                                {currentExercise.type === 'speak' && heard && !isCorrect && (
-                                                    <p className="text-xs text-cream/80">Heard: <span className="italic">"{heard}"</span></p>
-                                                )}
-                                                {!isCorrect && (
-                                                    <p className="text-xs text-cream/80">Answer: <span className="font-bold text-cream">{currentExercise.answer}</span></p>
-                                                )}
-                                                {currentExercise.type === 'speak' && (
-                                                    <div className="pt-1"><SpeakerButton text={currentExercise.answer} lang="es-ES" size="sm" /></div>
-                                                )}
-                                            </div>
+                        {lesson.mastery && (
+                            <div className="rounded-2xl border border-white/10 bg-[#13131B] p-4">
+                                <p className="text-xs font-bold uppercase tracking-wider text-cream/50 mb-2">Mastery</p>
+                                <p className="text-sm font-bold text-violet-400 mb-3">{lesson.mastery.level}</p>
+                                {Object.entries(lesson.mastery.dimensions as Record<string, number | null>).map(([k, v]) => (
+                                    <div key={k} className="flex items-center gap-2 mb-2">
+                                        <span className="w-24 text-[11px] text-cream/50 capitalize">{k}</span>
+                                        <div className="flex-1 h-1 rounded-full bg-white/5 overflow-hidden">
+                                            <div className="h-full bg-violet-500" style={{ width: `${v ?? 0}%` }} />
                                         </div>
+                                        <span className="w-8 text-right text-[11px] text-cream/40">{v == null ? '—' : `${v}%`}</span>
                                     </div>
-                                    <button onClick={handleNext} className="w-full py-3.5 rounded-xl font-bold text-sm sm:text-base text-night-900 bg-glow hover:bg-glow-bright flex items-center justify-center gap-2">
-                                        {currentIndex === totalExercises - 1 ? 'Finish Part' : 'Continue'} <ArrowRight className="h-4 w-4" />
-                                    </button>
-                                </div>
-                            )}
-                            {isRevealed && currentExercise.type === 'match' && (
-                                <button onClick={handleNext} className="w-full mt-4 py-3.5 rounded-xl font-bold text-sm sm:text-base text-night-900 bg-glow hover:bg-glow-bright flex items-center justify-center gap-2">
-                                    {currentIndex === totalExercises - 1 ? 'Finish Part' : 'Continue'} <ArrowRight className="h-4 w-4" />
-                                </button>
-                            )}
-                        </div>
+                                ))}
+                            </div>
+                        )}
                     </div>
-                )}
-
-                {/* ── USE ── */}
-                {phase === 'use' && activeSub?.realLife && (
-                    <div className="fade-in space-y-5">
-                        <div className="flex items-center gap-3 p-3.5 sm:p-4 rounded-xl border border-purple-400/30 bg-purple-400/5">
-                            <Target className="h-5 w-5 text-purple-400 flex-shrink-0" />
-                            <p className="text-xs sm:text-sm text-cream/90"><span className="font-bold text-purple-400">Real-world mission:</span> {activeSub.realLife.prompt}</p>
-                        </div>
-                        <div className="rounded-2xl border border-white/10 bg-night-800/80 p-5 sm:p-8 text-center space-y-5">
-                            <Firefly mood="proud" size={80} glow={glowColors} />
-                            <p className="text-sm sm:text-base text-cream/80">Use your new ability in a real interaction with Ecla.</p>
-                            <button
-                                onClick={() => setMissionOpen(true)}
-                                className="w-full py-3 rounded-xl bg-purple-400 text-night-900 font-bold text-sm transition-all hover:brightness-110 flex items-center justify-center gap-2"
-                            >
-                                <Target className="h-4 w-4" /> Start Mission
-                            </button>
-                            <button onClick={() => router.push(`/chat?seed={encodeURIComponent(activeSub.realLife!.chatSeed || '')}`)} className="w-full py-3 rounded-xl border border-white/10 text-cream/60 text-sm flex items-center justify-center gap-2">
-                                <MessageCircle className="h-4 w-4" /> Prefer chat? Practice with Ecla
-                            </button>
-                            <button onClick={completePart} disabled={saving} className="w-full py-3 rounded-xl border border-white/10 text-cream/60 text-sm">
-                                {saving ? 'Saving…' : 'Skip & Finish Part'}
-                            </button>
-                        </div>
-                    </div>
-                )}
+                </aside>
             </div>
-
-            {/* ── Mission Runner overlay (Phase 6) ── */}
-            {missionOpen && (
-                <MissionRunner
-                    competencyId={lesson.conceptId}
-                    onClose={() => {
-                        setMissionOpen(false)
-                        window.dispatchEvent(new Event('ecla:progress-updated'))
-                        window.dispatchEvent(new Event('ecla:progress-updated'))
-                    }}
-                />
-            )}
         </main>
+    )
+}
+
+/* ══════════════════════ Activity renderer ══════════════════════ */
+
+function ActivityCard({ activity, lesson, getToken, report }: {
+    activity: any; lesson: any; getToken: () => Promise<string | null>
+    report: (correct: boolean, f: Feedback) => void
+}) {
+    const [picked, setPicked] = useState<string | null>(null)
+    const [typed, setTyped] = useState('')
+    const [played, setPlayed] = useState(false)
+    const [chat, setChat] = useState<{ role: 'ai' | 'learner'; text: string }[]>([])
+    const [busy, setBusy] = useState(false)
+
+    const target: string = activity.input?.target ?? activity.expectedOutput ?? ''
+    const options: string[] = activity.input?.options ?? []
+    const correctOption = options.includes(target) ? target : options[0]
+
+    const mic = useMic(getToken, text => handleOpen(text), () => report(false, { kind: 'retry', text: "I didn't catch that. Listen once more, then try again." }))
+
+    /* open-response evaluation (recall / produce / transfer / retain) */
+    const handleOpen = async (answer: string) => {
+        const accept: string[] = activity.expectedOutput?.accepted ?? (target ? [target] : [])
+        const local = gradeLocal(answer, { type: 'recall', answer: target || accept[0], accept })
+        if (local.correct) {
+            report(true, { kind: 'good', text: 'Good — I understood you. Meaning communicated.', heard: answer })
+            return
+        }
+        if (local.needsJudge) {
+            setBusy(true)
+            try {
+                const token = await getToken()
+                const r = await fetch(`${API_URL}/api/v1/lessons/grade`, {
+                    method: 'POST', headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+                    body: JSON.stringify({ answer, expected: target || accept[0], accept }),
+                })
+                const j = await r.json()
+                setBusy(false)
+                if (j.correct) report(true, { kind: 'good', text: 'I understood your meaning. Successful communication.', heard: answer })
+                else report(false, { kind: 'retry', text: 'Your message was understandable next time — try the target expression.', heard: answer, target })
+            } catch { setBusy(false); report(true, { kind: 'info', text: 'Recorded. We will revisit this later.', heard: answer }) }
+            return
+        }
+        report(false, { kind: 'retry', text: 'Almost. Try again — you can take your time.', heard: answer, target })
+    }
+
+    /* interaction: AI partner exchange */
+    const interact = async (learnerText: string) => {
+        setChat(c => [...c, { role: 'learner', text: learnerText }])
+        setBusy(true)
+        try {
+            const token = await getToken()
+            const r = await fetch(`${API_URL}/api/v1/missions/${lesson.conceptId}/turn`, {
+                method: 'POST', headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+                body: JSON.stringify({ history: [...chat, { role: 'learner', text: learnerText }] }),
+            })
+            const j = await r.json()
+            setChat(c => [...c, { role: 'ai', text: j.text }])
+            report(true, { kind: 'good', text: 'Nice — the conversation continued. That is real interaction.' })
+        } catch { setBusy(false) }
+        setBusy(false)
+    }
+
+    const MicButton = ({ say }: { say?: string }) => (
+        <div className="flex flex-col items-center gap-3 py-4">
+            <button
+                onClick={mic.state === 'recording' ? mic.stop : mic.start}
+                disabled={mic.state === 'processing' || busy}
+                className={`flex h-20 w-20 items-center justify-center rounded-full transition-all ${mic.state === 'recording' ? 'bg-red-500 text-white animate-pulse' : 'bg-violet-600/20 text-violet-300 hover:bg-violet-600/30 border border-violet-500/40'}`}
+            >
+                {mic.state === 'recording' ? <Square className="h-7 w-7" /> : <Mic className="h-7 w-7" />}
+            </button>
+            <p className="text-xs text-cream/50">
+                {mic.state === 'recording' ? 'Listening… tap to finish' : mic.state === 'processing' ? 'Checking…' : say ? `Tap to speak · Say "${say}"` : 'Tap to speak'}
+            </p>
+        </div>
+    )
+
+    const TypeFallback = () => (
+        <div className="flex gap-2 mt-3">
+            <input
+                value={typed} onChange={e => setTyped(e.target.value)}
+                onKeyDown={e => e.key === 'Enter' && typed.trim() && handleOpen(typed)}
+                placeholder="…or type it"
+                className="flex-1 rounded-xl border border-white/10 bg-[#1A1A24] px-4 py-2.5 text-sm focus:outline-none focus:border-violet-500"
+            />
+            <button onClick={() => handleOpen(typed)} disabled={!typed.trim()} className="rounded-xl bg-white/10 px-4 text-sm font-semibold disabled:opacity-40">Check</button>
+        </div>
+    )
+
+    switch (activity.type) {
+        /* ── context / encounter ── */
+        case 'context':
+            return (
+                <Card>
+                    <Situation text={activity.input?.scenario} target={activity.input?.targetLanguage} onPlayed={() => setPlayed(true)} />
+                    <button onClick={() => report(true, { kind: 'info', text: "Context understood. Let's notice the language." })} disabled={!played} className={CONTINUE}>
+                        {played ? 'Continue' : 'Listen first'}
+                    </button>
+                </Card>
+            )
+
+        /* ── listening ── */
+        case 'listening':
+            return (
+                <Card>
+                    <p className="text-sm text-cream/60 mb-3">{activity.prompt}</p>
+                    <div className="flex justify-center mb-4"><SpeakerButton text={(activity.input?.utterances ?? [target])[0]} lang="es-ES" size="lg" onEnd={() => setPlayed(true)} /></div>
+                    <button
+                        onClick={() => report(true, { kind: 'info', text: "Context understood. Let's notice the language." })}
+                        disabled={!played}
+                        className={CONTINUE}
+                    >
+                        {played ? 'Continue' : 'Listen first'}
+                    </button>
+                </Card>
+            )
+
+        /* ── meaning discovery / comprehension / recognition (MCQ, calm) ── */
+        case 'meaning_discovery':
+        case 'comprehension':
+        case 'recognition': {
+            // Defensive: some seeded comprehension activities ship without options.
+            // Synthesize intent options from the can-do (Art. 6: meaning first)
+            // so the learner can NEVER be stuck on an empty card.
+            const opts = options.length ? options : [
+                `They are trying to ${lesson.canDo.toLowerCase()}`,
+                'They are ending the conversation.',
+                'They are talking about something unrelated.',
+            ]
+            const correct = opts.includes(target) ? target : opts[0]
+            const audio = activity.input?.target ?? activity.input?.utterances?.[0]
+            return (
+                <Card>
+                    <p className="text-sm text-cream/70 mb-4">{activity.prompt}</p>
+                    {audio && (
+                        <div className="mb-4 flex items-center gap-3 rounded-xl bg-white/5 border border-white/10 p-3">
+                            <SpeakerButton text={audio} lang="es-ES" size="md" />
+                            <span className="text-sm text-cream/70">Listen, then choose.</span>
+                        </div>
+                    )}
+                    <div className="space-y-2">
+                        {opts.map(o => (
+                            <button key={o} onClick={() => setPicked(o)} disabled={!!picked}
+                                className={`w-full rounded-xl border px-4 py-3 text-left text-sm transition-colors ${picked === o ? (o === correct ? 'border-green-600/50 bg-green-600/10' : 'border-amber-600/50 bg-amber-600/10') : 'border-white/10 bg-[#1A1A24] hover:border-white/25'}`}>
+                                {o}
+                            </button>
+                        ))}
+                    </div>
+                    {picked && (
+                        <button onClick={() => report(picked === correct, picked === correct
+                            ? { kind: 'good', text: 'Exactly. You understood the meaning.' }
+                            : { kind: 'retry', text: 'Not quite — notice what the speaker is trying to do.', target: correct })} className={`${CONTINUE} mt-4`}>
+                            Continue
+                        </button>
+                    )}
+                </Card>
+            )
+        }
+
+        /* ── listening discrimination ── */
+        case 'listening_discrimination': {
+            const opts = [target, ...(activity.input?.distractors ?? [])].slice(0, 4)
+            return (
+                <Card>
+                    <p className="text-sm text-cream/70 mb-3">Tap what you hear.</p>
+                    <div className="flex justify-center mb-4"><SpeakerButton text={target} lang="es-ES" size="lg" /></div>
+                    <div className="space-y-2">
+                        {opts.map(o => (
+                            <button key={o} onClick={() => setPicked(o)} disabled={!!picked}
+                                className={`w-full rounded-xl border px-4 py-3 text-left text-sm ${picked === o ? (o === target ? 'border-green-600/50 bg-green-600/10' : 'border-amber-600/50 bg-amber-600/10') : 'border-white/10 bg-[#1A1A24] hover:border-white/25'}`}>
+                                {o}
+                            </button>
+                        ))}
+                    </div>
+                    {picked && (
+                        <button onClick={() => report(picked === target, picked === target
+                            ? { kind: 'good', text: 'Clear ear. You heard it correctly.' }
+                            : { kind: 'retry', text: 'Listen once more — notice the rhythm.', target })} className={`${CONTINUE} mt-4`}>
+                            Continue
+                        </button>
+                    )}
+                </Card>
+            )
+        }
+
+        /* ── noticing / pronunciation (info + listen) ── */
+        case 'noticing':
+        case 'pronunciation':
+            return (
+                <Card>
+                    <p className="text-sm text-cream/70 mb-3">{activity.prompt}</p>
+                    {activity.input?.patterns && (
+                        <div className="flex flex-wrap gap-2 mb-4">
+                            {activity.input.patterns.map((p: string) => (
+                                <span key={p} className="rounded-lg bg-white/5 border border-white/10 px-3 py-1.5 text-sm text-cream/80">{p}</span>
+                            ))}
+                        </div>
+                    )}
+                    {activity.input?.target && (
+                        <div className="flex items-center gap-3 mb-4 rounded-xl bg-white/5 border border-white/10 p-3">
+                            <SpeakerButton text={activity.input.target} lang="es-ES" size="md" />
+                            <span className="text-sm text-cream/80">{activity.input.target}</span>
+                        </div>
+                    )}
+                    {activity.input?.note && <p className="text-xs text-cream/50 mb-4">{activity.input.note}</p>}
+                    <button onClick={() => report(true, { kind: 'info', text: 'Noted. Now retrieve it from memory.' })} className={CONTINUE}>Continue</button>
+                </Card>
+            )
+
+        /* ── recall / completion / produce / transfer / retain (mic-first) ── */
+        case 'recall':
+        case 'completion':
+        case 'guided_speaking':
+        case 'free_retrieval':
+        case 'simulation':
+        case 'unexpected_interaction':
+        case 'spaced_retrieval':
+        case 'mixed_context_review':
+            return (
+                <Card>
+                    <p className="text-sm text-cream/70 mb-2">{activity.prompt}</p>
+                    {activity.input?.scenario && <p className="text-sm text-cream/50 mb-2 italic">{activity.input.scenario}</p>}
+                    {activity.input?.support && (
+                        <div className="flex flex-wrap gap-2 mb-3">
+                            {(Array.isArray(activity.input.support) ? activity.input.support : [activity.input.support]).map((s: string) => (
+                                <span key={s} className="rounded-lg bg-violet-600/10 border border-violet-500/30 px-3 py-1 text-xs text-violet-300 capitalize">
+                                    {String(s).replace(/_/g, ' ')}
+                                </span>
+                            ))}
+                        </div>
+                    )}
+                    <MicButton say={typeof target === 'string' && target.length < 60 ? target : undefined} />
+                    <TypeFallback />
+                </Card>
+            )
+
+        /* ── interaction / role-play ── */
+        case 'guided_interaction':
+        case 'role_play':
+            return (
+                <Card>
+                    <p className="text-sm text-cream/70 mb-4">{activity.prompt}</p>
+                    <div className="space-y-2 mb-4">
+                        {chat.length === 0 && activity.input?.opening && (
+                            <Bubble role="ai" text={activity.input.opening} />
+                        )}
+                        {chat.map((m, i) => <Bubble key={i} role={m.role} text={m.text} />)}
+                    </div>
+                    {chat.length === 0 ? (
+                        <>
+                            <MicButton />
+                            <TypeFallback />
+                        </>
+                    ) : chat.filter(m => m.role === 'learner').length === 0 ? (
+                        <></>
+                    ) : (
+                        <p className="text-xs text-cream/50">Interaction recorded.</p>
+                    )}
+                </Card>
+            )
+
+        default:
+            return (
+                <Card>
+                    <p className="text-sm text-cream/70">{activity.prompt ?? activity.title}</p>
+                    <button onClick={() => report(true, { kind: 'info', text: 'Recorded.' })} className={`${CONTINUE} mt-4`}>Continue</button>
+                </Card>
+            )
+    }
+
+    /* inner helpers need access to interact for interaction types */
+    function Bubble({ role, text }: { role: 'ai' | 'learner'; text: string }) {
+        return (
+            <div className={`flex ${role === 'learner' ? 'justify-end' : 'justify-start'}`}>
+                <div className={`max-w-[80%] rounded-2xl px-4 py-2.5 text-sm ${role === 'learner' ? 'bg-violet-600 text-white' : 'bg-white/5 border border-white/10 text-cream/80'}`}>
+                    {text}
+                    {role === 'ai' && <span className="ml-2 inline-block align-middle"><SpeakerButton text={text} lang="es-ES" size="sm" /></span>}
+                </div>
+            </div>
+        )
+    }
+}
+
+const CONTINUE = 'w-full rounded-xl bg-violet-600 hover:bg-violet-500 py-3 text-sm font-bold text-white disabled:opacity-40'
+
+function Card({ children }: { children: React.ReactNode }) {
+    return <div className="rounded-2xl border border-white/10 bg-[#13131B] p-5 md:p-6">{children}</div>
+}
+
+function Situation({ text, target, onPlayed }: { text?: string; target?: string; onPlayed: () => void }) {
+    return (
+        <div className="mb-5 rounded-xl border border-white/10 bg-[#1A1A24] p-4">
+            <p className="text-xs font-bold uppercase tracking-wider text-cream/40 mb-2">Situation</p>
+            <p className="text-sm text-cream/80 leading-relaxed mb-3">{text}</p>
+            {target && (
+                <div className="flex items-center gap-3 rounded-lg bg-white/5 p-3 cursor-pointer hover:bg-white/10 transition-colors" onClick={onPlayed}>
+                    <SpeakerButton text={target} lang="es-ES" size="md" onStart={onPlayed} onEnd={onPlayed} />
+                    <span className="text-base font-semibold text-cream">{target}</span>
+                </div>
+            )}
+        </div>
     )
 }
 
 export default function LearnPage() {
     return (
-        <Suspense fallback={<main className="flex min-h-screen items-center justify-center"><NightBackground /><Firefly mood="thinking" size={100} /></main>}>
-            <LearnPageContent />
+        <Suspense fallback={<main className="min-h-screen bg-[#0B0B10]" />}>
+            <LearnPlayer />
         </Suspense>
     )
 }

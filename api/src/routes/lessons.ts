@@ -122,37 +122,24 @@ router.get('/api/v1/lessons/:conceptId', async (req: Request, res: Response, nex
         const comp = await prisma.competency.findUnique({
             where: { id: req.params.conceptId },
             include: {
+                unit: { include: { course: true } },
                 experiences: { orderBy: { orderIndex: 'asc' } },
-                vocabulary: { include: { vocabulary: true } },   // needed for meaning lookup
+                vocabulary: { include: { vocabulary: true } },
             },
         })
         if (!comp) throw new AppError('Lesson not found', 404)
 
-        const realization = await prisma.languageRealization.findFirst({
-            where: { competencyId: comp.id },
-        })
-
-        // ── Meaning lookup: Spanish example → English via the competency's vocab ──
-        const norm = (s: string) => s.toLowerCase().normalize('NFD')
-            .replace(/[\u0300-\u036f]/g, '').replace(/[¿¡?!.,;:()"']/g, '').replace(/\s+/g, ' ').trim()
-        const vocabByNorm = new Map<string, string>()
-        for (const link of comp.vocabulary ?? []) vocabByNorm.set(norm(link.vocabulary.word), link.vocabulary.translation)
-        const meaningOf = (text: string | null | undefined): string | null => {
-            if (!text) return null
-            const n = norm(text)
-            if (vocabByNorm.has(n)) return vocabByNorm.get(n)!
-            const words = n.split(' ')
-            if (words.length > 1) {                       // word-by-word fallback for chunks
-                const parts = words.map(w => vocabByNorm.get(w))
-                if (parts.every(Boolean)) return parts.join(' ')
-            }
-            return null
-        }
+        const realization = await prisma.languageRealization.findFirst({ where: { competencyId: comp.id } })
 
         const progress = await prisma.userExperienceProgress.findMany({
             where: { userId: user.id, experienceId: { in: comp.experiences.map(e => e.id) } },
         })
         const completedIds = progress.filter(p => p.status === 'completed').map(p => p.experienceId)
+
+        const mastery = await prisma.competencyMastery.findUnique({
+            where: { userId_competencyId: { userId: user.id, competencyId: comp.id } },
+        })
+
         const perPartXp = Math.max(5, Math.round(comp.xpReward / Math.max(1, comp.experiences.length)))
 
         const subLessons = comp.experiences.map((e: any) => {
@@ -162,64 +149,48 @@ router.get('/api/v1/lessons/:conceptId', async (req: Request, res: Response, nex
                 conceptId: comp.id,
                 orderIndex: e.orderIndex,
                 title: e.title,
-                icon: TYPE_ICON[e.type] ?? 'book-open',
                 type: e.type,
                 xpReward: perPartXp,
+                // The 9-stage engine data (ENCOUNTER → RETAIN) written by seedSublessons
+                journey: content.subLessons ?? [],
+                assessment: e.assessment ?? null,
                 teach: normalizeTeach(content.teach),
-                exercises: (content.exercises ?? [])
-                    .map((ex: any) => {
-                        const n = normalizeExercise(ex)
-                        if (!n) return null
-                        // Trim + dedupe options → kills visually-duplicate choices ("Mira." vs "Mira. ")
-                        if (Array.isArray(n.options)) {
-                            const seen = new Set<string>()
-                            n.options = n.options
-                                .map((o: any) => String(o).trim())
-                                .filter((o: string) => {
-                                    if (!o) return false
-                                    const k = o.toLowerCase()
-                                    if (seen.has(k)) return false
-                                    seen.add(k); return true
-                                })
-                            // guarantee the answer is always among the options
-                            if (n.answer && !n.options.some((o: string) => o.toLowerCase() === String(n.answer).toLowerCase())) {
-                                n.options.push(String(n.answer).trim())
-                            }
-                        }
-                        if (typeof n.answer === 'string') n.answer = n.answer.trim()
-                        if (typeof n.prompt === 'string') n.prompt = n.prompt.trim()
-                        if (typeof n.audio === 'string') n.audio = n.audio.trim()
-                        // Attach the REAL meaning (translation), not the exercise instruction
-                        n.meaning = meaningOf(n.answer) ?? meaningOf(n.audio) ?? null
-                        return n
-                    })
-                    .filter(Boolean),
+                exercises: (content.exercises ?? []).map(normalizeExercise),
                 realLife: content.realLife ?? null,
             }
         })
-
-        const flavorOf = (type: string) => {
-            const e = comp.experiences.find(x => x.type === type)
-            return ((e?.content as any)?.teach?.[0]?.text) ?? null
-        }
-
-        const firstExample = ((realization?.examples as any[]) ?? [])[0] ?? null
 
         res.json({
             lesson: {
                 conceptId: comp.id,
                 conceptName: comp.title,
                 canDo: comp.canDo,
-                // The true meaning of the core phrase; falls back to the can-do (communicative meaning)
-                coreMeaning: meaningOf(firstExample) ?? comp.canDo,
                 mode: typeof req.query.mode === 'string' ? req.query.mode : user.preferredMode,
                 xpReward: comp.xpReward,
                 grammarNote: realization?.grammarNote ?? null,
-                variant: {
-                    storyBeat: flavorOf('STORY'),
-                    culturalRef: flavorOf('IMMERSION'),
-                    formalPhrase: flavorOf('PROFESSIONAL'),
+                breadcrumb: {
+                    course: comp.unit?.course?.title ?? 'Spanish Pre-A1',
+                    unit: comp.unit?.title ?? '',
+                    competency: comp.title,
                 },
+                tools: {
+                    vocabulary: (comp as any).vocabulary.map((l: any) => ({ word: l.vocabulary.word, translation: l.vocabulary.translation })),
+                    grammar: realization?.grammarNote ?? null,
+                    pronunciation: realization?.pronunciationNote ?? null,
+                    culture: realization?.culturalNote ?? null,
+                },
+                mastery: mastery ? {
+                    level: mastery.level,
+                    overall: mastery.overallScore ?? null,
+                    dimensions: {
+                        comprehension: mastery.comprehensionScore,
+                        recall: mastery.retrievalScore,
+                        production: mastery.applicationScore,
+                        interaction: mastery.interactionScore,
+                        transfer: mastery.transferScore,
+                        retention: null,
+                    },
+                } : null,
                 subLessons,
                 completedSubLessonIds: completedIds,
                 equippedCosmetic: user.equippedCosmetic ?? 'gold',
