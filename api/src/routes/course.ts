@@ -1,33 +1,27 @@
 /**
- * Course Map Route — ECLA schema adapter
- * 
- * Reads: Course → Unit → Competency (+ mastery, experiences, prerequisites)
- * Emits: the SAME shape the course page already consumes:
- *   { units: [{ id, title, concepts: [{ id, name, status, isAvailable,
- *     completedSubLessons, totalSubLessons, subLessonProgress, accuracy, modes }] }],
- *     preferredMode }
- * 
- * Mapping (spec §12):
- * - Concept          → Competency
- * - SubLessons       → LearningExperiences (completion = UserExperienceProgress)
- * - Mastery 80% rule → CompetencyMastery.level (CONTROLLED/TRANSFERRED/RETAINED = finished)
- * - Linear unlock    → CompetencyPrerequisite graph (available when all prereqs finished)
+ * Course Map — the journey data (Phase 11.2).
+ *
+ * Returns published courses → units → competencies with HONEST statuses:
+ *   mastered   → mastery level CONTROLLED/TRANSFERRED/RETAINED
+ *   developing → some evidence, not yet demonstrated
+ *   upcoming   → prerequisites met, not started
+ *   locked     → prerequisites not met (the graph, made visible)
+ * Statuses are resolved across ALL courses so cross-level prerequisites work.
  */
-
 import { Router, Request, Response, NextFunction } from 'express'
 import { prisma } from '../lib/prisma'
 import { getOrSyncUserFast } from '../lib/auth'
 
 const router = Router()
 
-// §6.4 — levels that count as "finished" for unlocking dependents
-const FINISHED_LEVELS = ['CONTROLLED', 'TRANSFERRED', 'RETAINED']
+const FINISHED = ['CONTROLLED', 'TRANSFERRED', 'RETAINED']
+const LEVEL_RANK: Record<string, number> = { PRE_A1: 0, A1: 1, A2: 2, B1: 3, B2: 4, C1: 5, C2: 6 }
 
 router.get('/api/v1/course/map', async (req: Request, res: Response, next: NextFunction) => {
     try {
         const user = await getOrSyncUserFast(req)
 
-        const course = await prisma.course.findFirst({
+        const courses = await prisma.course.findMany({
             where: { isPublished: true },
             include: {
                 units: {
@@ -38,87 +32,64 @@ router.get('/api/v1/course/map', async (req: Request, res: Response, next: NextF
                             include: {
                                 mastery: { where: { userId: user.id } },
                                 experiences: {
-                                    orderBy: { orderIndex: 'asc' },
-                                    select: {
-                                        id: true,
-                                        type: true,
-                                        progress: { where: { userId: user.id }, select: { status: true } },
-                                    },
+                                    select: { id: true, progress: { where: { userId: user.id }, select: { status: true } } },
                                 },
-                                prerequisitesAsCompetency: {
-                                    select: {
-                                        prerequisite: {
-                                            select: {
-                                                id: true,
-                                                mastery: { where: { userId: user.id }, select: { level: true } },
-                                                experiences: {
-                                                    select: { id: true, progress: { where: { userId: user.id }, select: { status: true } } },
-                                                },
-                                            },
-                                        },
-                                    },
-                                },
+                                prerequisitesAsCompetency: { select: { prerequisiteId: true } },
                             },
                         },
                     },
                 },
             },
         })
+        courses.sort((a, b) => (LEVEL_RANK[a.cefrLevel] ?? 9) - (LEVEL_RANK[b.cefrLevel] ?? 9))
 
-        if (!course) return res.json({ units: [], preferredMode: user.preferredMode })
-
-        // A competency is FINISHED when mastery says so, or all its experiences are completed
-        const finishedOf = (c: any): boolean => {
-            const m = c.mastery?.[0]
-            if (m && FINISHED_LEVELS.includes(m.level)) return true
-            const exps = c.experiences ?? []
-            if (exps.length === 0) return false
-            return exps.every((e: any) => e.progress?.[0]?.status === 'completed')
+        // Pass 1: global finished/developing sets (cross-course prerequisite resolution).
+        const finished = new Set<string>()
+        const developing = new Set<string>()
+        for (const course of courses) {
+            for (const unit of course.units) {
+                for (const comp of unit.competencies) {
+                    const m = (comp as any).mastery?.[0]
+                    const done = ((comp as any).experiences ?? []).filter((e: any) => e.progress?.[0]?.status === 'completed').length
+                    if (m && (FINISHED as string[]).includes(m.level)) finished.add(comp.id)
+                    else if ((m && ['EXPOSED', 'DEVELOPING'].includes(m.level)) || done > 0) developing.add(comp.id)
+                }
+            }
         }
 
-        // Pass 1: finished map (needed for prerequisite availability checks)
-        const finishedMap = new Map<string, boolean>()
-        for (const u of course.units) for (const c of u.competencies) finishedMap.set(c.id, finishedOf(c))
-
-        // Pass 2: build the UI contract
-        const units = course.units.map((u: any) => ({
-            id: u.id,
-            title: u.title,
-            description: u.description,
-            concepts: u.competencies.map((c: any) => {
-                const exps = c.experiences ?? []
-                const total = exps.length
-                const done = exps.filter((e: any) => e.progress?.[0]?.status === 'completed').length
-
-                const m = c.mastery?.[0]
-                const attempts = (m?.successCount ?? 0) + (m?.failureCount ?? 0)
-                const accuracy = attempts > 0 ? Math.round(((m?.successCount ?? 0) / attempts) * 100) : 0
-                const finished = finishedMap.get(c.id)
-
-                // §5.8 — no artificial prerequisites: available iff every prereq is finished
-                const isAvailable = (c.prerequisitesAsCompetency ?? []).every((p: any) => finishedMap.get(p.prerequisite.id))
-
-                const status = finished
-                    ? (m && (m.level === 'RETAINED' || m.level === 'TRANSFERRED') ? 'mastered'
-                        : (attempts >= 2 && accuracy > 0 && accuracy < 60 ? 'struggling' : 'completed'))
-                    : (done > 0 ? 'in_progress' : 'available')
-
+        // Pass 2: shape the response.
+        const shaped = courses.map(course => ({
+            level: course.cefrLevel,
+            title: course.title,
+            units: course.units.map(unit => {
+                const comps = (unit as any).competencies.map((comp: any) => {
+                    const prereqsMet = (comp.prerequisitesAsCompetency as { prerequisiteId: string }[])
+                        .every(p => finished.has(p.prerequisiteId))
+                    const status = finished.has(comp.id) ? 'mastered'
+                        : developing.has(comp.id) ? 'developing'
+                            : prereqsMet ? 'upcoming' : 'locked'
+                    return {
+                        id: comp.id, code: comp.code, title: comp.title, canDo: comp.canDo,
+                        status, href: `/learn/${comp.id}`,
+                    }
+                })
                 return {
-                    id: c.id,
-                    name: c.title,
-                    status,
-                    isAvailable,
-                    completedSubLessons: done,
-                    totalSubLessons: total,
-                    subLessonProgress: total ? Math.round((done / total) * 100) : 0,
-                    accuracy,
-                    modes: ['STORY', 'DRILL', 'IMMERSION', 'PROFESSIONAL'],
-                    xpReward: c.xpReward,
+                    id: unit.id,
+                    title: unit.title,
+                    description: unit.description,
+                    competencies: comps,
+                    counts: {
+                        mastered: comps.filter((c: any) => c.status === 'mastered').length,
+                        developing: comps.filter((c: any) => c.status === 'developing').length,
+                        upcoming: comps.filter((c: any) => c.status === 'upcoming').length,
+                        locked: comps.filter((c: any) => c.status === 'locked').length,
+                        total: comps.length,
+                    },
                 }
             }),
         }))
 
-        res.json({ units, preferredMode: user.preferredMode })
+        res.json({ courses: shaped })
     } catch (error) { next(error) }
 })
 
