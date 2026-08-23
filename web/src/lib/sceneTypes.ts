@@ -81,6 +81,8 @@ export type SceneBeat =
         /** First-try clean success → insert this harder follow-up (Phase 8 branching). */
         challenge?: ChallengeSpec
         stage?: StageName
+
+        captureName?: boolean
     }
     | {
         kind: 'unexpected'

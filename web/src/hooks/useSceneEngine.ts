@@ -25,6 +25,7 @@ import { useTTS } from './useTTS'
 import { useMic, type MicError, type MicState } from './useMic'
 import { useGrader } from './useGrader'
 import type { RepairAction } from '@/components/ecla/RepairDock'
+import { parseLearnerName, recordEncounter } from '@/lib/memory'
 
 export type SceneLine = {
     id: number
@@ -139,6 +140,10 @@ export function useSceneEngine({ scene, support = 'medium', getToken, onStage }:
 
         if (res.ok) {
             counts.current.correct++
+            if (b.kind === 'speak' && b.captureName) {
+                const name = parseLearnerName(text)
+                if (name) recordEncounter(getToken, npcRef.current, name)
+            }
             const clean = res.method === 'exact' || res.method === 'normalized'
             if (!clean) push({ who: 'coach', text: `They understood you. A natural form: “${expected[0]}.”` })
             if (b.kind === 'unexpected') {
