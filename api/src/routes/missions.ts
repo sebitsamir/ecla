@@ -41,7 +41,7 @@ router.get('/api/v1/missions/:competencyId', async (req: Request, res: Response,
     try {
         await getOrSyncUserFast(req)
         const mission = await prisma.mission.findFirst({
-            where: { competencyId: req.params.competencyId },
+            where: { competencyId: req.params.competencyId as string },
             include: { competency: { select: { code: true, title: true, canDo: true, domain: true } } },
         })
         if (!mission) throw new AppError('No mission for this competency', 404)
@@ -58,7 +58,7 @@ router.post('/api/v1/missions/:competencyId/turn', async (req: Request, res: Res
         await getOrSyncUserFast(req)
         const { history = [] } = req.body ?? {}
 
-        const mission = await prisma.mission.findFirst({ where: { competencyId: req.params.competencyId } })
+        const mission = await prisma.mission.findFirst({ where: { competencyId: req.params.competencyId as string } })
         if (!mission) throw new AppError('Mission not found', 404)
 
         const completion = await groq.chat.completions.create({
@@ -104,7 +104,7 @@ router.post('/api/v1/missions/:competencyId/evaluate', async (req: Request, res:
         const user = await getOrSyncUserFast(req)
         const { transcript = [] } = req.body ?? {}
 
-        const mission = await prisma.mission.findFirst({ where: { competencyId: req.params.competencyId } })
+        const mission = await prisma.mission.findFirst({ where: { competencyId: req.params.competencyId as string } })
         if (!mission) throw new AppError('Mission not found', 404)
 
         const learnerTurns = transcript.filter((t: any) => t.role === 'learner')
@@ -201,7 +201,7 @@ router.post('/api/v1/missions/:competencyId/evaluate', async (req: Request, res:
             },
             create: {
                 userId: user.id,
-                competencyId: req.params.competencyId,
+                competencyId: req.params.competencyId as string,
                 level: passed ? 'TRANSFERRED' : 'DEVELOPING',
                 transferScore: passed ? 85 : 40,
                 interactionScore: passed ? 75 : 45,

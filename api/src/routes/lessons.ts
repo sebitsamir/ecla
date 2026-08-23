@@ -120,7 +120,7 @@ router.get('/api/v1/lessons/:conceptId', async (req: Request, res: Response, nex
         const user = await getOrSyncUserFast(req)
 
         const comp = await prisma.competency.findUnique({
-            where: { id: req.params.conceptId },
+            where: { id: req.params.conceptId as string },
             include: {
                 experiences: { orderBy: { orderIndex: 'asc' } },
                 vocabulary: { include: { vocabulary: true } },   // feeds ToolsPanel
