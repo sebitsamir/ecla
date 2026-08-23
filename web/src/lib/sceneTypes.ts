@@ -54,10 +54,11 @@ export type ChallengeSpec = {
  * - unexpected:     NPC speaks slightly beyond comfort (Phase 8);
  *                   responding OR repairing both count as evidence (Arts. 14/15)
  */
+
 export type SceneBeat =
     | { kind: 'action'; text: string; stage?: StageName }
-    | { kind: 'say'; character: CharacterId; es: string; en?: string; stage?: StageName }
-    | { kind: 'listen'; character: CharacterId; es: string; stage?: StageName }
+    | { kind: 'say'; character: CharacterId; es: string; en?: string; gloss?: string; stage?: StageName }
+    | { kind: 'listen'; character: CharacterId; es: string; gloss?: string; stage?: StageName }
     | { kind: 'transfer-intro'; text: string; setting?: string; stage?: StageName }
     | { kind: 'choice'; prompt: string; coach?: string; stage?: StageName; options: SceneOption[] }
     | {

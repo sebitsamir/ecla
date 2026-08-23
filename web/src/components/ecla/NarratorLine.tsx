@@ -1,6 +1,17 @@
 'use client'
 
-/** NarratorLine — quiet stage directions ("The café door opens."). */
+/**
+ * NarratorLine — Cinematic stage directions.
+ * Styled like elegant script directions to set the mood without distracting.
+ */
 export default function NarratorLine({ text }: { text: string }) {
-    return <p className="text-center text-sm text-cream/50 italic py-1">{text}</p>
+    return (
+        <div className="flex items-center justify-center py-4 animate-fade-in">
+            <div className="relative max-w-md text-center">
+                <p className="text-[13px] text-cream/40 italic font-serif tracking-wide leading-relaxed">
+                    {text}
+                </p>
+            </div>
+        </div>
+    )
 }

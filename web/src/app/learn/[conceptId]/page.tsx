@@ -1,20 +1,13 @@
 'use client'
 
 /**
- * ECLA Learn Page — Scene-driven language experiences (Phase 11.3).
- *
- * The learner enters a situation and participates in it — not completing
- * exercises inside a website. Characters remember the learner. The world
- * reacts naturally. Evidence replaces points.
- *
- * Three entry paths:
- * 1. Authored scene → personalized reunion greeting
- * 2. Learned competency + no scene → street encounter (spaced retrieval)
- * 3. Neither → redirect to course page (shouldn't happen)
- *
- * Phase 11.3: Mode-aware routing ensures authored scenes only play when
- * ?mode is absent or STORY; other modes (DRILL, IMMERSION) don't force
- * the cinematic scene and instead redirect gracefully.
+ * ECLA Learn Page — Pure Scene-driven language experiences.
+ * No legacy code. No fallback card players.
+ * 
+ * Rules:
+ * 1. If a competency has an authored scene, it plays.
+ * 2. If it's a mastered competency without a scene, it plays a Street Encounter (spaced retrieval).
+ * 3. If neither, it gracefully redirects to the Course map.
  */
 
 import { useEffect, useRef, useState, Suspense } from 'react'
@@ -43,7 +36,7 @@ function LearnPlayer() {
     const [evidence, setEvidence] = useState<{ correct: number; incorrect: number } | null>(null)
     const recordedSceneRef = useRef<string | null>(null)
 
-    // Fetch lesson data
+    // 1. Fetch lesson data
     useEffect(() => {
         (async () => {
             try {
@@ -61,15 +54,14 @@ function LearnPlayer() {
         })()
     }, [getToken, params.conceptId])
 
-    // Load learner memory (for personalization)
+    // 2. Load learner memory
     useEffect(() => {
         (async () => setMemory(await fetchMemory(getToken)))()
     }, [getToken])
 
-    // ── Phase 11.3: Mode-aware scene routing ──
-    // Authored scenes are STORY experiences. If the adaptive engine routes
-    // with a different mode (e.g., ?mode=DRILL), we don't force the cinematic scene.
+    // 3. Determine the scene (Strictly Scene-Driven)
     const sceneModeOk = !modeParam || modeParam === 'STORY'
+    const baseScene = sceneModeOk && lesson?.code ? sceneFor(lesson.code) : undefined
 
     const storyExp = (lesson?.subLessons ?? []).find((s: any) => s.type === 'STORY')
     const retrievalTarget = (storyExp?.exercises ?? [])
@@ -77,15 +69,14 @@ function LearnPlayer() {
         .map((e: any) => String(e.answer))
 
     const learned = ['CONTROLLED', 'TRANSFERRED', 'RETAINED'].includes(lesson?.mastery?.level ?? '')
-    const baseScene = sceneModeOk ? sceneFor(lesson?.code) : undefined
 
     const scene = baseScene
         ? personalizeScene(baseScene, memory)
-        : (learned && retrievalTarget.length)
+        : (learned && retrievalTarget.length > 0)
             ? streetEncounter({ name: memory?.name, canDo: lesson?.canDo ?? '', expected: retrievalTarget })
             : undefined
 
-    // Record character encounters for memory
+    // 4. Record character encounters for memory (once per scene load)
     useEffect(() => {
         if (!scene || recordedSceneRef.current === scene.id) return
         recordedSceneRef.current = scene.id
@@ -97,7 +88,17 @@ function LearnPlayer() {
         chars.forEach(c => recordEncounter(getToken, c))
     }, [scene, getToken])
 
-    // Scene completion handler
+    // 5. Safe redirect if no scene is available for this competency
+    useEffect(() => {
+        if (!loading && !lesson) {
+            router.push('/course')
+        } else if (!loading && lesson && !scene) {
+            // No scene exists for this competency yet. Redirect to course map.
+            router.push('/course')
+        }
+    }, [loading, lesson, scene, router])
+
+    // 6. Scene completion handler
     const completeScene = async (correct: number, incorrect: number) => {
         const exp = (lesson.subLessons ?? []).find((s: any) => s.type === 'STORY')
         const token = await getToken()
@@ -114,39 +115,25 @@ function LearnPlayer() {
             }),
         })
         window.dispatchEvent(new Event('ecla:progress-updated'))
-        window.dispatchEvent(new Event('luma:progress-updated'))
+        window.dispatchEvent(new Event('ecla:progress-updated'))
         setEvidence({ correct, incorrect })
         setFinished(true)
     }
 
-    // Loading state
-    if (loading) {
+    // 7. Render States: Loading or Redirecting
+    if (loading || !lesson || !scene) {
         return (
-            <main className="min-h-screen flex items-center justify-center bg-[#0B0B10]">
-                <p className="text-sm text-cream/50">Entering the scene…</p>
+            <main className="min-h-screen flex flex-col items-center justify-center bg-[#0B0B10]">
+                <div className="h-8 w-8 animate-spin rounded-full border-2 border-glow border-t-transparent mb-4" />
+                <p className="text-sm text-cream/50">Preparing your experience…</p>
             </main>
         )
     }
 
-    // Lesson not found
-    if (!lesson) {
-        return (
-            <main className="min-h-screen flex items-center justify-center bg-[#0B0B10]">
-                <p className="text-sm text-cream/60">Lesson not found.</p>
-            </main>
-        )
-    }
-
-    // No scene available (shouldn't happen, but handle gracefully)
-    if (!scene) {
-        router.push('/course')
-        return null
-    }
-
-    // Evidence-based completion screen
+    // 8. Evidence-based completion screen
     if (finished && evidence) {
         return (
-            <main className="min-h-screen bg-[#0B0B10] flex items-center justify-center p-6">
+            <main className="min-h-screen bg-[#0B0B10] flex items-center justify-center p-6 animate-fade-in">
                 <div className="max-w-lg w-full text-center space-y-8">
                     <div>
                         <h1 className="font-display text-3xl font-bold text-cream mb-2">You did it.</h1>
@@ -188,7 +175,7 @@ function LearnPlayer() {
         )
     }
 
-    // Active scene experience
+    // 9. Active Scene Experience
     return (
         <main className="min-h-screen font-body bg-[#0B0B10]">
             <header className="sticky top-0 z-40 border-b border-white/5 bg-[#0B0B10]/90 backdrop-blur">
@@ -199,7 +186,8 @@ function LearnPlayer() {
                     >
                         ← Exit
                     </button>
-                    <p className="text-sm font-semibold text-cream/80 truncate">{lesson.conceptName}</p>
+                    {/* FIX: Use scene.title for perfect consistency with the cinematic experience */}
+                    <p className="text-sm font-semibold text-cream/80 truncate">{scene.title}</p>
                     <p className="ml-auto text-[11px] uppercase tracking-widest text-cream/40">
                         Spanish · Pre-A1
                     </p>
@@ -218,7 +206,11 @@ function LearnPlayer() {
 
 export default function LearnPage() {
     return (
-        <Suspense fallback={<main className="min-h-screen bg-[#0B0B10]" />}>
+        <Suspense fallback={
+            <main className="min-h-screen flex items-center justify-center bg-[#0B0B10]">
+                <div className="h-8 w-8 animate-spin rounded-full border-2 border-glow border-t-transparent" />
+            </main>
+        }>
             <LearnPlayer />
         </Suspense>
     )
