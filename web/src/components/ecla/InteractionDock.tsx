@@ -11,6 +11,10 @@
  *   ladder and the "hear an example" repair option.
  * - `unexpected` beat kind: rendered like `speak` but with the gloss
  *   folded into the prompt; repair counts as evidence.
+ *
+ * Phase 11.3 additions:
+ * - `onUnsure` prop + quiet "I'm not sure" button under the mic
+ *   (support fading made human, Art. 12).
  */
 import { useEffect, useState } from 'react'
 import { Keyboard, Send } from 'lucide-react'
@@ -24,7 +28,7 @@ import type { MicError, MicState } from '@/hooks/useMic'
 export default function InteractionDock({
     beat, hintLevel, repairOpen, showHints = true,
     micState, micError,
-    onPick, onRepair, onMicStart, onMicStop, onTyped,
+    onPick, onRepair, onUnsure, onMicStart, onMicStop, onTyped,
 }: {
     beat: SceneBeat | undefined
     hintLevel: number
@@ -34,6 +38,7 @@ export default function InteractionDock({
     micError: MicError
     onPick: (option: SceneOption) => void
     onRepair: (action: RepairAction) => void
+    onUnsure: () => void
     onMicStart: () => void
     onMicStop: () => void
     onTyped: (text: string) => void
@@ -88,6 +93,12 @@ export default function InteractionDock({
                             className="inline-flex items-center gap-1.5 text-[11px] font-bold text-cream/40 hover:text-cream"
                         >
                             <Keyboard className="h-3 w-3" /> Prefer typing?
+                        </button>
+                        <button
+                            onClick={onUnsure}
+                            className="text-[11px] font-bold text-cream/40 transition-colors hover:text-cream"
+                        >
+                            I'm not sure
                         </button>
                     </>
                 ) : (

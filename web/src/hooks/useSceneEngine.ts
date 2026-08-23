@@ -103,7 +103,7 @@ export function useSceneEngine({ scene, support = 'medium', getToken, onStage }:
     }, [])
 
     const advance = useCallback(() => setIdx(i => i + 1), [])
-    const speechRef = useRef<(text: string) => void>(() => {})
+    const speechRef = useRef<(text: string) => void>(() => { })
     const mic = useMic(getToken, text => speechRef.current(text))
 
     /** The NPC line the learner is currently answering (for repeats). */
@@ -225,6 +225,22 @@ export function useSceneEngine({ scene, support = 'medium', getToken, onStage }:
         setRepairOpen(false)
     }, [idx, push, say])
 
+    /** "I'm not sure" — support fading made human (Art. 12): raise a hint,
+ *  or open the RepairDock when no hints remain. */
+    const unsure = useCallback(() => {
+        const b = beatsRef.current[idx]
+        const hints = b?.kind === 'speak' ? (b.hints ?? []) : []
+        if (hints.length) setHintLevel(h => Math.min(h + 1, hints.length))
+        else setRepairOpen(true)
+    }, [idx])
+
+    /** Quiet help: replay the last NPC line (no penalty, no noise). */
+    const replayLast = useCallback(() => {
+        const last = [...linesRef.current].reverse()
+            .find(l => l.who !== 'you' && l.who !== 'narrator' && l.who !== 'coach')
+        if (last) say(last.text)
+    }, [say])
+
     const pick = useCallback((option: SceneOption) => {
         const b = beatsRef.current[idx]
         if (!b || b.kind !== 'choice') return
@@ -305,14 +321,14 @@ export function useSceneEngine({ scene, support = 'medium', getToken, onStage }:
         // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [idx, finished])
 
-    return {
+        return {
         // state
         lines, beat, stage, setting, environment: scene.environment, finished,
         attempts, hintLevel, repairOpen, showHints,
         micState: mic.state as MicState, micError: mic.error as MicError,
         counts,
         // actions
-        pick, listenTap, submitTyped, repairChoice,
+        pick, listenTap, submitTyped, repairChoice, unsure, replayLast,
         startMic: mic.start, stopMic: mic.stop,
     }
 }
