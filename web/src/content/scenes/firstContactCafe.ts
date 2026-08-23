@@ -59,6 +59,7 @@ export const firstContactCafe: SceneSpec = {
         {
             kind: 'speak', stage: 'INTERACT', prompt: 'Say your name.',
             npcLine: '¿Cómo te llamas?',
+            captureName: true,
             expected: ['Me llamo', 'Soy'], open: true,
             hints: ['Me llamo …', 'Soy …'],
             replyOnSuccess: 'Mucho gusto. Yo soy Sofia.'

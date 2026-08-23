@@ -27,6 +27,9 @@ import { useEquippedGlow } from '@/lib/useEquippedGlow'
 import { gradeLocal } from '@/lib/grading'
 import SceneExperience from '@/components/ecla/SceneExperience'
 import { sceneFor } from '@/content/scenes'
+import { fetchMemory, recordEncounter, type LearnerMemory } from '@/lib/memory'
+import { personalizeScene } from '@/content/scenes/personalize'
+import { streetEncounter } from '@/content/scenes/streetEncounter'
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL ?? 'http://localhost:4000'
 
@@ -94,6 +97,9 @@ function LearnPlayer() {
     const [toolsOpen, setToolsOpen] = useState(false)
     const [finished, setFinished] = useState(false)
     const [saving, setSaving] = useState(false)
+    const [memory, setMemory] = useState<LearnerMemory | null>(null)
+    const recordedSceneRef = useRef<string | null>(null)
+
     const counts = useRef({ correct: 0, incorrect: 0 })
 
     useEffect(() => {
@@ -108,6 +114,11 @@ function LearnPlayer() {
             } catch (e) { console.error(e) } finally { setLoading(false) }
         })()
     }, [getToken, params.conceptId, modeParam])
+
+    // load who remembers you (and your name). Fails soft.
+    useEffect(() => {
+        (async () => setMemory(await fetchMemory(getToken)))()
+    }, [getToken])
 
     const mode = modeParam ?? lesson?.mode ?? 'STORY'
     const experience = lesson?.subLessons?.find((s: any) => s.type === mode) ?? lesson?.subLessons?.[0]
@@ -171,7 +182,35 @@ function LearnPlayer() {
     )
 
     // ── Scene flow: competencies with authored scenes play as living worlds ──
-    const scene = sceneFor(lesson?.code)
+        // First gradable target from the STORY bridge exercises → retrieval prompt.
+    const storyExp = (lesson?.subLessons ?? []).find((s: any) => s.type === 'STORY')
+    const retrievalTarget = (storyExp?.exercises ?? [])
+        .filter((e: any) => e.answer)
+        .map((e: any) => String(e.answer))
+
+    // ── Scene flow
+    //    authored scene → personalized reunion;
+    //    learned + no scene → street encounter (spaced retrieval as life);
+    //    otherwise → legacy workspace. ──
+    const learned = ['CONTROLLED', 'TRANSFERRED', 'RETAINED'].includes(lesson?.mastery?.level ?? '')
+    const baseScene = sceneFor(lesson?.code)
+    const scene = baseScene
+        ? personalizeScene(baseScene, memory)
+        : (learned && retrievalTarget.length)
+            ? streetEncounter({ name: memory?.name, canDo: lesson?.canDo ?? '', expected: retrievalTarget })
+            : undefined
+
+    // Record encounters once per scene so characters remember next time.
+    useEffect(() => {
+        if (!scene || recordedSceneRef.current === scene.id) return
+        recordedSceneRef.current = scene.id
+        const chars = Array.from(new Set(
+            scene.beats
+                .filter(b => b.kind === 'say' || b.kind === 'listen' || b.kind === 'unexpected')
+                .map(b => (b as any).character as string),
+        ))
+        chars.forEach(c => recordEncounter(getToken, c))
+    }, [scene, getToken])
 
     const completeScene = async (correct: number, incorrect: number) => {
         const exp = (lesson.subLessons ?? []).find((s: any) => s.type === 'STORY')

@@ -50,6 +50,7 @@ model User {
   equippedCosmetic    String       @default("gold")
   streakDays          Int          @default(0)
   lastActiveAt        DateTime?
+  displayName         String? 
   isPro               Boolean      @default(false)
   onboardingCompleted Boolean      @default(false)
   currentLevel        String?
@@ -61,6 +62,17 @@ model User {
   vocabProgress      UserVocabProgress[]
   streakLogs         StreakLog[]
   missionAttempts    MissionAttempt[]
+}
+
+model CharacterMemory {
+  id          String   @id @default(cuid())
+  userId      String
+  characterId String
+  encounters  Int      @default(1)
+  firstMetAt  DateTime @default(now())
+  lastMetAt   DateTime @default(now())
+
+  @@unique([userId, characterId])
 }
 
 model Language {
