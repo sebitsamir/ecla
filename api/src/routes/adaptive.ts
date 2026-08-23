@@ -1,192 +1,158 @@
 /**
- * Adaptive Engine — ECLA's Next-Best-Action System
+ * Adaptive Engine — next-best-action + spaced review (Phases 5 & 11).
  *
- * Constitution Art. 17: "Weaknesses determine progression"
+ * The dashboard never hardcodes "next lesson": it asks this engine,
+ * which reads the learner model (dimension scores, mastery levels,
+ * prerequisite graph) and answers:
+ *   - WHAT to do next (first available, undemonstrated competency)
+ *   - HOW to do it (mode biased toward the weakest dimension)
+ *   - WHY (a human-readable reason — transparency, Art. 20)
  *
- * This endpoint reads the learner's dimensional mastery profile and
- * recommends the next competency + mode to practice. The logic:
- *
- * 1. Find competencies with weak dimensions or overdue reviews
- * 2. Check prerequisites (don't recommend B if A isn't ready)
- * 3. Select mode based on weakest dimension:
- *    - weak comprehension → STORY
- *    - weak retrieval → DRILL
- *    - weak interaction → IMMERSION
- *    - weak application → PROFESSIONAL
- *    - weak transfer → MISSION
- * 4. Return competency + mode for the frontend to navigate to
- *
- * This is what makes ECLA adaptive rather than linear.
+ * Relation names follow the schema: Competency.prerequisitesAsCompetency
+ * (rows of CompetencyPrerequisite where this competency is the dependent).
  */
-
 import { Router, Request, Response, NextFunction } from 'express'
 import { prisma } from '../lib/prisma'
 import { getOrSyncUserFast } from '../lib/auth'
 
 const router = Router()
 
-/**
- * Dimension → Mode mapping (Constitution Art. 17)
- * Each mode trains a specific dimension; weak dimension → train that mode
- */
-const DIMENSION_TO_MODE: Record<string, string> = {
-    comprehensionScore: 'STORY',
-    retrievalScore: 'DRILL',
-    interactionScore: 'IMMERSION',
-    applicationScore: 'PROFESSIONAL',
-    transferScore: 'MISSION',
+const FINISHED = ['CONTROLLED', 'TRANSFERRED', 'RETAINED']
+const MODE_BY_DIM: Record<string, string> = {
+    comprehension: 'STORY',      // meaning & context
+    recall: 'DRILL',             // retrieval & automaticity
+    production: 'PROFESSIONAL',  // purposeful output
+    interaction: 'IMMERSION',    // spontaneous exchange
+    transfer: 'MISSION',         // new-context proof
 }
 
-/**
- * Minimum score threshold before a competency is considered "strong enough"
- * Below this = needs more practice in that dimension
- */
-const MIN_SCORE_THRESHOLD = 70
+/** Qualitative bands — learners see words, not raw percentages (§11). */
+export const bandOf = (v: number | null): string | null =>
+    v == null ? null : v >= 75 ? 'Strong' : v >= 50 ? 'Developing' : 'Needs practice'
 
-/**
- * How many days until a competency is considered "overdue" for review
- */
-const OVERDUE_DAYS = 3
+/** CompetencyIds the learner has demonstrably finished (mastery levels). */
+export async function finishedSetFor(userId: string): Promise<Set<string>> {
+    const rows = await prisma.competencyMastery.findMany({
+        where: { userId, level: { in: FINISHED } },
+        select: { competencyId: true },
+    })
+    return new Set(rows.map(r => r.competencyId))
+}
 
-router.get('/api/v1/learner/next-activity', async (req: Request, res: Response, next: NextFunction) => {
-    try {
-        const user = await getOrSyncUserFast(req)
-        const now = new Date()
+/** Competencies due for spaced retrieval (surfaced as "a familiar face"). */
+export async function dueReviewsFor(userId: string, limit = 3) {
+    const rows = await prisma.competencyMastery.findMany({
+        where: { userId, level: { in: FINISHED }, nextReviewAt: { lte: new Date() } },
+        include: { competency: { select: { id: true, code: true, title: true, canDo: true } } },
+        orderBy: { nextReviewAt: 'asc' },
+        take: limit,
+    })
+    return rows.map(r => ({ id: r.competency.id, code: r.competency.code, title: r.competency.title, canDo: r.competency.canDo }))
+}
 
-        // 1. Get all competencies the learner has interacted with
-        const masteries = await prisma.competencyMastery.findMany({
-            where: { userId: user.id },
+/** Dimension averages + next-best-action with a reason. */
+export async function computeNextAction(userId: string) {
+    const finished = await finishedSetFor(userId)
+
+    const [courses, masteryRows] = await Promise.all([
+        prisma.course.findMany({
+            where: { isPublished: true },
             include: {
-                competency: {
+                units: {
+                    orderBy: { orderIndex: 'asc' },
                     include: {
-                        prerequisites: {
-                            include: { prerequisite: true },
+                        competencies: {
+                            orderBy: { orderIndex: 'asc' },
+                            include: { prerequisitesAsCompetency: { select: { prerequisiteId: true } } },
                         },
                     },
                 },
             },
-        })
+        }),
+        prisma.competencyMastery.findMany({ where: { userId } }),
+    ])
 
-        // 2. Get all prerequisites the learner has completed
-        const completedIds = new Set(
-            masteries
-                .filter(m => m.level === 'TRANSFERRED' || m.level === 'RETAINED' || m.level === 'CONTROLLED')
-                .map(m => m.competencyId)
-        )
-
-        // 3. Find competencies that need attention
-        const candidates: Array<{
-            competencyId: string
-            competencyCode: string
-            competencyTitle: string
-            canDo: string
-            weakestDimension: string
-            weakestScore: number
-            recommendedMode: string
-            reason: string
-            priority: number
-        }> = []
-
-        for (const mastery of masteries) {
-            // Check prerequisites: all prereqs must be completed
-            const prereqsMet = mastery.competency.prerequisites.every(p =>
-                completedIds.has(p.prerequisiteId)
-            )
-            if (!prereqsMet) continue
-
-            // Find the weakest dimension
-            const dimensions = [
-                { name: 'comprehensionScore', score: mastery.comprehensionScore },
-                { name: 'retrievalScore', score: mastery.retrievalScore },
-                { name: 'interactionScore', score: mastery.interactionScore },
-                { name: 'applicationScore', score: mastery.applicationScore },
-                { name: 'transferScore', score: mastery.transferScore },
-            ].filter(d => d.score !== null) as Array<{ name: string; score: number }>
-
-            if (dimensions.length === 0) continue
-
-            const weakest = dimensions.reduce((min, d) => (d.score < min.score ? d : min), dimensions[0])
-
-            // Only recommend if below threshold
-            if (weakest.score >= MIN_SCORE_THRESHOLD) continue
-
-            // Check if overdue
-            const overdue = mastery.nextReviewAt && new Date(mastery.nextReviewAt) < now
-            const daysOverdue = overdue
-                ? Math.floor((now.getTime() - new Date(mastery.nextReviewAt!).getTime()) / (1000 * 60 * 60 * 24))
-                : 0
-
-            const priority = overdue ? 100 + daysOverdue : 100 - weakest.score
-
-            candidates.push({
-                competencyId: mastery.competency.id,
-                competencyCode: mastery.competency.code,
-                competencyTitle: mastery.competency.title,
-                canDo: mastery.competency.canDo,
-                weakestDimension: weakest.name.replace('Score', ''),
-                weakestScore: weakest.score,
-                recommendedMode: DIMENSION_TO_MODE[weakest.name] ?? 'DRILL',
-                reason: overdue
-                    ? `Overdue for review (${daysOverdue} days)`
-                    : `Weak ${weakest.name.replace('Score', '')} (${weakest.score}%)`,
-                priority,
-            })
-        }
-
-        // 4. Sort by priority (highest first) and pick the top recommendation
-        candidates.sort((a, b) => b.priority - a.priority)
-        const recommendation = candidates[0] ?? null
-
-        // 5. If no candidates, find the next unstarted competency with all prereqs met
-        if (!recommendation) {
-            const allCompetencies = await prisma.competency.findMany({
-                where: { level: 'PRE_A1' },
-                include: {
-                    prerequisites: {
-                        include: { prerequisite: true },
-                    },
-                },
-                orderBy: [{ unit: { orderIndex: 'asc' } }, { orderIndex: 'asc' }],
-            })
-
-            for (const comp of allCompetencies) {
-                if (masteries.some(m => m.competencyId === comp.id)) continue // already started
-
-                const prereqsMet = comp.prerequisites.every(p => completedIds.has(p.prerequisiteId))
-                if (!prereqsMet) continue
-
-                // Found the next unstarted competency
-                return res.json({
-                    success: true,
-                    recommendation: {
-                        competencyId: comp.id,
-                        competencyCode: comp.code,
-                        competencyTitle: comp.title,
-                        canDo: comp.canDo,
-                        weakestDimension: null,
-                        weakestScore: null,
-                        recommendedMode: 'STORY', // start with comprehension
-                        reason: 'Next competency in sequence',
-                        priority: 0,
-                    },
-                })
-            }
-
-            // All competencies completed or blocked
-            return res.json({
-                success: true,
-                recommendation: null,
-                message: 'All competencies completed or prerequisites not met',
-            })
-        }
-
-        res.json({
-            success: true,
-            recommendation,
-        })
-    } catch (error) {
-        next(error)
+    // ── Dimension averages across everything assessed ──
+    const sums: Record<string, { total: number; n: number }> = {
+        comprehension: { total: 0, n: 0 }, recall: { total: 0, n: 0 },
+        production: { total: 0, n: 0 }, interaction: { total: 0, n: 0 },
+        transfer: { total: 0, n: 0 },
     }
+    for (const m of masteryRows) {
+        const add = (k: string, v: number | null) => { if (v != null) { sums[k].total += v; sums[k].n++ } }
+        add('comprehension', m.comprehensionScore)
+        add('recall', m.retrievalScore)
+        add('production', m.applicationScore)
+        add('interaction', m.interactionScore)
+        add('transfer', m.transferScore)
+    }
+    const dimensions = Object.keys(sums).map(key => {
+        const avg = sums[key].n ? Math.round(sums[key].total / sums[key].n) : null
+        return { key, avg, band: bandOf(avg) }
+    })
+    const weakest = [...dimensions]
+        .filter((d): d is { key: string; avg: number; band: string } => d.avg != null)
+        .sort((a, b) => a.avg - b.avg)[0]
+
+    // ── First available, undemonstrated competency in curriculum order ──
+    let target: { comp: any } | null = null
+    for (const course of courses) {
+        for (const unit of course.units) {
+            for (const comp of unit.competencies) {
+                if (finished.has(comp.id)) continue
+                const open = (comp.prerequisitesAsCompetency as { prerequisiteId: string }[])
+                    .every(p => finished.has(p.prerequisiteId))
+                if (open) { target = { comp }; break }
+            }
+            if (target) break
+        }
+        if (target) break
+    }
+
+    if (!target) {
+        return {
+            dimensions,
+            next: {
+                kind: 'gateway', title: 'Pre-A1 Gateway',
+                canDo: 'Demonstrate everything you can do — on your own.',
+                mode: 'MISSION', href: '/gateway',
+                reason: 'Every competency is demonstrated. Time to prove it in the wild.',
+            },
+        }
+    }
+
+    const mode = weakest ? MODE_BY_DIM[weakest.key] ?? 'STORY' : 'STORY'
+    const reason = weakest
+        ? `Because ${weakest.key} is your weakest dimension right now (${weakest.avg}% · ${weakest.band}).`
+        : 'Your next step in the journey.'
+
+    return {
+        dimensions,
+        next: {
+            kind: 'lesson',
+            competencyId: target.comp.id,
+            code: target.comp.code,
+            title: target.comp.title,
+            canDo: target.comp.canDo,
+            mode,
+            href: `/learn/${target.comp.id}?mode=${mode}`,
+            reason,
+        },
+    }
+}
+
+router.get('/api/v1/adaptive/next', async (req: Request, res: Response, next: NextFunction) => {
+    try {
+        const user = await getOrSyncUserFast(req)
+        res.json(await computeNextAction(user.id))
+    } catch (error) { next(error) }
+})
+
+router.get('/api/v1/adaptive/review', async (req: Request, res: Response, next: NextFunction) => {
+    try {
+        const user = await getOrSyncUserFast(req)
+        res.json({ due: await dueReviewsFor(user.id) })
+    } catch (error) { next(error) }
 })
 
 export default router

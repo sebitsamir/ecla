@@ -28,6 +28,7 @@
 import { Router, Request, Response, NextFunction } from 'express'
 import { prisma } from '../lib/prisma'
 import { getOrSyncUserFast } from '../lib/auth'
+import { computeNextAction, dueReviewsFor } from './adaptive'
 
 const router = Router()
 
@@ -111,6 +112,78 @@ router.get('/api/v1/learner/competencies', async (req: Request, res: Response, n
                 notStarted,
                 weakestDimension,
                 strongestDimension,
+            },
+        })
+    } catch (error) { next(error) }
+})
+
+/**
+ * GET /api/v1/learner/summary — one fetch powers the whole dashboard:
+ * proven counts, dimension bands, week evidence, due reviews,
+ * adaptive next action, and "continue learning" unit cards.
+ */
+router.get('/api/v1/learner/summary', async (req: Request, res: Response, next: NextFunction) => {
+    try {
+        const user = await getOrSyncUserFast(req)
+        const weekAgo = new Date(Date.now() - 7 * 86400000)
+
+        const [total, finishedRows, weekRows, attempts, units] = await Promise.all([
+            prisma.competency.count({ where: { level: 'PRE_A1' } }),
+            prisma.competencyMastery.findMany({
+                where: { userId: user.id, level: { in: ['CONTROLLED', 'TRANSFERRED', 'RETAINED'] } },
+                select: { competencyId: true },
+            }),
+            prisma.competencyMastery.findMany({
+                where: { userId: user.id, level: { in: ['CONTROLLED', 'TRANSFERRED', 'RETAINED'] }, lastAssessedAt: { gte: weekAgo } },
+                select: { competencyId: true },
+            }),
+            prisma.missionAttempt.findMany({
+                where: { userId: user.id, completedAt: { gte: weekAgo } },
+                select: { evidence: true },
+            }),
+            prisma.unit.findMany({
+                where: { course: { isPublished: true } },
+                orderBy: { orderIndex: 'asc' },
+                include: {
+                    competencies: {
+                        orderBy: { orderIndex: 'asc' },
+                        select: {
+                            id: true, title: true,
+                            prerequisitesAsCompetency: { select: { prerequisiteId: true } },
+                        },
+                    },
+                },
+            }),
+        ])
+
+        const finished = new Set(finishedRows.map(r => r.competencyId))
+        const repairs = attempts.filter(a => (a.evidence as any)?.repairUsed === true).length
+        const { dimensions, next } = await computeNextAction(user.id)
+
+        // "Continue learning" cards: demonstrated counts + first open competency.
+        const unitCards = units.slice(0, 4).map(u => {
+            const done = u.competencies.filter(c => finished.has(c.id)).length
+            const firstOpen = u.competencies.find(c =>
+                !finished.has(c.id) &&
+                (c.prerequisitesAsCompetency as { prerequisiteId: string }[]).every(p => finished.has(p.prerequisiteId)),
+            )
+            return {
+                id: u.id, title: u.title,
+                demonstrated: done, total: u.competencies.length,
+                href: firstOpen ? `/learn/${firstOpen.id}` : null,
+            }
+        })
+
+        res.json({
+            summary: {
+                name: (user as any).displayName ?? null,
+                demonstrated: finished.size,
+                total,
+                week: { demonstrated: weekRows.length, conversations: attempts.length, repairs },
+                dimensions,
+                dueReviews: await dueReviewsFor(user.id),
+                nextAction: next,
+                units: unitCards,
             },
         })
     } catch (error) { next(error) }
