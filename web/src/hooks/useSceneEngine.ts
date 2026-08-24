@@ -33,6 +33,7 @@ export type SceneLine = {
     text: string
     mine?: boolean
     tap?: string
+    gloss?: string  // Phase S2: translation/gloss for NPC lines
 }
 
 type Support = 'maximum' | 'high' | 'medium' | 'low' | 'minimal'
@@ -61,6 +62,8 @@ export function useSceneEngine({ scene, support = 'medium', getToken, onStage }:
     const [attempts, setAttempts] = useState(0)
     const [hintLevel, setHintLevel] = useState(0)
     const [repairOpen, setRepairOpen] = useState(false)
+    // Feedback state for visual flashes (correct/incorrect)
+    const [feedback, setFeedback] = useState<'correct' | 'incorrect' | null>(null)
 
     const idRef = useRef(0)
     const npcRef = useRef<CharacterId>('sofia')
@@ -68,6 +71,7 @@ export function useSceneEngine({ scene, support = 'medium', getToken, onStage }:
     const challengedRef = useRef(false)
     const pendingNpcRef = useRef<CharacterId | null>(null)
     const counts = useRef({ correct: 0, incorrect: 0 })
+    
 
     // Refs mirror state so the scheduler sees fresh data without re-running.
     const beatsRef = useRef(beats)
@@ -140,12 +144,14 @@ export function useSceneEngine({ scene, support = 'medium', getToken, onStage }:
 
         if (res.ok) {
             counts.current.correct++
+            setFeedback('correct') // Trigger green flash
+            setTimeout(() => setFeedback(null), 800)
             if (b.kind === 'speak' && b.captureName) {
                 const name = parseLearnerName(text)
                 if (name) recordEncounter(getToken, npcRef.current, name)
             }
             const clean = res.method === 'exact' || res.method === 'normalized'
-            if (!clean) push({ who: 'coach', text: `They understood you. A natural form: “${expected[0]}.”` })
+            if (!clean) push({ who: 'coach', text: `They understood you. A natural form: "${expected[0]}."` })
             if (b.kind === 'unexpected') {
                 push({ who: 'coach', text: 'Nice — you handled a question you never practiced. That is real ability.' })
             }
@@ -183,6 +189,8 @@ export function useSceneEngine({ scene, support = 'medium', getToken, onStage }:
 
         // 3) Failure = data. The person reacts; the learner chooses the repair.
         counts.current.incorrect++
+        setFeedback('incorrect') // Trigger amber flash
+        setTimeout(() => setFeedback(null), 800)
         const n = attempts + 1
         setAttempts(n)
 
@@ -193,7 +201,7 @@ export function useSceneEngine({ scene, support = 'medium', getToken, onStage }:
             setRepairOpen(true)   // learner agency: RepairDock appears
         } else {
             // Model the target, then the conversation continues anyway.
-            push({ who: 'coach', text: `No problem. You can say: “${expected[0]}.”` })
+            push({ who: 'coach', text: `No problem. You can say: "${expected[0]}."` })
             setAttempts(0); setHintLevel(0); setRepairOpen(false)
             if (b.kind === 'speak' && b.replyOnSuccess) {
                 push({ who: npcRef.current, text: b.replyOnSuccess })
@@ -219,7 +227,7 @@ export function useSceneEngine({ scene, support = 'medium', getToken, onStage }:
         // 'example' — model the target (support fading: counts as a hint)
         const ex = b?.kind === 'speak' ? b.expected[0]
             : b?.kind === 'unexpected' ? (b.accept?.[0] ?? b.es) : ''
-        push({ who: 'coach', text: `You can say: “${ex}.”` })
+        push({ who: 'coach', text: `You can say: "${ex}."` })
         say(ex)
         setHintLevel(h => h + 1)
         setRepairOpen(false)
@@ -255,10 +263,15 @@ export function useSceneEngine({ scene, support = 'medium', getToken, onStage }:
         }
     }, [idx, push, advance])
 
-    const listenTap = useCallback((text: string) => {
+        const listenTap = useCallback((text: string) => {
         const consume = beatsRef.current[idx]?.kind === 'listen' && !listenConsumedRef.current
         if (consume) listenConsumedRef.current = true
-        say(text, () => { if (consume) setTimeout(advance, PACE_MS) })
+        
+        say(text, () => { 
+            // Phase S3.1: 1.5s delay for listen beats so the learner hears the audio 
+            // before the scene auto-advances.
+            if (consume) setTimeout(advance, 1500) 
+        })
     }, [idx, say, advance])
 
     const submitTyped = useCallback((text: string) => {
@@ -294,13 +307,23 @@ export function useSceneEngine({ scene, support = 'medium', getToken, onStage }:
             t = setTimeout(advance, ACTION_MS + 300)
         } else if (b.kind === 'say') {
             npcRef.current = b.character
-            push({ who: b.character, text: b.es })
-            say(b.es, () => { if (t) clearTimeout(t); t = setTimeout(advance, PACE_MS) })
-            // Backstop: never strand the learner if TTS can't finish.
-            t = setTimeout(advance, TTS_BACKSTOP_MS + b.es.length * 120)
+            // Guard against empty text from missing curriculum payload
+            if (!b.es?.trim()) {
+                t = setTimeout(advance, 50)
+            } else {
+                push({ who: b.character, text: b.es, gloss: (b as any).gloss ?? (b as any).en })
+                say(b.es, () => { if (t) clearTimeout(t); t = setTimeout(advance, PACE_MS) })
+                // Backstop: never strand the learner if TTS can't finish.
+                t = setTimeout(advance, TTS_BACKSTOP_MS + b.es.length * 120)
+            }
         } else if (b.kind === 'listen') {
             npcRef.current = b.character
-            push({ who: b.character, text: b.es, tap: b.es })
+            // Guard against empty text
+            if (b.es?.trim()) {
+                push({ who: b.character, text: b.es, tap: b.es, gloss: (b as any).gloss })
+            } else {
+                t = setTimeout(advance, 50)
+            }
         } else if (b.kind === 'speak') {
             // Present the NPC's question if it wasn't said yet
             // (spliced challenge beats carry their own line).
@@ -312,8 +335,12 @@ export function useSceneEngine({ scene, support = 'medium', getToken, onStage }:
         } else if (b.kind === 'unexpected') {
             // NPC speaks beyond comfort; the learner must react or repair.
             npcRef.current = b.character
-            push({ who: b.character, text: b.es })
-            say(b.es)
+            if (b.es?.trim()) {
+                push({ who: b.character, text: b.es, gloss: (b as any).gloss })
+                say(b.es)
+            } else {
+                t = setTimeout(advance, 50)
+            }
         }
         // 'choice' | 'speak' render in the dock and wait.
 
@@ -321,10 +348,10 @@ export function useSceneEngine({ scene, support = 'medium', getToken, onStage }:
         // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [idx, finished])
 
-        return {
+    return {
         // state
         lines, beat, stage, setting, environment: scene.environment, finished,
-        attempts, hintLevel, repairOpen, showHints,
+        attempts, hintLevel, repairOpen, showHints, feedback,
         micState: mic.state as MicState, micError: mic.error as MicError,
         counts,
         // actions

@@ -28,7 +28,10 @@ export function targetFromLesson(lesson: any): Target {
 
 export function compileScene(bp: SceneBlueprint, lesson: any): SceneSpec {
     const t = targetFromLesson(lesson)
-        const glossMap = new Map<string, string>((lesson?.tools?.vocabulary ?? []).map((v: any) => [norm(String(v.word)), String(v.translation)]))
+    if (process.env.NODE_ENV !== 'production' && !t.words.length && !t.examples.length) {
+        console.warn(`[ecla] compileScene(${bp.id}): EMPTY curriculum payload — page must pass lesson to sceneFor().`)
+    }
+    const glossMap = new Map<string, string>((lesson?.tools?.vocabulary ?? []).map((v: any) => [norm(String(v.word)), String(v.translation)]))
     const ctx: Ctx = {
         bp, t,
         gloss: x => glossMap.get(norm(x)),
@@ -36,7 +39,12 @@ export function compileScene(bp: SceneBlueprint, lesson: any): SceneSpec {
         other: bp.characters[1],
     }
     const gen = ARCHETYPES[bp.archetype]
-    const beats = gen ? gen(ctx) : []
+    // Defense in depth: never render empty say/listen beats or dead choices.
+    const beats = (gen ? gen(ctx) : []).filter(b => {
+        if ((b.kind === 'say' || b.kind === 'listen') && !(b as any).es?.trim()) return false
+        if (b.kind === 'choice' && !b.options.some(o => o.label?.trim())) return false
+        return true
+    })
 
     return {
         id: bp.id,
@@ -44,6 +52,9 @@ export function compileScene(bp: SceneBlueprint, lesson: any): SceneSpec {
         environment: bp.environment,
         setting: `Madrid · ${bp.environment === 'cafe' ? 'A small café' : 'The street'} · ${bp.timeOfDay === 'evening' ? '19:30' : '9:42'}`,
         title: bp.title,
+        timeOfDay: bp.timeOfDay,
+        mood: bp.mood,
+        cast: bp.characters,
         outcomes: [
             lesson?.canDo ?? bp.title,
             'recover when you don\u2019t understand',

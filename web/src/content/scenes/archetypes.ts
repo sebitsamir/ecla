@@ -28,7 +28,12 @@ export type Ctx = {
 const norm = (s: string) => s.toLowerCase().replace(/[¡!.,¿?]/g, '').trim()
 const cap = (s?: string) => (s ? s.charAt(0).toUpperCase() + s.slice(1) : '')
 const splitList = (s?: string) => (s ?? '').split(',').map(x => x.trim()).filter(Boolean)
-const w = (ctx: Ctx, i: number) => ctx.t.words[i] ?? { word: ctx.t.examples[i] ?? '', translation: undefined }
+const w = (ctx: Ctx, i: number) => {
+    const fromWords = ctx.t.words[i]
+    if (fromWords?.word?.trim()) return fromWords
+    const fbWord = ctx.t.examples[i] ?? ctx.t.patterns[i] ?? ''
+    return { word: fbWord.replace(/\.$/, ''), translation: undefined }
+}
 
 function listens(ctx: Ctx, items: { es: string; gloss?: string }[], intro: string): SceneBeat[] {
     return [

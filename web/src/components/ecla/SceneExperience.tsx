@@ -1,20 +1,22 @@
 'use client'
 
 /**
- * SceneExperience — three-zone organism with mobile drawers.
- * Desktop: rail left · player center · tools right.
- * Mobile: floating toggles open the rail/tools as overlays.
+ * SceneExperience — three-zone organism with mobile drawers (Phase S3.3 + S3.5 + S3.7).
+ * Phase S3.7: mobile toggles are ONE centered pill with bottom clearance,
+ * so they never cover the interaction dock.
  */
 import { useState } from 'react'
 import { ListOrdered, SlidersHorizontal, X } from 'lucide-react'
+import { useSceneEngine } from '@/hooks/useSceneEngine'
+import { useSceneAudio } from '@/hooks/useSceneAudio'
 import JourneyRail from './JourneyRail'
-import ScenePlayer from './ScenePlayer'
+import StageLayout from './StageLayout'
 import ToolsPanel, { type MasteryData, type ToolsData } from './ToolsPanel'
-import type { SceneSpec, StageName } from '@/lib/sceneTypes'
+import AudioControls from './AudioControls'
+import type { SceneSpec } from '@/lib/sceneTypes'
 
 type Support = 'maximum' | 'high' | 'medium' | 'low' | 'minimal'
 
-/** Mastery level → scaffolding (support-removal algorithm, §3.4). */
 const SUPPORT_BY_LEVEL: Record<string, Support> = {
     NOT_STARTED: 'maximum',
     EXPOSED: 'maximum',
@@ -31,52 +33,63 @@ export default function SceneExperience({ scene, tools, mastery, getToken, onCom
     getToken: () => Promise<string | null>
     onComplete: (correct: number, incorrect: number) => Promise<void> | void
 }) {
-    const [stage, setStage] = useState<StageName | undefined>(undefined)
     const [railOpen, setRailOpen] = useState(false)
     const [toolsOpen, setToolsOpen] = useState(false)
     const support = SUPPORT_BY_LEVEL[mastery?.level ?? 'NOT_STARTED'] ?? 'medium'
 
-    const drawer = 'fixed inset-x-0 top-14 bottom-0 z-40 bg-[#0B0B10]/95 backdrop-blur p-4 overflow-y-auto'
+    const engine = useSceneEngine({ scene, support, getToken })
+
+    // Phase S3.5: ambient + SFX
+    const { isMuted, toggleMute } = useSceneAudio(scene.environment, engine.stage, engine.feedback)
+
+    const drawer =
+        'fixed inset-x-0 top-14 bottom-0 z-40 overflow-y-auto bg-[#0B0B10]/95 p-4 backdrop-blur'
 
     return (
-        <div className="mx-auto max-w-[1400px] grid grid-cols-1 lg:grid-cols-[240px_1fr] xl:grid-cols-[240px_1fr_320px] gap-6 px-4 py-6">
+        <>
+            <AudioControls isMuted={isMuted} onToggle={toggleMute} />
 
-            {/* Mobile toggles */}
-            <div className="lg:hidden fixed bottom-4 left-4 z-50 flex gap-2">
-                <button
-                    onClick={() => { setRailOpen(v => !v); setToolsOpen(false) }}
-                    aria-label="Lesson journey"
-                    className="h-11 w-11 rounded-full bg-[#13131B] border border-white/10 text-cream/70 flex items-center justify-center"
-                >
-                    {railOpen ? <X className="h-5 w-5" /> : <ListOrdered className="h-5 w-5" />}
-                </button>
-                <button
-                    onClick={() => { setToolsOpen(v => !v); setRailOpen(false) }}
-                    aria-label="Tools"
-                    className="h-11 w-11 rounded-full bg-[#13131B] border border-white/10 text-cream/70 flex items-center justify-center"
-                >
-                    {toolsOpen ? <X className="h-5 w-5" /> : <SlidersHorizontal className="h-5 w-5" />}
-                </button>
+            {/* pb-24 on mobile leaves room for the floating pill above the dock */}
+            <div className="mx-auto grid max-w-[1400px] grid-cols-1 gap-6 px-4 pb-24 pt-6 lg:grid-cols-[240px_minmax(0,1fr)] lg:pb-6 xl:grid-cols-[240px_minmax(0,1fr)_320px]">
+
+                {/* ── Mobile toggles — one compact pill, clear of the dock ── */}
+                <div className="fixed bottom-4 left-1/2 z-50 flex -translate-x-1/2 items-center gap-1 rounded-full border border-white/10 bg-[#13131B]/90 px-1.5 py-1 shadow-xl backdrop-blur lg:hidden">
+                    <button
+                        onClick={() => { setRailOpen(v => !v); setToolsOpen(false) }}
+                        aria-label="Lesson journey"
+                        className={`flex h-9 w-9 items-center justify-center rounded-full transition-colors ${
+                            railOpen ? 'bg-glow text-night-900' : 'text-cream/70 hover:text-cream'
+                        }`}
+                    >
+                        {railOpen ? <X className="h-4 w-4" /> : <ListOrdered className="h-4 w-4" />}
+                    </button>
+                    <span className="h-5 w-px bg-white/10" aria-hidden />
+                    <button
+                        onClick={() => { setToolsOpen(v => !v); setRailOpen(false) }}
+                        aria-label="Tools"
+                        className={`flex h-9 w-9 items-center justify-center rounded-full transition-colors ${
+                            toolsOpen ? 'bg-glow text-night-900' : 'text-cream/70 hover:text-cream'
+                        }`}
+                    >
+                        {toolsOpen ? <X className="h-4 w-4" /> : <SlidersHorizontal className="h-4 w-4" />}
+                    </button>
+                </div>
+
+                {/* ── Left rail ── */}
+                <div className={`${railOpen ? drawer : 'hidden'} lg:static lg:z-auto lg:block lg:bg-transparent lg:p-0 lg:backdrop-blur-none`}>
+                    <JourneyRail current={engine.stage} feedback={engine.feedback} />
+                </div>
+
+                {/* ── Center: the living scene ── */}
+                <div className="min-w-0">
+                    <StageLayout engine={engine} scene={scene} onComplete={onComplete} />
+                </div>
+
+                {/* ── Right tools ── */}
+                <div className={`${toolsOpen ? drawer : 'hidden'} xl:static xl:z-auto xl:block xl:bg-transparent xl:p-0 xl:backdrop-blur-none`}>
+                    <ToolsPanel tools={tools} mastery={mastery} />
+                </div>
             </div>
-
-            {/* Left rail — static on desktop, drawer on mobile */}
-            <div className={`${railOpen ? drawer : 'hidden'} lg:block lg:static lg:bg-transparent lg:backdrop-blur-none lg:p-0 lg:z-auto`}>
-                <JourneyRail current={stage} />
-            </div>
-
-            {/* Center — the living scene */}
-            <ScenePlayer
-                scene={scene}
-                support={support}
-                getToken={getToken}
-                onStage={setStage}
-                onDone={onComplete}
-            />
-
-            {/* Right tools — static on xl, drawer below */}
-            <div className={`${toolsOpen ? drawer : 'hidden'} xl:block xl:static xl:bg-transparent xl:backdrop-blur-none xl:p-0 xl:z-auto`}>
-                <ToolsPanel tools={tools} mastery={mastery} />
-            </div>
-        </div>
+        </>
     )
 }

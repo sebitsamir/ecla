@@ -1,136 +1,157 @@
 'use client'
 
 /**
- * InteractionDock — the learner's control surface for the current beat.
- *
- * Phase 8 additions:
- * - `repairOpen` / `onRepair` props from the engine; when true, renders
- *   the RepairDock (try again / ask to repeat / hear example) instead of
- *   the mic UI — giving the learner agency over recovery (Arts. 11/18).
- * - `showHints` prop: at low support levels, the dock hides the hint
- *   ladder and the "hear an example" repair option.
- * - `unexpected` beat kind: rendered like `speak` but with the gloss
- *   folded into the prompt; repair counts as evidence.
- *
- * Phase 11.3 additions:
- * - `onUnsure` prop + quiet "I'm not sure" button under the mic
- *   (support fading made human, Art. 12).
+ * InteractionDock — the learner's action surface.
+ * Phase S3.4: fixed TS narrowing (speak vs unexpected) and RepairDock prop name.
  */
-import { useEffect, useState } from 'react'
-import { Keyboard, Send } from 'lucide-react'
-import ChoiceGrid from './ChoiceGrid'
-import HintLadder from './HintLadder'
-import MicButton from './MicButton'
-import RepairDock, { type RepairAction } from './RepairDock'
-import type { SceneBeat, SceneOption } from '@/lib/sceneTypes'
-import type { MicError, MicState } from '@/hooks/useMic'
+import { useState } from 'react'
+import { Mic, Keyboard, Send, Volume2 } from 'lucide-react'
+import type { SceneEngine } from '@/hooks/useSceneEngine'
+import type { SceneOption } from '@/lib/sceneTypes'
+import RepairDock from './RepairDock'
 
-export default function InteractionDock({
-    beat, hintLevel, repairOpen, showHints = true,
-    micState, micError,
-    onPick, onRepair, onUnsure, onMicStart, onMicStop, onTyped,
-}: {
-    beat: SceneBeat | undefined
-    hintLevel: number
-    repairOpen: boolean
-    showHints?: boolean
-    micState: MicState
-    micError: MicError
-    onPick: (option: SceneOption) => void
-    onRepair: (action: RepairAction) => void
-    onUnsure: () => void
-    onMicStart: () => void
-    onMicStop: () => void
-    onTyped: (text: string) => void
+export default function InteractionDock({ engine, emphasize = false }: {
+    engine: SceneEngine
+    emphasize?: boolean
 }) {
     const [typeMode, setTypeMode] = useState(false)
     const [typed, setTyped] = useState('')
-
-    // Reset per-beat UI; a denied mic drops the learner into typing gracefully.
-    useEffect(() => { setTypeMode(false); setTyped('') }, [beat])
-    useEffect(() => { if (micError === 'denied') setTypeMode(true) }, [micError])
+    const { beat, micState, attempts, repairOpen, showHints, hintLevel } = engine
 
     if (!beat) return null
 
+    // ── Choice stage ──
     if (beat.kind === 'choice') {
         return (
-            <div className="px-4 sm:px-6 pb-5">
-                <ChoiceGrid prompt={beat.prompt} options={beat.options} onPick={onPick} />
+            <div className="space-y-2">
+                <p className="mb-3 text-sm text-cream/80">{beat.prompt}</p>
+                {beat.options.map((opt: SceneOption, i: number) => (
+                    <button
+                        key={i}
+                        onClick={() => engine.pick(opt)}
+                        className="w-full rounded-xl border border-white/10 bg-[#1A1A24] px-4 py-3 text-left text-sm text-cream transition-all duration-200 hover:border-glow/40 hover:bg-white/5 active:scale-[0.98]"
+                    >
+                        {opt.label}
+                    </button>
+                ))}
             </div>
         )
     }
 
-    // Phase 8: `speak` and `unexpected` share the same interaction surface.
+    // ── Listen stage ──
+    if (beat.kind === 'listen') {
+        return (
+            <button
+                onClick={() => engine.listenTap(beat.es)}
+                className="group w-full rounded-xl border border-white/10 bg-[#1A1A24] px-4 py-4 text-sm text-cream/80 transition-all duration-200 hover:border-glow/40 hover:bg-white/5 active:scale-[0.98]"
+            >
+                <span className="flex items-center justify-center gap-2">
+                    <Volume2 className="h-4 w-4 text-glow" />
+                    <span>{beat.es}</span>
+                </span>
+            </button>
+        )
+    }
+
+    // ── Speak / unexpected stage (mic + typing fallback) ──
     if (beat.kind === 'speak' || beat.kind === 'unexpected') {
-        const prompt = beat.kind === 'unexpected'
-            ? `They said: "${beat.es}"${beat.gloss ? ` (${beat.gloss})` : ''}. Respond however you can — or repair.`
-            : beat.prompt
+        // Safe narrowing: only `speak` carries prompt/hints.
+        const prompt = beat.kind === 'speak'
+            ? beat.prompt
+            : 'Respond naturally — or ask for help.'
         const hints = beat.kind === 'speak' ? (beat.hints ?? []) : []
+        const currentHint = showHints && hints.length > 0
+            ? hints[Math.min(hintLevel, hints.length - 1)]
+            : null
 
         return (
-            <div className="px-4 sm:px-6 pb-6 text-center space-y-3">
-                <p className="text-sm text-cream/70">{prompt}</p>
+            <div className="space-y-4">
+                {prompt && (
+                    <p className={`text-center ${emphasize ? 'text-base text-cream' : 'text-sm text-cream/80'}`}>
+                        {prompt}
+                    </p>
+                )}
 
-                {/* Hints only when support is still scaffolded (Art. 12). */}
-                {showHints && <HintLadder hints={hints} level={hintLevel} />}
+                {currentHint && (
+                    <p className="text-center text-xs text-violet-300 italic animate-fade-in">
+                        {currentHint}
+                    </p>
+                )}
 
-                {repairOpen ? (
-                    <RepairDock onRepair={onRepair} showExample={showHints} />
-                ) : !typeMode ? (
-                    <>
-                        <MicButton
-                            state={micState}
-                            onTap={micState === 'recording' ? onMicStop : onMicStart}
-                            label={
-                                micState === 'recording' ? 'Listening — tap to finish'
-                                    : micState === 'processing' ? '…'
-                                        : micError === 'network' ? 'Connection problem — try again or type.'
-                                            : 'Tap and speak'
-                            }
-                        />
+                {!typeMode ? (
+                    <div className="flex flex-col items-center gap-3">
+                        <button
+                            onClick={micState === 'recording' ? engine.stopMic : engine.startMic}
+                            className={`rounded-full flex items-center justify-center transition-all duration-300 ${
+                                emphasize
+                                    ? 'h-20 w-20 bg-violet-600 text-white shadow-[0_0_40px_rgba(139,92,246,0.4)]'
+                                    : 'h-14 w-14 bg-white/10 text-cream hover:bg-white/15'
+                            } ${micState === 'recording' ? 'animate-pulse bg-red-500 shadow-[0_0_30px_rgba(239,68,68,0.6)]' : ''} active:scale-95`}
+                            aria-label={micState === 'recording' ? 'Stop recording' : 'Start recording'}
+                        >
+                            <Mic className={emphasize ? 'h-8 w-8' : 'h-5 w-5'} />
+                        </button>
+                        <p className="text-[11px] text-cream/40">
+                            {micState === 'recording' ? 'Listening…' : 'Tap to speak'}
+                        </p>
                         <button
                             onClick={() => setTypeMode(true)}
-                            className="inline-flex items-center gap-1.5 text-[11px] font-bold text-cream/40 hover:text-cream"
+                            className="inline-flex items-center gap-1.5 text-[11px] font-bold text-cream/40 hover:text-cream transition-colors duration-200"
                         >
-                            <Keyboard className="h-3 w-3" /> Prefer typing?
+                            <Keyboard className="h-3 w-3" />
+                            Type instead
                         </button>
-                        <button
-                            onClick={onUnsure}
-                            className="text-[11px] font-bold text-cream/40 transition-colors hover:text-cream"
-                        >
-                            I'm not sure
-                        </button>
-                    </>
+                    </div>
                 ) : (
-                    <div className="flex gap-2 max-w-sm mx-auto">
+                    <div className="flex items-center gap-2">
                         <input
+                            type="text"
                             value={typed}
                             onChange={e => setTyped(e.target.value)}
-                            onKeyDown={e => e.key === 'Enter' && typed.trim() && (onTyped(typed), setTyped(''))}
-                            placeholder="Type it in Spanish…"
-                            className="flex-1 rounded-xl border border-white/10 bg-[#1A1A24] px-4 py-2.5 text-sm text-cream focus:outline-none focus:border-violet-500"
+                            onKeyDown={e => {
+                                if (e.key === 'Enter' && typed.trim()) {
+                                    engine.submitTyped(typed)
+                                    setTyped('')
+                                }
+                            }}
+                            placeholder="Type your response…"
+                            className="flex-1 rounded-xl border border-white/10 bg-[#1A1A24] px-4 py-2.5 text-sm text-cream placeholder:text-cream/30 focus:outline-none focus:border-violet-500 transition-all duration-200"
+                            autoFocus
                         />
                         <button
-                            onClick={() => { onTyped(typed); setTyped('') }}
+                            onClick={() => {
+                                if (typed.trim()) {
+                                    engine.submitTyped(typed)
+                                    setTyped('')
+                                }
+                            }}
                             disabled={!typed.trim()}
-                            className="rounded-xl bg-white/10 px-3 text-cream disabled:opacity-40"
+                            className="rounded-xl bg-violet-600 p-2.5 text-white disabled:opacity-40 transition-all duration-200 active:scale-95 hover:bg-violet-500"
                             aria-label="Send"
                         >
                             <Send className="h-4 w-4" />
                         </button>
                     </div>
                 )}
+
+                <div className="flex items-center justify-center gap-3 pt-2">
+                    <button
+                        onClick={engine.unsure}
+                        className="text-[11px] font-bold text-cream/40 hover:text-cream transition-colors"
+                    >
+                        I'm not sure
+                    </button>
+                    {attempts > 0 && (
+                        <span className="text-[11px] text-amber-400">
+                            Attempt {attempts}/3
+                        </span>
+                    )}
+                </div>
+
+                {repairOpen && <RepairDock onRepair={engine.repairChoice} />}
             </div>
         )
     }
 
-    if (beat.kind === 'listen') {
-        return (
-            <p className="pb-5 text-center text-[11px] text-cream/40">
-                Tap "tap to listen" on the message above.
-            </p>
-        )
-    }
-
-    return null // auto-beats need no controls
+    return null
 }
