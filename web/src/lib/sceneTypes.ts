@@ -108,4 +108,36 @@ export type SceneSpec = {
     /** "You can now…" statements for the evidence end card (Art. 24). */
     outcomes: string[]
     beats: SceneBeat[]
+    cast?: CharacterId[]
+
+    timeOfDay?: 'morning' | 'afternoon' | 'evening' | 'night'
+    mood?: 'warm' | 'calm' | 'busy' | 'quiet'
 }
+
+/** Stage categories — drives layout decisions without string matching. */
+export type StageCategory = 'receptive' | 'productive' | 'terminal'
+
+/** Rich metadata per stage — the single source of truth for stage logic. */
+export const STAGE_META: Record<StageName, {
+    order: number
+    category: StageCategory
+    /** Does this stage show the InteractionDock? */
+    interactive: boolean
+    /** Should backdrop emphasize the scene (full-bleed) vs. the task? */
+    immersive: boolean
+}> = {
+    ENCOUNTER:  { order: 0, category: 'receptive',  interactive: false, immersive: true },
+    UNDERSTAND: { order: 1, category: 'receptive',  interactive: true,  immersive: false },
+    NOTICE:     { order: 2, category: 'receptive',  interactive: true,  immersive: false },
+    RECOGNIZE:  { order: 3, category: 'receptive',  interactive: true,  immersive: false },
+    RETRIEVE:   { order: 4, category: 'productive', interactive: true,  immersive: false },
+    PRODUCE:    { order: 5, category: 'productive', interactive: true,  immersive: false },
+    INTERACT:   { order: 6, category: 'productive', interactive: true,  immersive: false },
+    TRANSFER:   { order: 7, category: 'productive', interactive: true,  immersive: true },
+    RETAIN:     { order: 8, category: 'terminal',   interactive: false, immersive: false },
+}
+
+export const stageMeta = (s?: StageName) => s ? STAGE_META[s] : undefined
+export const isTerminal  = (s?: StageName) => stageMeta(s)?.category === 'terminal'
+export const isImmersive = (s?: StageName) => !!stageMeta(s)?.immersive
+export const isInteractive = (s?: StageName) => !!stageMeta(s)?.interactive

@@ -55,6 +55,9 @@ const units: UnitSeed[] = [
                     { word: "i", translation: "i", difficulty: 1 },
                     { word: "o", translation: "o", difficulty: 1 },
                     { word: "u", translation: "u", difficulty: 1 },
+                    { word: "mesa", translation: "table", difficulty: 1, importance: 2 },
+                    { word: "mi", translation: "my", difficulty: 1, importance: 2 },
+                    { word: "música", translation: "music", difficulty: 1, importance: 2 },
                 ],
             },
             {
@@ -64,12 +67,7 @@ const units: UnitSeed[] = [
                 domain: "SOUND",
                 difficulty: 1,
                 patterns: ["Escucha.", "Mira.", "Repite.", "Lee."],
-                examples: [
-                    "Escucha.",
-                    "Mira.",
-                    "Repite.",
-                    "Lee.",
-                ],
+                examples: ["Escucha.", "Mira.", "Repite.", "Lee."],
                 vocabulary: [
                     { word: "escucha", translation: "listen", difficulty: 1 },
                     { word: "mira", translation: "look", difficulty: 1 },
@@ -84,12 +82,7 @@ const units: UnitSeed[] = [
                 domain: "SOCIAL",
                 difficulty: 1,
                 patterns: ["Hola.", "Buenos días.", "Buenas tardes.", "Buenas noches."],
-                examples: [
-                    "Hola.",
-                    "Buenos días.",
-                    "Buenas tardes.",
-                    "Buenas noches.",
-                ],
+                examples: ["Hola.", "Buenos días.", "Buenas tardes.", "Buenas noches."],
                 culturalNote:
                     "Greeting conventions vary by country and context. Hola is broadly useful, while buenos días and buenas tardes are common polite greetings.",
                 vocabulary: [
@@ -106,12 +99,7 @@ const units: UnitSeed[] = [
                 domain: "SOCIAL",
                 difficulty: 1,
                 patterns: ["Adiós.", "Hasta luego.", "Hasta mañana.", "Nos vemos."],
-                examples: [
-                    "Adiós.",
-                    "Hasta luego.",
-                    "Hasta mañana.",
-                    "Nos vemos.",
-                ],
+                examples: ["Adiós.", "Hasta luego.", "Hasta mañana.", "Nos vemos."],
                 vocabulary: [
                     { word: "adiós", translation: "goodbye", difficulty: 1, importance: 3 },
                     { word: "hasta luego", translation: "see you later", difficulty: 1, importance: 3 },
@@ -126,12 +114,7 @@ const units: UnitSeed[] = [
                 domain: "SOCIAL",
                 difficulty: 1,
                 patterns: ["Por favor.", "Gracias.", "Perdón."],
-                examples: [
-                    "Por favor.",
-                    "Gracias.",
-                    "Muchas gracias.",
-                    "Perdón.",
-                ],
+                examples: ["Por favor.", "Gracias.", "Muchas gracias.", "Perdón."],
                 vocabulary: [
                     { word: "por favor", translation: "please", difficulty: 1, importance: 3 },
                     { word: "gracias", translation: "thank you", difficulty: 1, importance: 3 },
@@ -141,7 +124,6 @@ const units: UnitSeed[] = [
             },
         ],
     },
-
     // ============================================================
     // UNIT 2 — FIRST CONTACT
     // ============================================================
@@ -562,7 +544,9 @@ const units: UnitSeed[] = [
                     "PA1.NED.WNT.01",
                     "PA1.SOC.COU.01",
                 ],
-                vocabulary: [],
+                vocabulary: [
+                    { word: "dar", translation: "to give", difficulty: 1, importance: 2 },
+                ],
             },
         ],
     },
@@ -581,19 +565,28 @@ const units: UnitSeed[] = [
                 canDo: "Recognize and use numbers needed for simple everyday interactions.",
                 domain: "SURVIVAL",
                 difficulty: 1,
-                patterns: ["uno, dos, tres...", "Tengo + número."],
-                examples: [
-                    "Uno.",
-                    "Cinco.",
-                    "Diez.",
-                    "Veinte.",
-                ],
+                patterns: ["uno, dos, tres… veinte", "Tengo + número."],
+                examples: ["Uno.", "Cinco.", "Diez.", "Veinte.", "Tengo veinte años."],
                 vocabulary: [
                     { word: "uno", translation: "one", difficulty: 1, importance: 3 },
                     { word: "dos", translation: "two", difficulty: 1, importance: 3 },
                     { word: "tres", translation: "three", difficulty: 1, importance: 3 },
+                    { word: "cuatro", translation: "four", difficulty: 1, importance: 2 },
                     { word: "cinco", translation: "five", difficulty: 1, importance: 2 },
+                    { word: "seis", translation: "six", difficulty: 1, importance: 2 },
+                    { word: "siete", translation: "seven", difficulty: 1, importance: 2 },
+                    { word: "ocho", translation: "eight", difficulty: 1, importance: 2 },
+                    { word: "nueve", translation: "nine", difficulty: 1, importance: 2 },
                     { word: "diez", translation: "ten", difficulty: 1, importance: 3 },
+                    { word: "once", translation: "eleven", difficulty: 1, importance: 2 },
+                    { word: "doce", translation: "twelve", difficulty: 1, importance: 2 },
+                    { word: "trece", translation: "thirteen", difficulty: 1, importance: 2 },
+                    { word: "catorce", translation: "fourteen", difficulty: 1, importance: 2 },
+                    { word: "quince", translation: "fifteen", difficulty: 1, importance: 2 },
+                    { word: "dieciséis", translation: "sixteen", difficulty: 1, importance: 2 },
+                    { word: "diecisiete", translation: "seventeen", difficulty: 1, importance: 2 },
+                    { word: "dieciocho", translation: "eighteen", difficulty: 1, importance: 2 },
+                    { word: "diecinueve", translation: "nineteen", difficulty: 1, importance: 2 },
                     { word: "veinte", translation: "twenty", difficulty: 1, importance: 2 },
                 ],
             },
@@ -614,6 +607,7 @@ const units: UnitSeed[] = [
                     { word: "mañana", translation: "tomorrow / morning", difficulty: 1, importance: 3 },
                     { word: "ahora", translation: "now", difficulty: 1, importance: 3 },
                     { word: "día", translation: "day", difficulty: 1, importance: 2 },
+                    { word: "por la mañana", translation: "in the morning", difficulty: 1, importance: 2 },
                 ],
             },
             {
@@ -906,6 +900,7 @@ const units: UnitSeed[] = [
                 ],
                 vocabulary: [
                     { word: "y", translation: "and", difficulty: 1 },
+                    { word: "tú", translation: "you", difficulty: 1, importance: 3 },
                 ],
             },
         ],

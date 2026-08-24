@@ -189,4 +189,51 @@ router.get('/api/v1/learner/summary', async (req: Request, res: Response, next: 
     } catch (error) { next(error) }
 })
 
+/**
+ * POST /api/v1/learner/demonstrate
+ *
+ * A finished scene = the full evidence ladder completed in one run
+ * (controlled → guided → spontaneous → transfer). Promotes mastery to
+ * CONTROLLED (never demotes), stores form diagnostics as dimension scores,
+ * and schedules the first spaced retrieval (+1 day).
+ * Function = completion. Form = the scores. (Constitution §16 split.)
+ */
+router.post('/api/v1/learner/demonstrate', async (req: Request, res: Response, next: NextFunction) => {
+    try {
+        const user = await getOrSyncUserFast(req)
+        const { competencyId, correct = 0, incorrect = 0 } = req.body ?? {}
+        if (!competencyId) return res.status(400).json({ error: 'competencyId required' })
+
+        const total = Number(correct) + Number(incorrect)
+        const ratio = total ? Number(correct) / total : 0
+        const score = Math.round(ratio * 100)
+
+        const existing = await prisma.competencyMastery.findFirst({
+            where: { userId: user.id, competencyId },
+        })
+
+        const FINISHED = ['CONTROLLED', 'TRANSFERRED', 'RETAINED']
+        const level = existing && (FINISHED as string[]).includes(existing.level)
+            ? existing.level        // never demote
+            : 'CONTROLLED'         // scene finished = demonstrated
+
+        const data = {
+            level,
+            lastAssessedAt: new Date(),
+            nextReviewAt: new Date(Date.now() + 24 * 3600 * 1000), // 1-day retrieval
+            comprehensionScore: score,
+            applicationScore: score,
+            transferScore: Math.max(score, 50), // transfer beat was passed to finish
+        }
+
+        if (existing) {
+            await prisma.competencyMastery.update({ where: { id: existing.id }, data })
+        } else {
+            await prisma.competencyMastery.create({ data: { userId: user.id, competencyId, ...data } })
+        }
+
+        res.json({ ok: true, level })
+    } catch (error) { next(error) }
+})
+
 export default router

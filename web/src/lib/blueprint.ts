@@ -1,22 +1,7 @@
-/**
- * Scene Blueprints — Layer 2 of the ECLA scene architecture.
- *
- *   CURRICULUM (DB)  →  BLUEPRINT (creative direction)  →  SceneSpec (runtime)
- *
- * The blueprint owns ONLY what the database cannot express:
- * situation, mood, characters, narrator lines, prompts, transfer setting.
- * Language (words/patterns/examples/notes) ALWAYS comes from the lesson
- * payload at compile time. Presentation (images, camera, audio) stays in
- * the renderer, keyed by environment/mood/timeOfDay.
- */
 import type { CharacterId, Environment, SceneOption } from '@/lib/sceneTypes'
 
 export type ArchetypeId =
-    | 'encounter'      // meet the language / instructions
-    | 'discovery'      // infer sounds & patterns
-    | 'conversation'   // greet / leave / small exchange
-    | 'transaction'    // request / politeness / purchase
-    // arrive with later units:
+    | 'encounter' | 'discovery' | 'conversation' | 'transaction'
     | 'environment' | 'navigation' | 'problem' | 'repair'
     | 'simulation' | 'challenge' | 'reflection' | 'gateway'
 
@@ -29,9 +14,7 @@ export type SceneBlueprint = {
     environment: Environment
     mood?: 'warm' | 'calm' | 'busy' | 'quiet'
     timeOfDay?: 'morning' | 'afternoon' | 'evening'
-    /** [main character, transfer character] */
     characters: [CharacterId, CharacterId]
-    /** Creative direction (authored) */
     enter: string
     understandPrompt: string
     understandCoach?: string
@@ -42,11 +25,9 @@ export type SceneBlueprint = {
     transferSetting: string
     transferPrompt: string
     retain: string
-    /** Reserved for adaptive variations (Phase S8). */
     variations?: string[]
 }
 
-/** UNIT 1 — Sound & Orientation · five scenes, curriculum order. */
 export const UNIT1: SceneBlueprint[] = [
     {
         id: 'scene-pa1-snd-lst-01', competency: 'PA1.SND.LST.01', unit: 1,

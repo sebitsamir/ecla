@@ -57,9 +57,9 @@ function NavLinks({ onNavigate }: { onNavigate?: () => void }) {
 
 function SidebarFoot() {
     return (
-        <div className="mt-auto rounded-2xl border border-white/10 bg-[#13131B] p-4">
-            <p className="mb-1 text-xs font-bold text-cream/80">Learn for real life</p>
-            <p className="text-[11px] text-cream/50">Not just words. Language for what matters.</p>
+        <div className="mt-auto w-full min-w-0 rounded-2xl border border-white/10 bg-[#13131B] p-4">
+            <p className="mb-1 truncate text-xs font-bold text-cream/80">Learn for real life</p>
+            <p className="text-[11px] leading-relaxed text-cream/50">Not just words. Language for what matters.</p>
         </div>
     )
 }
@@ -131,7 +131,8 @@ export default function AppShell({ children }: { children: ReactNode }) {
 
             <div className="mx-auto flex max-w-[1400px]">
                 {/* ── Desktop sidebar ─ */}
-                <aside className="sticky top-14 hidden h-[calc(100vh-3.5rem)] w-56 flex-shrink-0 flex-col gap-4 border-r border-white/5 px-4 py-6 md:flex">
+                                {/* Desktop sidebar: add min-w-0 */}
+                <aside className="sticky top-14 hidden h-[calc(100vh-3.5rem)] w-56 min-w-0 flex-shrink-0 flex-col gap-4 border-r border-white/5 px-4 py-6 md:flex">
                     <NavLinks />
                     <SidebarFoot />
                 </aside>

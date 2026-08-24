@@ -61,7 +61,10 @@ function LearnPlayer() {
 
     // 3. Determine the scene (Strictly Scene-Driven)
     const sceneModeOk = !modeParam || modeParam === 'STORY'
-    const baseScene = sceneModeOk && lesson?.code ? sceneFor(lesson.code) : undefined
+    // Curriculum payload MUST reach the compiler — scenes are data-driven.
+    const baseScene = sceneModeOk && lesson?.code
+        ? sceneFor(lesson.code, lesson)
+        : undefined
 
     const storyExp = (lesson?.subLessons ?? []).find((s: any) => s.type === 'STORY')
     const retrievalTarget = (storyExp?.exercises ?? [])
@@ -93,7 +96,7 @@ function LearnPlayer() {
         if (!loading && !lesson) {
             router.push('/course')
         } else if (!loading && lesson && !scene) {
-            // No scene exists for this competency yet. Redirect to course map.
+            console.warn('[ecla] Redirecting: no scene for', lesson?.code)
             router.push('/course')
         }
     }, [loading, lesson, scene, router])
@@ -113,6 +116,12 @@ function LearnPlayer() {
                 incorrectCount: incorrect,
                 xpEarned: exp?.xpReward ?? lesson.xpReward ?? 20,
             }),
+        })
+        // Scene finished = evidence ladder complete → promote mastery.
+        await fetch(`${API_URL}/api/v1/learner/demonstrate`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+            body: JSON.stringify({ competencyId: lesson.conceptId, correct, incorrect }),
         })
         window.dispatchEvent(new Event('ecla:progress-updated'))
         window.dispatchEvent(new Event('ecla:progress-updated'))
@@ -178,28 +187,16 @@ function LearnPlayer() {
     // 9. Active Scene Experience
     return (
         <main className="min-h-screen font-body bg-[#0B0B10]">
-            <header className="sticky top-0 z-40 border-b border-white/5 bg-[#0B0B10]/90 backdrop-blur">
+            <header className="sticky top-0 z-40 border-b border-white/5 bg-[#0B0B10]/95 backdrop-blur">
                 <div className="mx-auto max-w-[1400px] px-4 h-14 flex items-center gap-3">
-                    <button
-                        onClick={() => router.push('/course')}
-                        className="text-sm text-cream/60 hover:text-cream transition-colors"
-                    >
-                        ← Exit
-                    </button>
-                    {/* FIX: Use scene.title for perfect consistency with the cinematic experience */}
+                    <button onClick={() => router.push('/course')} className="text-sm text-cream/60 hover:text-cream transition-colors">← Exit</button>
                     <p className="text-sm font-semibold text-cream/80 truncate">{scene.title}</p>
-                    <p className="ml-auto text-[11px] uppercase tracking-widest text-cream/40">
-                        Spanish · Pre-A1
-                    </p>
+                    <p className="ml-auto text-[11px] uppercase tracking-widest text-cream/40">Spanish · Pre-A1</p>
                 </div>
             </header>
-            <SceneExperience
-                scene={scene}
-                tools={lesson.tools}
-                mastery={lesson.mastery}
-                getToken={getToken}
-                onComplete={completeScene}
-            />
+            <div className="relative z-0 mx-auto max-w-[1400px] px-4 py-6">
+                <SceneExperience scene={scene} tools={lesson.tools} mastery={lesson.mastery} getToken={getToken} onComplete={completeScene} />
+            </div>
         </main>
     )
 }
