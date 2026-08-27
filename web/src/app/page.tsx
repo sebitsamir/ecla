@@ -1,76 +1,29 @@
 'use client'
 
 /**
- * Landing Page: Marketing & Conversion
- * 
- * This is the public-facing landing page for unauthenticated users.
- * It serves as the primary conversion funnel with:
- * - Hero section with value proposition
- * - Four learning modes showcase
- * - Product differentiators
- * - Ecla companion introduction
- * - Final conversion CTA
- * 
- * Key Features:
- * - Responsive design from mobile (320px) to desktop (1920px+)
- * - Smooth scroll navigation
- * - Animated Firefly companion
- * - Clerk-powered auth modals (Sign In / Sign Up)
- * - Auto-redirect for authenticated users
- * 
- * Architecture:
- * - Static content, no API calls needed
- * - Client-side only for auth state checking
- * - Clerk SignInButton/SignUpButton handle auth modals
- * - Auto-redirects to dashboard if already signed in
- * 
- * Why No Loading State:
- * This page is purely static content with no data fetching.
- * It renders immediately without any async operations.
- * Loading states are only needed for pages that fetch data from APIs.
- * 
- * Conversion Strategy:
- * - Hero: Immediate value prop + dual CTAs
- * - Differentiators: Emotional benefits (warmth, not guilt)
- * - Modes: Feature showcase (4 ways to learn)
- * - Ecla: Companion relationship building
- * - Final CTA: Urgency + exclusivity
- * 
- * Tech Stack:
- * - Clerk: Authentication (SignInButton, SignUpButton)
- * - Lucide: Professional iconography
- * - Tailwind: Responsive design system
- * - Custom components: Firefly, Moon, NightBackground, Logo
+ * / — Landing: marketing & conversion (premium redesign).
+ * Flat surfaces · hairline borders · amber brand light · no noise.
+ * Sections: hero · differentiators · four modes · meet Ecla · CTA · footer.
+ * Clerk modals handle auth; signed-in users auto-redirect to /dashboard.
  */
-
 import { useEffect } from 'react'
 import { useRouter } from 'next/navigation'
 import { useAuth, SignInButton, SignUpButton } from '@clerk/nextjs'
 import {
-    BookOpen, Zap, Music, GraduationCap,
-    CheckCircle2, ArrowRight, Sparkles, ArrowUpRight,
-    Heart, Flame, Shield
+    ArrowRight, BookOpen, CheckCircle2, Flame, GraduationCap,
+    Heart, Mic, Music, Shield, Sparkles, Zap, MessageCircle,
 } from 'lucide-react'
 import Link from 'next/link'
-import NightBackground from '@/components/NightBackground'
-import Moon from '@/components/Moon'
-import Firefly from '@/components/Firefly'
-import { Logo, LogoMark } from '@/components/BrandLogo'
-import { DEFAULT_GLOW } from '@/lib/cosmetics'
 
-/**
- * Learning mode showcase data
- * Each mode has unique visual identity and value proposition
- */
+/** Learning mode showcase — same curriculum, four experiences. */
 const modes = [
     {
         id: 'STORY',
         label: 'Story',
         tagline: 'Learn through narrative',
-        desc: 'Master vocabulary and grammar naturally through engaging, bite-sized stories. Context makes it stick.',
+        desc: 'Master vocabulary and grammar naturally through engaging, bite-sized scenes. Context makes it stick.',
         Icon: BookOpen,
         accent: '#FFB45A',
-        bgClass: 'bg-story',
     },
     {
         id: 'DRILL',
@@ -79,7 +32,6 @@ const modes = [
         desc: 'Fast-paced, focused repetition to build muscle memory. Perfect for quick 5-minute sessions.',
         Icon: Zap,
         accent: '#4DD8E6',
-        bgClass: 'bg-drill',
     },
     {
         id: 'IMMERSION',
@@ -88,7 +40,6 @@ const modes = [
         desc: 'Understand the idioms, humor, and cultural context that textbooks leave out.',
         Icon: Music,
         accent: '#B98CF0',
-        bgClass: 'bg-immersion',
     },
     {
         id: 'PROFESSIONAL',
@@ -97,14 +48,10 @@ const modes = [
         desc: 'Master business vocabulary, workplace etiquette, and speak with confidence in any career setting.',
         Icon: GraduationCap,
         accent: '#7FA6FF',
-        bgClass: 'bg-pro',
     },
 ]
 
-/**
- * Product differentiators
- * Emotional benefits that set Ecla apart from competitors
- */
+/** Product differentiators — emotional benefits that set Ecla apart. */
 const differentiators = [
     {
         Icon: Heart,
@@ -113,59 +60,33 @@ const differentiators = [
     },
     {
         Icon: Flame,
-        title: 'Four ways to learn',
-        desc: 'Switch between Story, Drill, Immersion, and Professional modes based on your mood, goals, or the time of day.',
+        title: 'Cinematic scenes, not flashcards',
+        desc: 'Every lesson is a living scene — a café in Madrid, a street at dusk. You learn by doing, not by memorizing lists.',
     },
     {
         Icon: Shield,
-        title: 'Your light, your style',
-        desc: 'Unlock glow colors as you grow. Your firefly evolves with you — from Classic Gold to Violet Dream.',
+        title: 'Invisible adaptation',
+        desc: 'Scaffolding fades as you grow. Hints recede, challenges appear. The system watches, but never judges.',
     },
 ]
 
-/**
- * Landing Page Component
- * 
- * Main component rendering the entire marketing experience.
- * 
- * Key Behaviors:
- * - Checks auth state on mount
- * - Auto-redirects signed-in users to dashboard
- * - Smooth scroll for in-page navigation
- * - Responsive across all device sizes
- * 
- * The page renders immediately without any loading state
- * since all content is static and requires no API calls.
- */
 export default function LandingPage() {
     const router = useRouter()
     const { isSignedIn } = useAuth()
 
-    /**
-     * Auto-redirect authenticated users to dashboard
-     * Prevents signed-in users from seeing the landing page
-     */
+    /** Auto-redirect authenticated users to dashboard. */
     useEffect(() => {
         if (isSignedIn) {
             router.push('/dashboard')
         }
     }, [isSignedIn, router])
 
-    /**
-     * Smooth scroll to section
-     * Used by "See How It Works" button in hero
-     * 
-     * @param id - Target section ID
-     */
     const scrollToSection = (id: string) => {
-        document.getElementById(id)?.scrollIntoView({ 
-            behavior: 'smooth',
-            block: 'start'
-        })
+        document.getElementById(id)?.scrollIntoView({ behavior: 'smooth', block: 'start' })
     }
 
     return (
-        <main className="min-h-screen font-body text-cream selection:bg-glow/30 selection:text-night-900">
+        <main className="min-h-screen bg-[#0B0B10] font-body text-cream selection:bg-glow/30 selection:text-night-900">
             <style>{`
                 @keyframes gentle-float { 
                     0%, 100% { transform: translateY(0); } 
@@ -174,14 +95,8 @@ export default function LandingPage() {
                 .gentle-float { animation: gentle-float 8s ease-in-out infinite; }
                 
                 @keyframes fade-in-up {
-                    from {
-                        opacity: 0;
-                        transform: translateY(20px);
-                    }
-                    to {
-                        opacity: 1;
-                        transform: translateY(0);
-                    }
+                    from { opacity: 0; transform: translateY(20px); }
+                    to { opacity: 1; transform: translateY(0); }
                 }
                 .fade-in-up { animation: fade-in-up 0.6s ease-out; }
                 
@@ -192,15 +107,12 @@ export default function LandingPage() {
                 .pulse-glow { animation: pulse-glow 3s ease-in-out infinite; }
             `}</style>
 
-            <NightBackground />
-            <Moon phase="full" size="xl" position="top-right" />
-
             {/* ── Navigation Header ─ */}
-            <header className="sticky top-0 z-50 bg-night-950/80 backdrop-blur-md border-b border-white/5">
+            <header className="sticky top-0 z-50 bg-[#0B0B10]/90 backdrop-blur border-b border-white/5">
                 <div className="max-w-6xl mx-auto px-4 sm:px-6 h-14 sm:h-16 flex items-center justify-between">
                     <Link href="/" className="flex items-center gap-2 sm:gap-2.5 group">
-                        <LogoMark size={26} className="transition-transform group-hover:scale-110" />
-                        <span className="font-display text-base sm:text-lg font-bold text-cream tracking-tight">Ecla</span>
+                        <span className="font-display text-base sm:text-lg font-bold text-cream tracking-tight">ECLA</span>
+                        <span className="hidden sm:block text-[10px] uppercase tracking-widest text-cream/40">Speak · Understand · Use</span>
                     </Link>
 
                     <div className="flex items-center gap-1.5 sm:gap-3">
@@ -210,7 +122,7 @@ export default function LandingPage() {
                             </button>
                         </SignInButton>
                         <SignUpButton mode="modal">
-                            <button className="inline-flex items-center gap-1 sm:gap-1.5 px-3 sm:px-4 py-2 rounded-full bg-glow text-night-900 text-xs sm:text-sm font-bold hover:bg-glow-bright transition-all active:scale-[0.98] shadow-glow-sm">
+                            <button className="inline-flex items-center gap-1 sm:gap-1.5 px-3 sm:px-4 py-2 rounded-full bg-glow text-night-900 text-xs sm:text-sm font-bold hover:bg-glow/90 transition-all active:scale-[0.98]">
                                 <span>Get Started</span>
                                 <ArrowRight className="w-3.5 h-3.5 sm:w-4 sm:h-4" />
                             </button>
@@ -242,20 +154,20 @@ export default function LandingPage() {
 
                             {/* Subheadline */}
                             <p className="text-base sm:text-lg lg:text-xl text-cream/70 max-w-xl mx-auto lg:mx-0 mb-8 sm:mb-10 leading-relaxed">
-                                Ditch the guilt-driven streaks and robotic drills. <span className="text-cream font-semibold">Ecla adapts to how you learn</span> — with four distinct modes, a firefly companion, and zero shame.
+                                Ditch the guilt-driven streaks and robotic drills. <span className="text-cream font-semibold">Ecla adapts to how you learn</span> — with cinematic scenes, invisible scaffolding, and a voice tutor that feels like a real conversation.
                             </p>
 
                             {/* CTAs */}
                             <div className="flex flex-col sm:flex-row items-stretch sm:items-center justify-center lg:justify-start gap-2.5 sm:gap-3 mb-8 sm:mb-12">
                                 <SignUpButton mode="modal">
-                                    <button className="w-full sm:w-auto inline-flex items-center justify-center gap-2 px-6 sm:px-8 py-3.5 sm:py-4 rounded-xl bg-glow text-night-900 font-bold text-sm sm:text-base hover:bg-glow-bright transition-all active:scale-[0.98] shadow-glow-sm">
+                                    <button className="w-full sm:w-auto inline-flex items-center justify-center gap-2 px-6 sm:px-8 py-3.5 sm:py-4 rounded-xl bg-glow text-night-900 font-bold text-sm sm:text-base hover:bg-glow/90 transition-all active:scale-[0.98]">
                                         Start Learning Free
                                         <ArrowRight className="w-4 h-4 sm:w-5 sm:h-5" />
                                     </button>
                                 </SignUpButton>
                                 <button
                                     onClick={() => scrollToSection('modes')}
-                                    className="w-full sm:w-auto inline-flex items-center justify-center gap-2 px-6 sm:px-8 py-3.5 sm:py-4 rounded-xl border border-white/15 bg-night-800/60 text-cream font-semibold text-sm sm:text-base hover:bg-night-800 hover:border-white/25 transition-all active:scale-[0.98] backdrop-blur-sm"
+                                    className="w-full sm:w-auto inline-flex items-center justify-center gap-2 px-6 sm:px-8 py-3.5 sm:py-4 rounded-xl border border-white/15 bg-[#13131B] text-cream font-semibold text-sm sm:text-base hover:bg-white/5 hover:border-white/25 transition-all active:scale-[0.98]"
                                 >
                                     See How It Works
                                 </button>
@@ -278,14 +190,12 @@ export default function LandingPage() {
                             </div>
                         </div>
 
-                        {/* Right: Firefly visual */}
+                        {/* Right: Amber glow orb (replaces Firefly) */}
                         <div className="relative flex items-center justify-center lg:justify-end order-first lg:order-last mb-8 lg:mb-0">
-                            <div className="relative">
-                                {/* Ambient glow */}
-                                <div className="absolute inset-0 blur-[80px] sm:blur-[100px] opacity-40 pulse-glow" style={{ background: 'radial-gradient(circle, #FFC857 0%, transparent 70%)' }} />
-                                {/* Firefly with gentle float animation */}
-                                <div className="relative gentle-float">
-                                    <Firefly mood="proud" size={240} glow={DEFAULT_GLOW} />
+                            <div className="relative gentle-float">
+                                <div className="absolute inset-0 blur-[80px] sm:blur-[100px] opacity-40 pulse-glow bg-glow/30 rounded-full" />
+                                <div className="relative h-64 w-64 sm:h-80 sm:w-80 rounded-full bg-gradient-to-br from-glow/20 to-amber-600/10 border border-glow/20 flex items-center justify-center">
+                                    <div className="h-32 w-32 sm:h-40 sm:w-40 rounded-full bg-gradient-to-br from-glow to-amber-600/50 blur-md" />
                                 </div>
                             </div>
                         </div>
@@ -296,7 +206,6 @@ export default function LandingPage() {
             {/* ── Differentiators Section ─ */}
             <section className="relative py-16 sm:py-24 lg:py-32 border-t border-white/5">
                 <div className="max-w-6xl mx-auto px-4 sm:px-6">
-                    {/* Section header */}
                     <div className="max-w-2xl mb-12 sm:mb-16 text-center mx-auto">
                         <p className="text-xs sm:text-sm font-bold uppercase tracking-widest text-glow mb-3 sm:mb-4">The Antidote</p>
                         <h2 className="font-display text-2xl sm:text-3xl md:text-4xl lg:text-5xl font-black tracking-tight text-cream mb-4 sm:mb-5">
@@ -308,20 +217,16 @@ export default function LandingPage() {
                         </p>
                     </div>
 
-                    {/* Differentiator cards */}
                     <div className="grid grid-cols-1 md:grid-cols-3 gap-4 sm:gap-6">
                         {differentiators.map((d, index) => (
                             <div
                                 key={d.title}
-                                className="group rounded-2xl border border-white/5 bg-night-800/50 backdrop-blur-sm p-6 sm:p-8 hover:border-glow/30 hover:bg-night-800/80 transition-all duration-300 hover:shadow-glow-sm"
+                                className="group rounded-2xl border border-white/10 bg-[#13131B] p-6 sm:p-8 hover:border-glow/30 transition-all duration-300"
                                 style={{ animationDelay: `${index * 100}ms` }}
                             >
-                                {/* Icon container */}
                                 <div className="h-10 w-10 sm:h-12 sm:w-12 rounded-xl bg-glow/10 border border-glow/20 flex items-center justify-center mb-4 sm:mb-6 group-hover:scale-110 transition-transform duration-300">
                                     <d.Icon className="h-5 w-5 sm:h-6 sm:w-6 text-glow" />
                                 </div>
-                                
-                                {/* Content */}
                                 <h3 className="font-display text-lg sm:text-xl font-bold text-cream mb-2 sm:mb-3">{d.title}</h3>
                                 <p className="text-cream/60 leading-relaxed text-sm sm:text-base">{d.desc}</p>
                             </div>
@@ -333,7 +238,6 @@ export default function LandingPage() {
             {/* ── Four Modes Section ─ */}
             <section id="modes" className="relative py-16 sm:py-24 lg:py-32">
                 <div className="max-w-6xl mx-auto px-4 sm:px-6">
-                    {/* Section header */}
                     <div className="max-w-2xl mb-12 sm:mb-16">
                         <p className="text-xs sm:text-sm font-bold uppercase tracking-widest text-glow mb-3 sm:mb-4">Your Journey</p>
                         <h2 className="font-display text-2xl sm:text-3xl md:text-4xl lg:text-5xl font-black tracking-tight text-cream mb-4 sm:mb-5">
@@ -345,44 +249,34 @@ export default function LandingPage() {
                         </p>
                     </div>
 
-                    {/* Mode cards grid */}
                     <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4 lg:gap-5">
                         {modes.map((mode, index) => (
                             <div
                                 key={mode.id}
-                                className="group rounded-2xl border border-white/5 bg-night-800/50 backdrop-blur-sm p-5 sm:p-6 hover:border-opacity-50 transition-all duration-300 hover:shadow-glow-sm cursor-pointer"
-                                style={{ 
-                                    ['--mode-accent' as any]: mode.accent,
-                                    animationDelay: `${index * 100}ms`
-                                }}
-                                onClick={() => {}}
+                                className="group rounded-2xl border border-white/10 bg-[#13131B] p-5 sm:p-6 hover:border-white/20 transition-all duration-300 cursor-pointer"
+                                style={{ animationDelay: `${index * 100}ms` }}
                             >
                                 <div className="relative">
-                                    {/* Icon container */}
                                     <div
-                                        className={`h-10 w-10 sm:h-12 sm:w-12 rounded-xl ${mode.bgClass}/15 border border-current/20 flex items-center justify-center mb-4 sm:mb-6 group-hover:scale-110 transition-transform duration-300`}
-                                        style={{ color: mode.accent }}
+                                        className="h-10 w-10 sm:h-12 sm:w-12 rounded-xl border border-current/20 flex items-center justify-center mb-4 sm:mb-6 group-hover:scale-110 transition-transform duration-300"
+                                        style={{ color: mode.accent, backgroundColor: `${mode.accent}15` }}
                                     >
                                         <mode.Icon className="h-5 w-5 sm:h-6 sm:w-6" />
                                     </div>
 
-                                    {/* Mode label */}
                                     <p className="text-[10px] sm:text-xs font-bold uppercase tracking-wider mb-1.5 sm:mb-2" style={{ color: mode.accent }}>
                                         {mode.label} Mode
                                     </p>
                                     
-                                    {/* Tagline */}
                                     <h3 className="font-display text-base sm:text-lg font-bold text-cream mb-2 sm:mb-3">{mode.tagline}</h3>
                                     
-                                    {/* Description */}
                                     <p className="text-cream/60 leading-relaxed text-xs sm:text-sm mb-4 sm:mb-6">{mode.desc}</p>
 
-                                    {/* Explore link */}
                                     <div
                                         className="flex items-center gap-1 text-xs sm:text-sm font-semibold group-hover:gap-2 transition-all duration-300"
                                         style={{ color: mode.accent }}
                                     >
-                                        Explore <ArrowUpRight className="w-3.5 h-3.5 sm:w-4 sm:h-4 transition-transform group-hover:translate-x-0.5 group-hover:-translate-y-0.5" />
+                                        Explore <ArrowRight className="w-3.5 h-3.5 sm:w-4 sm:h-4 transition-transform group-hover:translate-x-0.5" />
                                     </div>
                                 </div>
                             </div>
@@ -391,44 +285,41 @@ export default function LandingPage() {
                 </div>
             </section>
 
-            {/* ── Meet Ecla Section ─ */}
+            {/* ── Voice Tutor Section ─ */}
             <section className="relative py-16 sm:py-24 lg:py-32 border-t border-white/5">
                 <div className="max-w-6xl mx-auto px-4 sm:px-6">
                     <div className="grid lg:grid-cols-2 gap-12 lg:gap-16 items-center">
-                        {/* Firefly visual */}
+                        {/* Visual */}
                         <div className="relative flex items-center justify-center order-2 lg:order-1">
-                            <div className="relative">
-                                {/* Ambient glow */}
-                                <div className="absolute inset-0 blur-[100px] sm:blur-[120px] opacity-30 pulse-glow" style={{ background: 'radial-gradient(circle, #FFC857 0%, transparent 70%)' }} />
-                                {/* Firefly */}
-                                <div className="relative">
-                                    <Firefly mood="idle" size={200} glow={DEFAULT_GLOW} />
+                            <div className="relative gentle-float">
+                                <div className="absolute inset-0 blur-[100px] sm:blur-[120px] opacity-30 pulse-glow bg-violet-500/20 rounded-full" />
+                                <div className="relative h-64 w-64 sm:h-80 sm:w-80 rounded-full bg-gradient-to-br from-violet-500/20 to-purple-600/10 border border-violet-500/20 flex items-center justify-center">
+                                    <MessageCircle className="h-24 w-24 sm:h-32 sm:w-32 text-violet-300/50" />
                                 </div>
                             </div>
                         </div>
 
                         {/* Copy */}
                         <div className="order-1 lg:order-2 text-center lg:text-left">
-                            <p className="text-xs sm:text-sm font-bold uppercase tracking-widest text-glow mb-3 sm:mb-4">Meet Ecla</p>
+                            <p className="text-xs sm:text-sm font-bold uppercase tracking-widest text-violet-300 mb-3 sm:mb-4">Meet Ecla</p>
                             <h2 className="font-display text-2xl sm:text-3xl md:text-4xl lg:text-5xl font-black tracking-tight text-cream mb-4 sm:mb-6">
-                                Your firefly <br className="hidden sm:block" />
-                                <span className="text-glow">grows with you.</span>
+                                Your AI tutor, <br className="hidden sm:block" />
+                                <span className="text-violet-300">always ready.</span>
                             </h2>
                             <p className="text-cream/60 text-base sm:text-lg leading-relaxed mb-6 sm:mb-8">
-                                Ecla isn't just a mascot — she's your companion. She celebrates your wins, dims when you struggle, and evolves her glow as your consistency compounds.
+                                Ecla isn't just a mascot — she's your companion. Type or speak in Spanish, get instant feedback, and practice real conversations without the pressure of a human tutor.
                             </p>
                             
-                            {/* Feature list */}
                             <ul className="space-y-3 sm:space-y-4 text-left max-w-md mx-auto lg:mx-0">
                                 {[
-                                    'Perches on your current lesson',
-                                    'Reacts to every answer in real-time',
-                                    'Unlocks new glow colors as you progress',
-                                    'Celebrates your journey, not just streaks',
+                                    'Real-time voice conversations',
+                                    'Bilingual display with instant translations',
+                                    'Adapts to your level and goals',
+                                    'Available 24/7, no judgment',
                                 ].map((item) => (
                                     <li key={item} className="flex items-start gap-2.5 sm:gap-3 text-cream/70 text-sm sm:text-base">
-                                        <div className="mt-0.5 h-4 w-4 sm:h-5 sm:w-5 rounded-full bg-glow/20 border border-glow/30 flex items-center justify-center flex-shrink-0">
-                                            <Sparkles className="h-2.5 w-2.5 sm:h-3 sm:w-3 text-glow" />
+                                        <div className="mt-0.5 h-4 w-4 sm:h-5 sm:w-5 rounded-full bg-violet-500/20 border border-violet-500/30 flex items-center justify-center flex-shrink-0">
+                                            <Sparkles className="h-2.5 w-2.5 sm:h-3 sm:w-3 text-violet-300" />
                                         </div>
                                         <span className="leading-relaxed">{item}</span>
                                     </li>
@@ -442,26 +333,24 @@ export default function LandingPage() {
             {/* ── Final CTA Section ─ */}
             <section className="relative py-16 sm:py-24 lg:py-32 border-t border-white/5">
                 <div className="max-w-3xl mx-auto px-4 sm:px-6 text-center">
-                    {/* Firefly visual */}
                     <div className="relative inline-block mb-8 sm:mb-10">
-                        <div className="absolute inset-0 blur-[60px] sm:blur-[80px] opacity-30 pulse-glow" style={{ background: 'radial-gradient(circle, #FFC857 0%, transparent 70%)' }} />
-                        <Firefly mood="proud" size={100} glow={DEFAULT_GLOW} />
+                        <div className="absolute inset-0 blur-[60px] sm:blur-[80px] opacity-30 pulse-glow bg-glow/30 rounded-full" />
+                        <div className="relative h-24 w-24 sm:h-32 sm:w-32 rounded-full bg-gradient-to-br from-glow/20 to-amber-600/10 border border-glow/20 flex items-center justify-center">
+                            <div className="h-12 w-12 sm:h-16 sm:w-16 rounded-full bg-gradient-to-br from-glow to-amber-600/50 blur-md" />
+                        </div>
                     </div>
                     
-                    {/* Headline */}
                     <h2 className="font-display text-2xl sm:text-4xl lg:text-5xl font-black tracking-tight text-cream mb-4 sm:mb-6 leading-tight">
                         Ready to find <br className="sm:hidden" />
                         <span className="text-glow">your fluency?</span>
                     </h2>
                     
-                    {/* Subheadline */}
                     <p className="text-cream/60 text-base sm:text-lg mb-8 sm:mb-12 max-w-xl mx-auto leading-relaxed">
                         Join the exclusive Ecla beta. Shape the future of language learning and keep your glow forever.
                     </p>
                     
-                    {/* CTA button */}
                     <SignUpButton mode="modal">
-                        <button className="inline-flex items-center justify-center gap-2 px-8 sm:px-10 py-3.5 sm:py-4 rounded-xl bg-glow text-night-900 font-bold text-base sm:text-lg hover:bg-glow-bright transition-all active:scale-[0.98] shadow-glow-sm">
+                        <button className="inline-flex items-center justify-center gap-2 px-8 sm:px-10 py-3.5 sm:py-4 rounded-xl bg-glow text-night-900 font-bold text-base sm:text-lg hover:bg-glow/90 transition-all active:scale-[0.98]">
                             Create Free Account
                             <ArrowRight className="w-4 h-4 sm:w-5 sm:h-5" />
                         </button>
@@ -469,10 +358,13 @@ export default function LandingPage() {
                 </div>
             </section>
 
-            {/* ── Footer ─ */}
+            {/* ─ Footer ─ */}
             <footer className="py-8 sm:py-10 border-t border-white/5">
                 <div className="max-w-6xl mx-auto px-4 sm:px-6 flex flex-col sm:flex-row items-center justify-between gap-3 sm:gap-4">
-                    <Logo className="text-3xl sm:text-4xl" fireflySize={36} />
+                    <div className="flex items-center gap-2">
+                        <span className="font-display text-xl font-bold text-cream">ECLA</span>
+                        <span className="text-[10px] uppercase tracking-widest text-cream/40">Speak · Understand · Use</span>
+                    </div>
                     <p className="text-xs sm:text-sm text-cream/40 text-center sm:text-right">
                         © {new Date().getFullYear()} Ecla Language Learning. Warmth, not guilt.
                     </p>

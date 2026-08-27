@@ -13,12 +13,14 @@ import { useEffect, useState } from 'react'
 import Link from 'next/link'
 import { usePathname } from 'next/navigation'
 import { useClerk, useUser } from '@clerk/nextjs'
-import { Flag, Home, LogOut, Map, Menu, TrendingUp, X } from 'lucide-react'
+import { Flag, Home, LogOut, Map, Menu, MessageCircle, Repeat, TrendingUp, X } from 'lucide-react'
 import type { ReactNode } from 'react'
 
 const NAV = [
     { href: '/dashboard', label: 'Home', icon: Home },
     { href: '/course', label: 'My Learning', icon: Map },
+    { href: '/review', label: 'Review', icon: Repeat },
+    { href: '/chat', label: 'Chat with Ecla', icon: MessageCircle },
     { href: '/gateway', label: 'Gateway', icon: Flag },
     { href: '/progress', label: 'Progress', icon: TrendingUp },
 ]
@@ -43,9 +45,8 @@ function NavLinks({ onNavigate }: { onNavigate?: () => void }) {
                         key={item.href}
                         href={item.href}
                         onClick={onNavigate}
-                        className={`flex items-center gap-3 rounded-xl px-3 py-2.5 text-sm font-semibold transition-colors ${
-                            active ? 'bg-glow text-night-900' : 'text-cream/60 hover:bg-white/5 hover:text-cream'
-                        }`}
+                        className={`flex items-center gap-3 rounded-xl px-3 py-2.5 text-sm font-semibold transition-colors ${active ? 'bg-glow text-night-900' : 'text-cream/60 hover:bg-white/5 hover:text-cream'
+                            }`}
                     >
                         <item.icon className="h-4 w-4" /> {item.label}
                     </Link>
@@ -131,7 +132,7 @@ export default function AppShell({ children }: { children: ReactNode }) {
 
             <div className="mx-auto flex max-w-[1400px]">
                 {/* ── Desktop sidebar ─ */}
-                                {/* Desktop sidebar: add min-w-0 */}
+                {/* Desktop sidebar: add min-w-0 */}
                 <aside className="sticky top-14 hidden h-[calc(100vh-3.5rem)] w-56 min-w-0 flex-shrink-0 flex-col gap-4 border-r border-white/5 px-4 py-6 md:flex">
                     <NavLinks />
                     <SidebarFoot />
