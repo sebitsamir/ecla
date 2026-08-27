@@ -1,9 +1,9 @@
 'use client'
 
 /**
- * /course — the journey world (Phase 11.2, polished).
- * Responsive: mobile = mission → journey → ability; desktop = journey + sticky rail.
- * Flat surfaces only; the rail never stretches to the journey's height.
+ * /course — the journey world (Phase D premium pass).
+ * Calm vertical journey left · intelligence rail right.
+ * Refetches on 'ecla:progress-updated' so mastery flips live.
  */
 import { useEffect, useState } from 'react'
 import { useAuth } from '@clerk/nextjs'
@@ -17,20 +17,18 @@ const API_URL = process.env.NEXT_PUBLIC_API_URL ?? 'http://localhost:4000'
 
 type CourseData = { courses: { level: string; title: string; units: CourseUnit[] }[] }
 
-function Stat({ value, label, tone }: { value: number; label: string; tone: 'leaf' | 'glow' | 'muted' }) {
-    const color = tone === 'leaf' ? 'text-leaf' : tone === 'glow' ? 'text-glow' : 'text-cream/60'
-    return (
-        <span className="inline-flex items-center gap-1.5 rounded-full border border-white/10 bg-[#13131B] px-3 py-1 text-xs text-cream/50">
-            <span className={`font-bold ${color}`}>{value}</span> {label}
-        </span>
-    )
-}
-
 export default function CoursePage() {
     const { getToken } = useAuth()
     const [data, setData] = useState<CourseData | null>(null)
     const [summary, setSummary] = useState<LearnerSummary | null>(null)
     const [loading, setLoading] = useState(true)
+    const [tick, setTick] = useState(0)
+
+    useEffect(() => {
+        const fn = () => setTick(t => t + 1)
+        window.addEventListener('ecla:progress-updated', fn)
+        return () => window.removeEventListener('ecla:progress-updated', fn)
+    }, [])
 
     useEffect(() => {
         (async () => {
@@ -44,73 +42,68 @@ export default function CoursePage() {
                 setSummary(sum)
             } catch { /* fail soft */ } finally { setLoading(false) }
         })()
-    }, [getToken])
+    }, [getToken, tick])
 
     if (loading) {
         return (
             <AppShell>
                 <div className="space-y-4">
-                    {[0, 1, 2, 3].map(i => <div key={i} className="h-24 animate-pulse rounded-2xl bg-white/5" />)}
+                    <div className="h-24 animate-pulse rounded-2xl bg-white/5" />
+                    {[0, 1, 2, 3].map(i => <div key={i} className="h-20 animate-pulse rounded-2xl bg-white/5" />)}
                 </div>
             </AppShell>
         )
     }
 
     const course = data?.courses?.[0]
-    const all = (course?.units ?? []).flatMap(u => u.competencies)
+    const all = (course?.units ?? []).flatMap(u => u.competencies ?? [])
     const mastered = all.filter(c => c.status === 'mastered').length
     const developing = all.filter(c => c.status === 'developing').length
     const ahead = all.length - mastered - developing
 
-    // "You are here": first unit with developing work, else first open unit.
-    const hereId = course?.units.find(u => u.counts.developing > 0)?.id
-        ?? course?.units.find(u => u.counts.upcoming > 0)?.id
+    const hereId = course?.units.find(u => (u.counts?.developing ?? 0) > 0)?.id
+        ?? course?.units.find(u => (u.counts?.upcoming ?? 0) > 0)?.id
 
     return (
         <AppShell>
             {!course ? (
                 <p className="text-sm text-cream/60">No published course yet.</p>
             ) : (
-                <div className="grid grid-cols-1 gap-6 xl:grid-cols-[minmax(0,1fr)_360px] xl:items-start">
-                    {/* ── The journey ─ */}
-                    <div className="order-2 min-w-0 xl:order-1">
-                        <header className="mb-6">
+                <div className="grid gap-8 xl:grid-cols-[minmax(0,1fr)_360px]">
+                    {/* ── The journey ── */}
+                    <div className="min-w-0">
+                        <header className="mb-6 sm:mb-8">
                             <p className="text-[11px] font-semibold uppercase tracking-widest text-glow">
-                                Spanish · {course.level}
+                                Spanish · {String(course.level).replace(/_/g, '-')}
                             </p>
-                            <h1 className="font-display mt-1 text-2xl font-bold text-cream md:text-3xl">
+                            <h1 className="font-display mt-1 text-2xl font-bold text-cream sm:text-3xl md:text-4xl">
                                 {course.title}
                             </h1>
                             <div className="mt-3 flex flex-wrap gap-2">
-                                <Stat value={mastered} label="demonstrated" tone="leaf" />
-                                <Stat value={developing} label="developing" tone="glow" />
-                                <Stat value={ahead} label="ahead" tone="muted" />
+                                <span className="rounded-full border border-leaf/30 bg-leaf/10 px-3 py-1 text-[11px] font-semibold text-leaf">
+                                    {mastered} demonstrated
+                                </span>
+                                <span className="rounded-full border border-glow/30 bg-glow/10 px-3 py-1 text-[11px] font-semibold text-glow">
+                                    {developing} developing
+                                </span>
+                                <span className="rounded-full border border-white/10 bg-white/5 px-3 py-1 text-[11px] font-semibold text-cream/50">
+                                    {ahead} ahead
+                                </span>
                             </div>
                         </header>
 
-                        <ol className="relative space-y-4 before:absolute before:bottom-8 before:left-4 before:top-8 before:w-px before:bg-white/10">
+                        <ol className="space-y-3 sm:space-y-4">
                             {course.units.map((u, i) => (
                                 <StageCard key={u.id} unit={u} index={i} defaultOpen={u.id === hereId} />
                             ))}
                         </ol>
                     </div>
 
-                    {/* ── Intelligence rail (sticky on desktop, on top for mobile) ─ */}
-                    <aside className="order-1 min-w-0 space-y-6 xl:order-2 xl:sticky xl:top-20">
+                    {/* ── Intelligence rail ── */}
+                    <div className="min-w-0 space-y-5 xl:sticky xl:top-20 xl:self-start">
                         {summary && <NextActionCard action={summary.nextAction} />}
-                        {summary && (
-                            <div className="hidden xl:block">
-                                <AbilityProfile dimensions={summary.dimensions} />
-                            </div>
-                        )}
-                    </aside>
-
-                    {/* Ability profile sits after the journey on < xl */}
-                    {summary && (
-                        <div className="min-w-0 xl:hidden">
-                            <AbilityProfile dimensions={summary.dimensions} />
-                        </div>
-                    )}
+                        {summary && <AbilityProfile dimensions={summary.dimensions} />}
+                    </div>
                 </div>
             )}
         </AppShell>

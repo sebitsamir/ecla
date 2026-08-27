@@ -1,42 +1,41 @@
 /**
- * personalizeScene — the "living world" transform (Phase 9).
+ * personalize — runtime name injection over compiled beats.
  *
- * When a character has met the learner before AND we know the learner's
- * name, that character's first line becomes a reunion greeting and a quiet
- * narrator beat acknowledges the memory (lesson_player §7:
- * "characters should remember what happened").
+ * Two mechanisms:
+ *   1. Explicit token: any authored line may contain `{{name}}`
+ *      (Unit 2 dialogue scripts will use this).
+ *   2. Natural greeting: the FIRST NPC "Hola…" say-beat becomes
+ *      "¡Hola, <Name>! …" — the rest of the line is preserved, so no
+ *      teaching content is lost ("Hola buenos días." → "¡Hola, Samir! Buenos días.").
  *
- * Pure function: scene + memory in → personalized scene out.
+ * Pure function: same input → same output; safe under Strict Mode.
  */
-import type { SceneBeat, SceneSpec } from '@/lib/sceneTypes'
-import type { LearnerMemory } from '@/lib/memory'
-import { CAST } from '@/content/cast'
+import type { SceneBeat } from '@/lib/sceneTypes'
 
-export function personalizeScene(scene: SceneSpec, memory: LearnerMemory | null): SceneSpec {
-    if (!memory?.name) return scene
-    const met = new Map(memory.characters.map(c => [c.characterId, c]))
+const TOKEN = '{{name}}'
+const cap = (s: string) => (s ? s.charAt(0).toUpperCase() + s.slice(1) : s)
 
-    const beats: SceneBeat[] = []
-    let reunionDone = false
+export function applyLearnerName(beats: SceneBeat[], name: string | null): SceneBeat[] {
+    if (!name) return beats
+    let greeted = false
 
-    for (const b of scene.beats) {
-        if (
-            !reunionDone &&
-            b.kind === 'say' &&
-            (met.get(b.character)?.encounters ?? 0) > 0
-        ) {
-            reunionDone = true
-            const who = CAST[b.character].name
-            beats.push({
-                kind: 'action',
-                stage: b.stage,
-                text: `${who} looks up — and recognizes you.`,
-            })
-            beats.push({ ...b, es: `¡Hola, ${memory.name}! ¡Qué gusto verte!` })
-            continue
+    return beats.map(b => {
+        if (b.kind !== 'say' && b.kind !== 'listen' && b.kind !== 'unexpected') return b
+
+        let es = b.es
+        let gloss = b.gloss
+
+        if (es.includes(TOKEN)) {
+            es = es.split(TOKEN).join(name)
+            if (gloss) gloss = gloss.split(TOKEN).join(name)
+        } else if (!greeted && b.kind === 'say' && b.character !== 'you' && /^¡?hola\b/i.test(es)) {
+            greeted = true
+            const rest = es.replace(/^¡?hola[\s,.]*/i, '').trim()
+            es = `¡Hola, ${name}!` + (rest ? ` ${cap(rest)}` : '')
+        } else {
+            return b
         }
-        beats.push(b)
-    }
 
-    return reunionDone ? { ...scene, beats } : scene
+        return { ...b, es, gloss } as SceneBeat
+    })
 }

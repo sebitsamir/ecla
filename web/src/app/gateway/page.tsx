@@ -1,39 +1,133 @@
 'use client'
 
 /**
- * /gateway — The Pre-A1 Gateway route (Phase 10).
- *
- * A dedicated, chrome-less environment for the continuous simulation.
- * The learner enters, plays the six scenarios unbroken, and graduates
- * with evidence — not a grade.
+ * /gateway — the Pre-A1 Gateway (premium pass).
+ * Shows readiness honestly: how far the learner is, which gateway
+ * abilities are unlocked, one clear CTA. No noise, no fake urgency.
  */
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { useAuth } from '@clerk/nextjs'
-import GatewayPlayer from '@/components/ecla/GatewayPlayer'
-import GraduationCard from '@/components/ecla/GraduationCard'
-import type { GatewayEvidence } from '@/lib/gatewayTypes'
+import { ArrowRight, Check, Flag, Lock } from 'lucide-react'
+import AppShell from '@/components/layout/AppShell'
+import { fetchSummary, type LearnerSummary } from '@/lib/summary'
+
+const API_URL = process.env.NEXT_PUBLIC_API_URL ?? 'http://localhost:4000'
+
+type GComp = { id: string | number; code?: string; canDo?: string; status?: string }
+type GUnit = { id: string | number; title?: string; description?: string; competencies?: GComp[] }
 
 export default function GatewayPage() {
-    const router = useRouter()
     const { getToken } = useAuth()
-    const [evidence, setEvidence] = useState<GatewayEvidence[] | null>(null)
+    const router = useRouter()
+    const [summary, setSummary] = useState<LearnerSummary | null>(null)
+    const [gateway, setGateway] = useState<GUnit | null>(null)
+    const [loading, setLoading] = useState(true)
+    const [tick, setTick] = useState(0)
 
-    // Post-graduation: show the evidence card
-    if (evidence) {
-        return (
-            <GraduationCard
-                evidence={evidence}
-                onContinue={() => router.push('/course')}
-            />
-        )
-    }
+    useEffect(() => {
+        const fn = () => setTick(t => t + 1)
+        window.addEventListener('ecla:progress-updated', fn)
+        return () => window.removeEventListener('ecla:progress-updated', fn)
+    }, [])
 
-    // Active simulation: full-screen, chrome-less
+    useEffect(() => {
+        (async () => {
+            try {
+                const token = await getToken()
+                const [map, sum] = await Promise.all([
+                    fetch(`${API_URL}/api/v1/course/map`, { headers: { Authorization: `Bearer ${token}` } }).then(r => r.json()),
+                    fetchSummary(getToken),
+                ])
+                const units: GUnit[] = map?.courses?.[0]?.units ?? []
+                setGateway(units.find(u => /gateway/i.test(u.title ?? '')) ?? units[units.length - 1] ?? null)
+                setSummary(sum)
+            } catch { /* fail soft */ } finally { setLoading(false) }
+        })()
+    }, [getToken, tick])
+
+    const comps = gateway?.competencies ?? []
+    const open = comps.filter(c => c.status !== 'locked')
+    const firstOpen = open[0]
+    const required = Math.max(0, (summary?.total ?? 0) - comps.length)
+    const done = Math.min(summary?.demonstrated ?? 0, required)
+    const pct = required ? Math.round((done / required) * 100) : 0
+
     return (
-        <GatewayPlayer
-            getToken={getToken}
-            onGraduate={setEvidence}
-        />
+        <AppShell>
+            {loading ? (
+                <div className="space-y-4">
+                    <div className="h-28 animate-pulse rounded-2xl bg-white/5" />
+                    <div className="h-64 animate-pulse rounded-2xl bg-white/5" />
+                </div>
+            ) : (
+                <div className="mx-auto max-w-3xl space-y-6 sm:space-y-8">
+                    {/* Hero */}
+                    <header className="text-center">
+                        <span className="inline-flex items-center gap-2 rounded-full border border-violet-500/30 bg-violet-600/10 px-4 py-1.5 text-[11px] font-semibold uppercase tracking-widest text-violet-300">
+                            <Flag className="h-3.5 w-3.5" /> Spanish · Pre-A1
+                        </span>
+                        <h1 className="font-display mt-4 text-3xl font-bold text-cream sm:text-4xl">
+                            {gateway?.title ?? 'Pre-A1 Gateway'}
+                        </h1>
+                        <p className="mx-auto mt-3 max-w-xl text-sm leading-relaxed text-cream/55">
+                            {gateway?.description ?? 'Bring your foundational abilities together in integrated communication.'}
+                        </p>
+                    </header>
+
+                    {/* Readiness */}
+                    <section className="rounded-2xl border border-white/10 bg-[#13131B] p-5 sm:p-6">
+                        <div className="mb-2 flex items-baseline justify-between">
+                            <p className="text-[11px] font-semibold uppercase tracking-widest text-cream/50">Readiness</p>
+                            <p className="text-xs font-bold text-cream/70">{done} / {required}</p>
+                        </div>
+                        <div className="h-2 w-full overflow-hidden rounded-full bg-white/5">
+                            <div className="h-full rounded-full bg-gradient-to-r from-violet-500 to-glow transition-all duration-700 ease-out" style={{ width: `${pct}%` }} />
+                        </div>
+                        <p className="mt-3 text-xs leading-relaxed text-cream/45">
+                            {firstOpen
+                                ? 'The gateway is open. One integrated conversation proves it.'
+                                : `Demonstrate ${required - done} more abilities across the journey to unlock the gateway.`}
+                        </p>
+                    </section>
+
+                    {/* Gateway abilities */}
+                    <section className="rounded-2xl border border-white/10 bg-[#13131B] p-5 sm:p-6">
+                        <p className="mb-4 text-[11px] font-semibold uppercase tracking-widest text-cream/50">What the gateway asks</p>
+                        <ul className="space-y-3">
+                            {comps.map(c => {
+                                const unlocked = c.status !== 'locked'
+                                return (
+                                    <li key={c.id} className="flex items-start gap-3">
+                                        <span className={`mt-0.5 flex h-6 w-6 flex-shrink-0 items-center justify-center rounded-full ${
+                                            unlocked ? 'bg-leaf text-night-900' : 'border border-white/10 text-cream/30'
+                                        }`}>
+                                            {unlocked ? <Check className="h-3.5 w-3.5" strokeWidth={3} /> : <Lock className="h-3 w-3" />}
+                                        </span>
+                                        <span className={`text-sm leading-snug ${unlocked ? 'text-cream/90' : 'text-cream/45'}`}>
+                                            {c.canDo ?? c.code}
+                                        </span>
+                                    </li>
+                                )
+                            })}
+                        </ul>
+                    </section>
+
+                    {/* CTA */}
+                    {firstOpen ? (
+                        <button
+                            onClick={() => router.push(`/learn/${firstOpen.code ?? firstOpen.id}`)}
+                            className="inline-flex w-full items-center justify-center gap-2 rounded-xl bg-glow py-4 text-sm font-bold text-night-900 shadow-[0_0_30px_rgba(255,200,0,0.2)] transition-all hover:bg-glow/90 active:scale-[0.98]"
+                        >
+                            Enter the gateway <ArrowRight className="h-4 w-4" />
+                        </button>
+                    ) : (
+                        <p className="text-center text-xs text-cream/40">
+                            The journey unlocks it — one real conversation at a time.
+                        </p>
+                    )}
+                </div>
+            )}
+        </AppShell>
     )
 }

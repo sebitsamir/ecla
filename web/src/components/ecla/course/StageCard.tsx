@@ -1,41 +1,56 @@
 'use client'
 
 /**
- * StageCard — one unit of the journey (Phase 11.2).
- * Header: purpose + evidence counts. Body (expandable): competencies as
- * human can-do statements with honest statuses — ✓ mastered · ● developing ·
- * ○ upcoming · locked. Locked rows are visible (the graph is honest)
- * but not clickable.
+ * StageCard — one unit of the journey (Phase D premium pass + boundary hardening).
+ * Smooth grid-rows collapse (no max-height hacks), tactile rows,
+ * status language: mastered ✓ / developing ● / upcoming ○ / locked.
+ *
+ * Boundary note: status/canDo/description are normalized at runtime so
+ * unexpected API shapes degrade gracefully instead of crashing or erroring.
  */
 import { useState } from 'react'
-import Link from 'next/link'
+import { useRouter } from 'next/navigation'
 import { Check, ChevronDown, Lock } from 'lucide-react'
 
 export type CourseCompetency = {
-    id: string; code: string; title: string; canDo: string
-    status: 'mastered' | 'developing' | 'upcoming' | 'locked'
-    href: string
+    id: string | number
+    code: string
+    canDo?: string | null
+    /** Lenient on purpose; unknown values render as "upcoming". */
+    status: string
 }
 
 export type CourseUnit = {
-    id: string
+    id: string | number
     title: string
-    description: string | null
-    competencies: CourseCompetency[]
-    counts: { mastered: number; developing: number; upcoming: number; locked: number; total: number }
+    description?: string | null
+    counts?: { mastered?: number; developing?: number; upcoming?: number; locked?: number } | null
+    competencies?: CourseCompetency[] | null
 }
 
-function StatusIcon({ status }: { status: CourseCompetency['status'] }) {
+function StatusIcon({ status }: { status: string }) {
     if (status === 'mastered') {
-        return <span className="flex h-6 w-6 flex-shrink-0 items-center justify-center rounded-full bg-leaf text-night-900"><Check className="h-3.5 w-3.5" /></span>
+        return (
+            <span className="mt-0.5 flex h-6 w-6 flex-shrink-0 items-center justify-center rounded-full bg-leaf text-night-900 shadow-[0_0_12px_rgba(34,197,94,0.35)]">
+                <Check className="h-3.5 w-3.5" strokeWidth={3} />
+            </span>
+        )
     }
     if (status === 'developing') {
-        return <span className="flex h-6 w-6 flex-shrink-0 items-center justify-center rounded-full bg-glow text-night-900"><span className="h-2 w-2 rounded-full bg-night-900" /></span>
+        return (
+            <span className="mt-0.5 flex h-6 w-6 flex-shrink-0 items-center justify-center rounded-full border-2 border-glow bg-glow/10">
+                <span className="h-2 w-2 rounded-full bg-glow" />
+            </span>
+        )
     }
     if (status === 'locked') {
-        return <span className="flex h-6 w-6 flex-shrink-0 items-center justify-center rounded-full border border-white/10 text-cream/30"><Lock className="h-3 w-3" /></span>
+        return (
+            <span className="mt-0.5 flex h-6 w-6 flex-shrink-0 items-center justify-center rounded-full border border-white/10 text-cream/30">
+                <Lock className="h-3 w-3" />
+            </span>
+        )
     }
-    return <span className="h-6 w-6 flex-shrink-0 rounded-full border border-white/20" />
+    return <span className="mt-0.5 h-6 w-6 flex-shrink-0 rounded-full border border-white/15" />
 }
 
 export default function StageCard({ unit, index, defaultOpen = false }: {
@@ -43,54 +58,86 @@ export default function StageCard({ unit, index, defaultOpen = false }: {
     index: number
     defaultOpen?: boolean
 }) {
+    const router = useRouter()
     const [open, setOpen] = useState(defaultOpen)
-    const c = unit.counts
-    const complete = c.mastered === c.total && c.total > 0
-    const started = c.mastered > 0 || c.developing > 0
+    const c = unit.counts ?? {}
+    const list = unit.competencies ?? []
+    const openCount = (c.developing ?? 0) + (c.upcoming ?? 0)
 
     return (
-        <li className="relative pl-12">
-            {/* Journey node on the vertical line */}
-            <span className={`absolute left-0 top-4 z-10 flex h-8 w-8 items-center justify-center rounded-full text-xs font-bold ${
-                complete ? 'bg-leaf text-night-900'
-                    : started ? 'bg-glow text-night-900'
-                        : 'border border-white/15 bg-[#0B0B10] text-cream/50'
+        <li className="relative">
+            <div className={`overflow-hidden rounded-2xl border bg-[#13131B] transition-colors duration-300 ${
+                open ? 'border-violet-500/30' : 'border-white/10 hover:border-white/20'
             }`}>
-                {complete ? <Check className="h-4 w-4" /> : index + 1}
-            </span>
-
-            <div className="overflow-hidden rounded-2xl border border-white/10 bg-[#13131B]">
-                <button onClick={() => setOpen(v => !v)} className="flex w-full items-center gap-3 p-5 text-left">
-                    <div className="min-w-0 flex-1">
-                        <p className="font-semibold text-cream">{unit.title}</p>
-                        <p className="mt-0.5 truncate text-xs text-cream/50">{unit.description ?? ''}</p>
-                    </div>
-                    <p className="hidden flex-shrink-0 text-[11px] text-cream/50 sm:block">
-                        {c.mastered}✓ · {c.developing + c.upcoming} open{c.locked > 0 ? ` · ${c.locked}🔒` : ''}
-                    </p>
-                    <ChevronDown className={`h-4 w-4 flex-shrink-0 text-cream/40 transition-transform ${open ? 'rotate-180' : ''}`} />
+                {/* Header */}
+                <button
+                    onClick={() => setOpen(v => !v)}
+                    aria-expanded={open}
+                    className="flex w-full items-center gap-4 px-4 py-4 text-left sm:px-6"
+                >
+                    <span className={`flex h-9 w-9 flex-shrink-0 items-center justify-center rounded-full text-sm font-bold transition-colors ${
+                        open ? 'bg-violet-600 text-white' : 'bg-white/5 text-cream/60'
+                    }`}>
+                        {index + 1}
+                    </span>
+                    <span className="min-w-0 flex-1">
+                        <span className="block truncate font-display text-base font-bold text-cream sm:text-lg">
+                            {unit.title}
+                        </span>
+                        {unit.description && (
+                            <span className="mt-0.5 block truncate text-xs text-cream/45 sm:text-sm">
+                                {unit.description}
+                            </span>
+                        )}
+                    </span>
+                    <span className="hidden flex-shrink-0 items-center gap-2 text-[11px] font-semibold text-cream/40 sm:flex">
+                        <span className="text-leaf">{c.mastered ?? 0}✓</span>
+                        <span>·</span>
+                        <span>{openCount} open</span>
+                        {(c.locked ?? 0) > 0 && (
+                            <>
+                                <span>·</span>
+                                <span className="flex items-center gap-1">
+                                    {c.locked} <Lock className="h-3 w-3" />
+                                </span>
+                            </>
+                        )}
+                    </span>
+                    <ChevronDown className={`h-4 w-4 flex-shrink-0 text-cream/40 transition-transform duration-300 ${open ? 'rotate-180' : ''}`} />
                 </button>
 
-                {open && (
-                    <ul className="space-y-1 border-t border-white/5 p-3">
-                        {unit.competencies.map(comp => {
-                            const row = (
-                                <div className={`flex items-start gap-3 rounded-xl px-3 py-2.5 ${comp.status === 'locked' ? 'opacity-50' : 'hover:bg-white/5'}`}>
-                                    <StatusIcon status={comp.status} />
-                                    <div className="min-w-0">
-                                        <p className="text-sm text-cream/90">{comp.canDo}</p>
-                                        <p className="mt-0.5 text-[10px] uppercase tracking-wider text-cream/35">{comp.code}</p>
-                                    </div>
-                                </div>
-                            )
-                            return (
-                                <li key={comp.id}>
-                                    {comp.status === 'locked' ? row : <Link href={comp.href}>{row}</Link>}
-                                </li>
-                            )
-                        })}
-                    </ul>
-                )}
+                {/* Body — smooth collapse */}
+                <div className={`grid transition-[grid-template-rows] duration-300 ease-out ${open ? 'grid-rows-[1fr]' : 'grid-rows-[0fr]'}`}>
+                    <div className="overflow-hidden">
+                        <ul className="border-t border-white/5">
+                            {list.map(cp => {
+                                const clickable = cp.status !== 'locked'
+                                return (
+                                    <li key={cp.id}>
+                                        <button
+                                            onClick={() => clickable && router.push(`/learn/${cp.code}`)}
+                                            disabled={!clickable}
+                                            aria-disabled={!clickable}
+                                            className={`flex w-full items-start gap-3 px-4 py-3.5 text-left transition-colors sm:px-6 ${
+                                                clickable ? 'hover:bg-white/[0.04] active:bg-white/[0.06]' : 'cursor-not-allowed opacity-45'
+                                            }`}
+                                        >
+                                            <StatusIcon status={cp.status} />
+                                            <span className="min-w-0 flex-1">
+                                                <span className={`block text-sm leading-snug ${cp.status === 'mastered' ? 'text-cream/70' : 'text-cream/90'}`}>
+                                                    {cp.canDo ?? cp.code}
+                                                </span>
+                                                <span className="mt-1 block text-[10px] font-semibold uppercase tracking-widest text-cream/30">
+                                                    {cp.code}
+                                                </span>
+                                            </span>
+                                        </button>
+                                    </li>
+                                )
+                            })}
+                        </ul>
+                    </div>
+                </div>
             </div>
         </li>
     )
