@@ -1,39 +1,64 @@
 'use client'
 
 /**
- * /dashboard — the learning control center (Phase 11).
- * Answers one question first: "What is the best thing for me to do
- * right now to improve?" — everything else is evidence and context.
+ * /dashboard — the learning control center (Phase 11 + C + D).
+ * "What is the best thing for me to do right now?" first;
+ * everything else is evidence and context. Premium, responsive shell.
+ *
+ * Fixes: summary fetch restored (loading flag), ContinueUnit imported,
+ * ContinueCards fed by course-map units (true counts).
  */
 import { useEffect, useState } from 'react'
-import { useAuth } from '@clerk/nextjs'
+import { useAuth, useUser } from '@clerk/nextjs'
 import AppShell from '@/components/layout/AppShell'
 import NextActionCard from '@/components/ecla/dashboard/NextActionCard'
 import ProvenRing from '@/components/ecla/dashboard/ProvenRing'
 import AbilityProfile from '@/components/ecla/dashboard/AbilityProfile'
 import WeekEvidence from '@/components/ecla/dashboard/WeekEvidence'
-import ReviewNudge from '@/components/ecla/dashboard/ReviewNudge'
-import ContinueCards from '@/components/ecla/dashboard/ContinueCards'
+import ContinueCards, { type ContinueUnit } from '@/components/ecla/dashboard/ContinueCards'
+import RetentionCard from '@/components/ecla/dashboard/RetentionCard'
 import { fetchSummary, type LearnerSummary } from '@/lib/summary'
-import { useUser } from '@clerk/nextjs'
+
+const API_URL = process.env.NEXT_PUBLIC_API_URL ?? 'http://localhost:4000'
 
 export default function DashboardPage() {
   const { getToken } = useAuth()
-  const [summary, setSummary] = useState<LearnerSummary | null>(null)
-  const [loading, setLoading] = useState(true)
   const { user } = useUser()
+  const [summary, setSummary] = useState<LearnerSummary | null>(null)
+  const [mapUnits, setMapUnits] = useState<ContinueUnit[]>([])
+  const [loading, setLoading] = useState(true)
+  const [tick, setTick] = useState(0)
 
   useEffect(() => {
+    const fn = () => setTick(t => t + 1)
+    window.addEventListener('ecla:progress-updated', fn)
+    return () => window.removeEventListener('ecla:progress-updated', fn)
+  }, [])
+
+  // Summary + course map in parallel; loading clears when summary lands.
+  useEffect(() => {
     (async () => {
-      setSummary(await fetchSummary(getToken))
-      setLoading(false)
+      try {
+        const token = await getToken()
+        const [sum, map] = await Promise.all([
+          fetchSummary(getToken),
+          fetch(`${API_URL}/api/v1/course/map`, { headers: { Authorization: `Bearer ${token}` } })
+            .then(r => r.json())
+            .catch(() => null),
+        ])
+        setSummary(sum)
+        setMapUnits(map?.courses?.[0]?.units ?? [])
+      } catch { /* handled by !summary below */ } finally {
+        setLoading(false)
+      }
     })()
-  }, [getToken])
+  }, [getToken, tick])
 
   return (
     <AppShell>
       {loading ? (
         <div className="space-y-6">
+          <div className="h-20 animate-pulse rounded-2xl bg-white/5" />
           {[0, 1, 2].map(i => (
             <div key={i} className="h-40 animate-pulse rounded-2xl bg-white/5" />
           ))}
@@ -41,43 +66,44 @@ export default function DashboardPage() {
       ) : !summary ? (
         <p className="text-sm text-cream/60">Couldn't load your learning control center. Refresh to retry.</p>
       ) : (
-        <div className="space-y-6">
+        <div className="space-y-6 sm:space-y-8">
           {/* Greeting + the adaptive WHY, up front */}
           <header>
-            <h1 className="font-display text-2xl font-bold text-cream md:text-3xl">
+            <h1 className="font-display text-2xl font-bold text-cream sm:text-3xl md:text-4xl">
               {`Hola, ${summary?.name ?? user?.firstName ?? 'there'}.`}
             </h1>
-            <p className="mt-1 text-sm text-cream/50">{summary.nextAction.reason}</p>
+            <p className="mt-2 max-w-2xl text-sm leading-relaxed text-cream/50">
+              {summary.nextAction.reason}
+            </p>
           </header>
 
           {/* Row 1: next mission (dominant) + proven ability */}
-          <div className="grid gap-6 lg:grid-cols-3">
-            <div className="lg:col-span-2">
+          <div className="grid gap-4 md:gap-6 lg:grid-cols-3">
+            <div className="min-w-0 lg:col-span-2">
               <NextActionCard action={summary.nextAction} />
             </div>
-            <ProvenRing demonstrated={summary.demonstrated} total={summary.total} stageLabel="Pre-A1" />
+            <div className="min-w-0">
+              <ProvenRing demonstrated={summary.demonstrated} total={summary.total} stageLabel="Pre-A1" />
+            </div>
           </div>
 
           {/* Row 2: ability bands + week evidence + retention nudge */}
-          <div className="grid gap-6 lg:grid-cols-3">
-            <AbilityProfile dimensions={summary.dimensions} />
-            <WeekEvidence week={summary.week} />
-            {summary.dueReviews.length > 0 ? (
-              <ReviewNudge review={summary.dueReviews[0]} />
-            ) : (
-              <div className="rounded-2xl border border-white/10 bg-[#13131B] p-6">
-                <p className="mb-2 text-xs font-bold uppercase tracking-wider text-cream/50">Retention</p>
-                <p className="text-sm text-cream/60">
-                  Nothing is fading yet. Retrievals will appear here as life, not homework.
-                </p>
-              </div>
-            )}
+          <div className="grid gap-4 md:grid-cols-2 md:gap-6 xl:grid-cols-3">
+            <div className="min-w-0">
+              <AbilityProfile dimensions={summary.dimensions} />
+            </div>
+            <div className="min-w-0">
+              <WeekEvidence week={summary.week} />
+            </div>
+            <div className="min-w-0 md:col-span-2 xl:col-span-1">
+              <RetentionCard getToken={getToken} />
+            </div>
           </div>
 
-          {/* Row 3: nearby curriculum */}
+          {/* Row 3: nearby curriculum (course-map counts win when available) */}
           <section>
             <p className="mb-3 text-xs font-bold uppercase tracking-wider text-cream/50">Continue learning</p>
-            <ContinueCards units={summary.units} />
+            <ContinueCards units={mapUnits.length ? mapUnits : summary.units} />
           </section>
         </div>
       )}

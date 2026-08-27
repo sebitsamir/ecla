@@ -12,12 +12,12 @@
 
 import { useEffect, useRef, useState, Suspense } from 'react'
 import { useParams, useRouter, useSearchParams } from 'next/navigation'
-import { useAuth } from '@clerk/nextjs'
+import { useAuth, useUser } from '@clerk/nextjs'
 import { Check, ArrowRight } from 'lucide-react'
 import SceneExperience from '@/components/ecla/SceneExperience'
 import { sceneFor } from '@/content/scenes'
-import { fetchMemory, recordEncounter, type LearnerMemory } from '@/lib/memory'
-import { personalizeScene } from '@/content/scenes/personalize'
+import { getLearnerName, recordEncounter, seedNameFromProfile } from '@/lib/memory'
+import { applyLearnerName } from '@/content/scenes/personalize'
 import { streetEncounter } from '@/content/scenes/streetEncounter'
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL ?? 'http://localhost:4000'
@@ -28,9 +28,9 @@ function LearnPlayer() {
     const searchParams = useSearchParams()
     const modeParam = searchParams.get('mode')
     const { getToken } = useAuth()
+    const { user } = useUser()
 
     const [lesson, setLesson] = useState<any>(null)
-    const [memory, setMemory] = useState<LearnerMemory | null>(null)
     const [loading, setLoading] = useState(true)
     const [finished, setFinished] = useState(false)
     const [evidence, setEvidence] = useState<{ correct: number; incorrect: number } | null>(null)
@@ -54,12 +54,12 @@ function LearnPlayer() {
         })()
     }, [getToken, params.conceptId])
 
-    // 2. Load learner memory
+    // Learner memory: seed the name from the profile once (learner-given names win).
     useEffect(() => {
-        (async () => setMemory(await fetchMemory(getToken)))()
-    }, [getToken])
+        seedNameFromProfile(user?.firstName ?? null)
+    }, [user])
 
-    // 3. Determine the scene (Strictly Scene-Driven)
+    // 2. Determine the scene (Strictly Scene-Driven)
     const sceneModeOk = !modeParam || modeParam === 'STORY'
     // Curriculum payload MUST reach the compiler — scenes are data-driven.
     const baseScene = sceneModeOk && lesson?.code
@@ -73,13 +73,15 @@ function LearnPlayer() {
 
     const learned = ['CONTROLLED', 'TRANSFERRED', 'RETAINED'].includes(lesson?.mastery?.level ?? '')
 
+    // Personalize: inject learner's name into the scene beats
+    const learnerName = getLearnerName()
     const scene = baseScene
-        ? personalizeScene(baseScene, memory)
+        ? { ...baseScene, beats: applyLearnerName(baseScene.beats, learnerName) }
         : (learned && retrievalTarget.length > 0)
-            ? streetEncounter({ name: memory?.name, canDo: lesson?.canDo ?? '', expected: retrievalTarget })
+            ? streetEncounter({ name: learnerName, canDo: lesson?.canDo ?? '', expected: retrievalTarget })
             : undefined
 
-    // 4. Record character encounters for memory (once per scene load)
+    // 3. Record character encounters for memory (once per scene load)
     useEffect(() => {
         if (!scene || recordedSceneRef.current === scene.id) return
         recordedSceneRef.current = scene.id
@@ -88,20 +90,25 @@ function LearnPlayer() {
                 .filter(b => b.kind === 'say' || b.kind === 'listen' || b.kind === 'unexpected')
                 .map(b => (b as any).character as string)
         ))
-        chars.forEach(c => recordEncounter(getToken, c))
-    }, [scene, getToken])
+        chars.forEach(c => {
+            // Only record if it's a learner-given name (not an NPC)
+            if (learnerName && c === 'you') {
+                recordEncounter(learnerName)
+            }
+        })
+    }, [scene, learnerName])
 
-    // 5. Safe redirect if no scene is available for this competency
+    // 4. Safe redirect if no scene is available for this competency
     useEffect(() => {
         if (!loading && !lesson) {
             router.push('/course')
         } else if (!loading && lesson && !scene) {
-            console.warn('[ecla] Redirecting: no scene for', lesson?.code)
+            console.warn('[ecla] Redirecting: no scene for', JSON.stringify(lesson?.code))
             router.push('/course')
         }
     }, [loading, lesson, scene, router])
 
-    // 6. Scene completion handler
+    // 5. Scene completion handler
     const completeScene = async (correct: number, incorrect: number) => {
         const exp = (lesson.subLessons ?? []).find((s: any) => s.type === 'STORY')
         const token = await getToken()
@@ -124,12 +131,11 @@ function LearnPlayer() {
             body: JSON.stringify({ competencyId: lesson.conceptId, correct, incorrect }),
         })
         window.dispatchEvent(new Event('ecla:progress-updated'))
-        window.dispatchEvent(new Event('ecla:progress-updated'))
         setEvidence({ correct, incorrect })
         setFinished(true)
     }
 
-    // 7. Render States: Loading or Redirecting
+    // 6. Render States: Loading or Redirecting
     if (loading || !lesson || !scene) {
         return (
             <main className="min-h-screen flex flex-col items-center justify-center bg-[#0B0B10]">
@@ -139,7 +145,7 @@ function LearnPlayer() {
         )
     }
 
-    // 8. Evidence-based completion screen
+    // 7. Evidence-based completion screen
     if (finished && evidence) {
         return (
             <main className="min-h-screen bg-[#0B0B10] flex items-center justify-center p-6 animate-fade-in">
@@ -154,7 +160,7 @@ function LearnPlayer() {
                             Communication achieved
                         </p>
                         <ul className="space-y-3">
-                            {scene.outcomes.map((outcome, i) => (
+                            {(scene.outcomes ?? []).map((outcome: string, i: number) => (
                                 <li key={i} className="flex items-start gap-3">
                                     <Check className="h-5 w-5 text-leaf flex-shrink-0 mt-0.5" />
                                     <span className="text-sm text-cream/90">{outcome}</span>
@@ -184,7 +190,7 @@ function LearnPlayer() {
         )
     }
 
-    // 9. Active Scene Experience
+    // 8. Active Scene Experience
     return (
         <main className="min-h-screen font-body bg-[#0B0B10]">
             <header className="sticky top-0 z-40 border-b border-white/5 bg-[#0B0B10]/95 backdrop-blur">

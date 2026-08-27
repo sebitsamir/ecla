@@ -236,4 +236,86 @@ router.post('/api/v1/learner/demonstrate', async (req: Request, res: Response, n
     } catch (error) { next(error) }
 })
 
+/**
+ * GET /api/v1/learner/recent-accuracy
+ * Average accuracy over the last 5 assessed competencies.
+ * Feeds the adaptive support ladder for FIRST-TIME scenes (which have
+ * no own mastery score yet).
+ */
+router.get('/api/v1/learner/recent-accuracy', async (req: Request, res: Response, next: NextFunction) => {
+    try {
+        const user = await getOrSyncUserFast(req)
+        const rows = await prisma.competencyMastery.findMany({
+            where: { userId: user.id, comprehensionScore: { not: null } },
+            orderBy: { lastAssessedAt: 'desc' },
+            take: 5,
+            select: { comprehensionScore: true },
+        })
+        const scores = rows
+            .map(r => r.comprehensionScore)
+            .filter((x): x is number => typeof x === 'number')
+        const avg = scores.length
+            ? Math.round(scores.reduce((a, b) => a + b, 0) / scores.length)
+            : null
+        res.json({ ok: true, recentAccuracy: avg, samples: scores.length })
+    } catch (error) { next(error) }
+})
+
+/**
+ * GET /api/v1/learner/upcoming-reviews
+ * Spaced-retrieval nudge feed (Phase C).
+ *
+ * A learned competency is "due" when now >= lastAssessedAt + interval(level):
+ *   CONTROLLED: 1 day · TRANSFERRED: 3 days · RETAINED: 7 days.
+ * Returns up to 3, soonest first, including items due within tomorrow
+ * (so a fresh skill immediately earns "Sofía wants to see you tomorrow").
+ * No schema changes: derived from lastAssessedAt + level.
+ */
+router.get('/api/v1/learner/upcoming-reviews', async (req: Request, res: Response, next: NextFunction) => {
+    try {
+        const user = await getOrSyncUserFast(req)
+        const now = Date.now()
+
+        const INTERVAL_MS: Record<string, number> = {
+            CONTROLLED: 1 * 86400000,
+            TRANSFERRED: 3 * 86400000,
+            RETAINED: 7 * 86400000,
+        }
+
+        const rows = await prisma.competencyMastery.findMany({
+            where: {
+                userId: user.id,
+                level: { in: ['CONTROLLED', 'TRANSFERRED', 'RETAINED'] },
+                lastAssessedAt: { not: null },
+            },
+            select: { competencyId: true, level: true, lastAssessedAt: true },
+        })
+
+        // Second query instead of a relation walk — schema-shape safe.
+        const comps = await prisma.competency.findMany({
+            where: { id: { in: rows.map(r => r.competencyId) } },
+            select: { id: true, code: true, canDo: true },
+        })
+        const byId = new Map(comps.map(c => [c.id, c]))
+
+        const reviews = rows
+            .map(r => {
+                const c = byId.get(r.competencyId)
+                if (!c || !r.lastAssessedAt) return null
+                const dueAt = new Date(r.lastAssessedAt).getTime() + (INTERVAL_MS[r.level] ?? 86400000)
+                return {
+                    code: c.code,
+                    title: c.canDo,
+                    level: r.level,
+                    dueInHours: Math.round((dueAt - now) / 3600000),
+                }
+            })
+            .filter((r): r is NonNullable<typeof r> => r !== null && r.dueInHours <= 24)
+            .sort((a, b) => a.dueInHours - b.dueInHours)
+            .slice(0, 3)
+
+        res.json({ ok: true, reviews })
+    } catch (error) { next(error) }
+})
+
 export default router

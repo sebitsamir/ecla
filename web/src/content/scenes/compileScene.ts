@@ -1,11 +1,14 @@
 /**
  * compileScene — the curriculum→scene compiler (Layer 1 → Layer 2 → runtime).
  * Pulls language targets from the lesson payload (DB), merges the blueprint's
- * creative direction, runs the archetype, and validates (Art. 23 gate).
+ * creative direction, runs the archetype, validates (Art. 23 gate), then
+ * applies runtime personalization (learner's name) as the final pass.
  */
 import type { SceneSpec } from '@/lib/sceneTypes'
 import type { SceneBlueprint } from '@/lib/blueprint'
 import { ARCHETYPES, type Ctx, type Target } from './archetypes'
+import { getLearnerName } from '@/lib/memory'
+import { applyLearnerName } from './personalize'
 
 const norm = (s: string) => s.toLowerCase().replace(/[¡!.,¿?]/g, '').trim()
 
@@ -40,11 +43,14 @@ export function compileScene(bp: SceneBlueprint, lesson: any): SceneSpec {
     }
     const gen = ARCHETYPES[bp.archetype]
     // Defense in depth: never render empty say/listen beats or dead choices.
-    const beats = (gen ? gen(ctx) : []).filter(b => {
+    const rawBeats = (gen ? gen(ctx) : []).filter(b => {
         if ((b.kind === 'say' || b.kind === 'listen') && !(b as any).es?.trim()) return false
         if (b.kind === 'choice' && !b.options.some(o => o.label?.trim())) return false
         return true
     })
+
+    // Runtime personalization: once the learner's name is known, the world uses it.
+    const beats = applyLearnerName(rawBeats, getLearnerName())
 
     return {
         id: bp.id,

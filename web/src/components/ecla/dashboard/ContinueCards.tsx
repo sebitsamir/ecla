@@ -1,37 +1,77 @@
 'use client'
 
 /**
- * ContinueCards — nearby curriculum as "x / y demonstrated" + can-do,
- * never as a lesson menu. Each card routes to the first open competency.
+ * ContinueCards — nearby curriculum as snap-scroll cards on mobile,
+ * grid on desktop (Phase D).
+ *
+ * Boundary note: accepts BOTH the course map's rich units and the
+ * summary API's UnitCard (which omits `description` and may reshape
+ * `counts`). Unknowns are normalized at runtime — the card never crashes.
  */
-import Link from 'next/link'
-import type { UnitCard } from '@/lib/summary'
+import { useRouter } from 'next/navigation'
+import { ArrowRight } from 'lucide-react'
 
-export default function ContinueCards({ units }: { units: UnitCard[] }) {
+/** Lenient on purpose: two different APIs feed this component. */
+export type ContinueUnit = {
+    id: string | number
+    title?: string | null
+    description?: string | null
+    counts?: unknown
+    competencies?: unknown
+}
+
+const num = (v: unknown): number => (typeof v === 'number' && isFinite(v) ? v : 0)
+
+export default function ContinueCards({ units }: { units?: ContinueUnit[] | null }) {
+    const router = useRouter()
+    const list = (units ?? []).slice(0, 4)
+
+    /** First competency the learner can actually enter. */
+    const firstOpen = (u: ContinueUnit): string | undefined => {
+        const comps = Array.isArray(u.competencies)
+            ? (u.competencies as Array<Record<string, unknown>>)
+            : []
+        const hit = comps.find(c => c.status === 'developing' || c.status === 'upcoming')
+        return typeof hit?.code === 'string' ? hit.code : undefined
+    }
+
     return (
-        <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
-            {units.map(u => (
-                <div key={u.id} className="flex flex-col rounded-2xl border border-white/10 bg-[#13131B] p-5">
-                    <p className="mb-1 text-sm font-semibold text-cream">{u.title}</p>
-                    <p className="mb-4 text-xs text-cream/50">{u.demonstrated} / {u.total} demonstrated</p>
-                    <div className="mb-4 h-1 overflow-hidden rounded-full bg-white/5">
-                        <div
-                            className="h-full bg-violet-500 transition-all duration-500"
-                            style={{ width: `${u.total ? (u.demonstrated / u.total) * 100 : 0}%` }}
-                        />
-                    </div>
-                    {u.href ? (
-                        <Link
-                            href={u.href}
-                            className="mt-auto rounded-xl border border-white/10 bg-white/5 px-4 py-2 text-center text-xs font-bold text-cream/80 transition-colors hover:bg-white/10"
-                        >
-                            {u.demonstrated > 0 ? 'Continue' : 'Start'}
-                        </Link>
-                    ) : (
-                        <p className="mt-auto text-center text-xs font-bold text-leaf">Demonstrated ✓</p>
-                    )}
-                </div>
-            ))}
+        <div className="scrollbar-hide -mx-4 flex snap-x snap-mandatory gap-4 overflow-x-auto px-4 pb-2 md:mx-0 md:grid md:grid-cols-2 md:overflow-visible md:px-0 xl:grid-cols-4">
+            {list.map((u, i) => {
+                const code = firstOpen(u)
+                const c = (u.counts ?? {}) as Record<string, unknown>
+                const mastered = num(c.mastered)
+                const open = num(c.developing) + num(c.upcoming)
+
+                return (
+                    <button
+                        key={u.id}
+                        onClick={() => router.push(code ? `/learn/${code}` : '/course')}
+                        className="group min-w-[240px] snap-start rounded-2xl border border-white/10 bg-[#13131B] p-5 text-left transition-all duration-300 hover:border-violet-500/40 hover:bg-[#171722] active:scale-[0.98] md:min-w-0"
+                    >
+                        <div className="mb-3 flex items-center justify-between">
+                            <span className="flex h-7 w-7 items-center justify-center rounded-full bg-white/5 text-xs font-bold text-cream/60">
+                                {i + 1}
+                            </span>
+                            <ArrowRight className="h-4 w-4 text-cream/30 transition-all group-hover:translate-x-0.5 group-hover:text-glow" />
+                        </div>
+
+                        <p className="font-display truncate text-sm font-bold text-cream">
+                            {u.title ?? `Unit ${i + 1}`}
+                        </p>
+
+                        {u.description && (
+                            <p className="mt-1 line-clamp-2 text-xs leading-relaxed text-cream/45">
+                                {u.description}
+                            </p>
+                        )}
+
+                        <p className="mt-3 text-[10px] font-semibold uppercase tracking-widest text-cream/35">
+                            {mastered}✓ · {open} open
+                        </p>
+                    </button>
+                )
+            })}
         </div>
     )
 }
