@@ -25,10 +25,7 @@ import { functionalJudge } from '../lib/functionalJudge'
 
 const router = Router()
 
-// ── Normalizers: seed content types → lesson player types ──
-const TEACH_TYPE: Record<string, string> = {
-    story: 'explain', explanation: 'explain', rule: 'explain', context: 'explain', mission: 'explain',
-}
+// ── Normalizers removed (Phase 21): player is scene-engine only ──
 
 const TYPE_ICON: Record<string, string> = {
     STORY: 'book-open', DRILL: 'puzzle', IMMERSION: 'ear', PROFESSIONAL: 'lightbulb', MISSION: 'message-circle',
@@ -53,67 +50,6 @@ const DIMENSION_BY_TYPE: Record<string, string> = {
  */
 function blend(old: number | null | undefined, score: number): number {
     return old == null ? score : Math.round(old * 0.6 + score * 0.4)
-}
-
-function normalizeTeach(blocks: any[]): any[] {
-    return (blocks ?? [])
-        .map((b: any) => {
-            if (!b || typeof b !== 'object') return null
-            // `pattern` blocks carry examples[], not text → render as explain
-            if (b.type === 'pattern') {
-                const list = Array.isArray(b.examples) ? b.examples : []
-                return { type: 'explain', text: 'Patterns: ' + list.join(' · ') }
-            }
-            const mapped = { ...b, type: TEACH_TYPE[b.type] ?? b.type }
-            // drop explain-style blocks with nothing to render
-            if (mapped.type === 'explain' && !mapped.text) return null
-            return mapped
-        })
-        .filter(Boolean) as any[]
-}
-
-/**
- * Map seed activity types → player types.
- * PRODUCTION types (recall/translate/guided_speaking/free_retrieval/shadowing)
- * become `speak`: the mic is the PRIMARY input; typing is a fallback.
- * Form vs function: the spoken transcript is graded tolerantly (gradeLocal + judge).
- */
-function normalizeExercise(ex: any): any | null {
-    if (!ex || typeof ex !== 'object') return null
-    const accept: string[] = Array.isArray(ex.accept)
-        ? ex.accept
-        : Array.isArray(ex.acceptedAnswers) ? ex.acceptedAnswers : []
-
-    switch (ex.type) {
-        case 'recognition':
-        case 'meaning':
-        case 'selection':
-            if (!Array.isArray(ex.options) || ex.options.length < 2 || !ex.answer) return null
-            return { type: 'mcq', prompt: ex.prompt, options: ex.options, answer: ex.answer, accept }
-        case 'recall':
-        case 'translate':
-        case 'guided_speaking':
-        case 'free_retrieval':
-        case 'shadowing':
-        case 'speak':
-            if (!ex.answer) return null
-            return { type: 'speak', prompt: ex.prompt ?? `How do you say: "${ex.answer}"?`, answer: ex.answer, accept }
-        case 'completion':
-            return { type: 'fill_blank', prompt: ex.prompt ?? 'Complete the expression.', answer: ex.answer ?? '', accept }
-        case 'listening': {
-            const audio = ex.audio ?? ex.answer ?? ex.input?.target
-            if (!audio) return null
-            return { type: 'listen_type', prompt: ex.prompt ?? 'Listen and type what you hear.', audio, answer: audio, accept }
-        }
-        case 'mcq':
-        case 'fill_blank':
-        case 'listen_choose':
-        case 'listen_type':
-        case 'match':
-            return { ...ex, accept }
-        default:
-            return null // transformation/roleplay — engine types, not renderable yet
-    }
 }
 
 router.get('/api/v1/lessons/:conceptId', async (req: Request, res: Response, next: NextFunction) => {
@@ -164,18 +100,16 @@ router.get('/api/v1/lessons/:conceptId', async (req: Request, res: Response, nex
                 icon: TYPE_ICON[e.type] ?? 'book-open',
                 type: e.type,
                 xpReward: perPartXp,
-                content,                                        
+                content,
                 journey: content.subLessons ?? [],
-                assessment: e.assessment ?? null, 
-                teach: normalizeTeach(content.teach),
-                exercises: (content.exercises ?? []).map(normalizeExercise),
-                realLife: content.realLife ?? null,
+                assessment: e.assessment ?? null,
             }
         })
 
         const flavorOf = (type: string) => {
             const e = comp!.experiences.find(x => x.type === type)
-            return ((e?.content as any)?.teach?.[0]?.text) ?? null
+            const content = (e?.content as any) ?? {}
+            return content.modePurpose ?? content.subLessons?.[0]?.objective ?? null
         }
 
         res.json({

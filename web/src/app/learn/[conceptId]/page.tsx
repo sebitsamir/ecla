@@ -14,6 +14,7 @@ import {
 } from '@/lib/memory'
 import { streetEncounter } from '@/content/scenes/streetEncounter'
 import { MODE_LABELS, MODE_PURPOSE, normalizeMode } from '@/lib/modeStages'
+import { retrievalTargetsFromLesson } from '@/lib/retrievalTargets'
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL ?? 'http://localhost:4000'
 
@@ -64,10 +65,7 @@ function LearnPlayer() {
         ? sceneFor(lesson.code, lesson, mode)
         : undefined
 
-    const storyExp = (lesson?.subLessons ?? []).find((s: any) => s.type === 'STORY')
-    const retrievalTarget = (storyExp?.exercises ?? [])
-        .filter((e: any) => e.answer)
-        .map((e: any) => String(e.answer))
+    const retrievalTarget = lesson ? retrievalTargetsFromLesson(lesson, 'STORY') : []
 
     const learned = ['CONTROLLED', 'TRANSFERRED', 'RETAINED'].includes(lesson?.mastery?.level ?? '')
     const learnerName = memory?.name ?? getLearnerName()

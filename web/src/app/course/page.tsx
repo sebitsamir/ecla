@@ -9,6 +9,7 @@ import { useEffect, useState } from 'react'
 import { useAuth } from '@clerk/nextjs'
 import AppShell from '@/components/layout/AppShell'
 import StageCard, { type CourseUnit } from '@/components/ecla/course/StageCard'
+import CompetencyGraph from '@/components/ecla/course/CompetencyGraph'
 import AbilityProfile from '@/components/ecla/dashboard/AbilityProfile'
 import NextActionCard from '@/components/ecla/dashboard/NextActionCard'
 import { fetchSummary, type LearnerSummary } from '@/lib/summary'
@@ -64,6 +65,17 @@ export default function CoursePage() {
     const hereId = course?.units.find(u => (u.counts?.developing ?? 0) > 0)?.id
         ?? course?.units.find(u => (u.counts?.upcoming ?? 0) > 0)?.id
 
+    const graphNodes = (course?.units ?? []).flatMap(u =>
+        (u.competencies ?? []).map(c => ({
+            id: String(c.id),
+            code: c.code,
+            title: c.code,
+            status: c.status,
+            href: `/learn/${c.id}`,
+            prerequisites: (c as { prerequisites?: string[] }).prerequisites ?? [],
+        })),
+    )
+
     return (
         <AppShell>
             {!course ? (
@@ -102,6 +114,7 @@ export default function CoursePage() {
                     {/* ── Intelligence rail ── */}
                     <div className="min-w-0 space-y-5 xl:sticky xl:top-20 xl:self-start">
                         {summary && <NextActionCard action={summary.nextAction} />}
+                        <CompetencyGraph nodes={graphNodes} />
                         {summary && <AbilityProfile dimensions={summary.dimensions} />}
                     </div>
                 </div>

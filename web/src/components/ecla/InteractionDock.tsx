@@ -2,12 +2,13 @@
 
 /**
  * InteractionDock — the learner's action surface.
- * Phase S3.4: fixed TS narrowing (speak vs unexpected) and RepairDock prop name.
+ * Phase 23: MicButton + mic error surfacing. Phase 25: read/write beats.
  */
 import { useState } from 'react'
-import { Mic, Keyboard, Send, Volume2 } from 'lucide-react'
+import { Keyboard, Send } from 'lucide-react'
 import type { SceneEngine } from '@/hooks/useSceneEngine'
 import type { SceneOption } from '@/lib/sceneTypes'
+import MicButton from './MicButton'
 import RepairDock from './RepairDock'
 
 export default function InteractionDock({ engine, emphasize = false }: {
@@ -16,7 +17,7 @@ export default function InteractionDock({ engine, emphasize = false }: {
 }) {
     const [typeMode, setTypeMode] = useState(false)
     const [typed, setTyped] = useState('')
-    const { beat, micState, attempts, repairOpen, showHints, hintLevel } = engine
+    const { beat, micState, micError, attempts, repairOpen, showHints, hintLevel } = engine
 
     if (!beat) return null
 
@@ -38,6 +39,27 @@ export default function InteractionDock({ engine, emphasize = false }: {
         )
     }
 
+    // ── Read stage (Phase 25) ──
+    if (beat.kind === 'read') {
+        return (
+            <div className="space-y-3">
+                <div className="rounded-xl border border-white/10 bg-[#1A1A24] px-4 py-4">
+                    <p className="text-base text-cream leading-relaxed font-medium">{beat.passage}</p>
+                </div>
+                <p className="text-sm text-cream/80">{beat.prompt}</p>
+                {beat.options.map((opt: SceneOption, i: number) => (
+                    <button
+                        key={i}
+                        onClick={() => engine.pick(opt)}
+                        className="w-full rounded-xl border border-white/10 bg-[#1A1A24] px-4 py-3 text-left text-sm text-cream transition-all duration-200 hover:border-glow/40 hover:bg-white/5 active:scale-[0.98]"
+                    >
+                        {opt.label}
+                    </button>
+                ))}
+            </div>
+        )
+    }
+
     // ── Listen stage ──
     if (beat.kind === 'listen') {
         return (
@@ -46,23 +68,24 @@ export default function InteractionDock({ engine, emphasize = false }: {
                 className="group w-full rounded-xl border border-white/10 bg-[#1A1A24] px-4 py-4 text-sm text-cream/80 transition-all duration-200 hover:border-glow/40 hover:bg-white/5 active:scale-[0.98]"
             >
                 <span className="flex items-center justify-center gap-2">
-                    <Volume2 className="h-4 w-4 text-glow" />
+                    <span className="text-glow text-xs font-bold uppercase tracking-wider">Tap to hear</span>
                     <span>{beat.es}</span>
                 </span>
             </button>
         )
     }
 
-    // ── Speak / unexpected stage (mic + typing fallback) ──
-    if (beat.kind === 'speak' || beat.kind === 'unexpected') {
-        // Safe narrowing: only `speak` carries prompt/hints.
-        const prompt = beat.kind === 'speak'
+    // ── Speak / write / unexpected stage ──
+    if (beat.kind === 'speak' || beat.kind === 'write' || beat.kind === 'unexpected') {
+        const isWrite = beat.kind === 'write'
+        const prompt = beat.kind === 'speak' || beat.kind === 'write'
             ? beat.prompt
             : 'Respond naturally — or ask for help.'
         const hints = beat.kind === 'speak' ? (beat.hints ?? []) : []
         const currentHint = showHints && hints.length > 0
             ? hints[Math.min(hintLevel, hints.length - 1)]
             : null
+        const preferType = isWrite || typeMode
 
         return (
             <div className="space-y-4">
@@ -78,29 +101,31 @@ export default function InteractionDock({ engine, emphasize = false }: {
                     </p>
                 )}
 
-                {!typeMode ? (
+                {micError && (
+                    <p className="text-center text-xs text-amber-400">
+                        {micError === 'denied'
+                            ? 'Microphone blocked — type your response instead.'
+                            : 'Voice unavailable — type your response instead.'}
+                    </p>
+                )}
+
+                {!preferType ? (
                     <div className="flex flex-col items-center gap-3">
-                        <button
-                            onClick={micState === 'recording' ? engine.stopMic : engine.startMic}
-                            className={`rounded-full flex items-center justify-center transition-all duration-300 ${
-                                emphasize
-                                    ? 'h-20 w-20 bg-violet-600 text-white shadow-[0_0_40px_rgba(139,92,246,0.4)]'
-                                    : 'h-14 w-14 bg-white/10 text-cream hover:bg-white/15'
-                            } ${micState === 'recording' ? 'animate-pulse bg-red-500 shadow-[0_0_30px_rgba(239,68,68,0.6)]' : ''} active:scale-95`}
-                            aria-label={micState === 'recording' ? 'Stop recording' : 'Start recording'}
-                        >
-                            <Mic className={emphasize ? 'h-8 w-8' : 'h-5 w-5'} />
-                        </button>
-                        <p className="text-[11px] text-cream/40">
-                            {micState === 'recording' ? 'Listening…' : 'Tap to speak'}
-                        </p>
-                        <button
-                            onClick={() => setTypeMode(true)}
-                            className="inline-flex items-center gap-1.5 text-[11px] font-bold text-cream/40 hover:text-cream transition-colors duration-200"
-                        >
-                            <Keyboard className="h-3 w-3" />
-                            Type instead
-                        </button>
+                        <MicButton
+                            state={micState}
+                            size={emphasize ? 'lg' : 'md'}
+                            onTap={micState === 'recording' ? engine.stopMic : engine.startMic}
+                            label={micState === 'recording' ? 'Listening…' : micState === 'processing' ? 'Processing…' : 'Tap to speak'}
+                        />
+                        {!isWrite && (
+                            <button
+                                onClick={() => setTypeMode(true)}
+                                className="inline-flex items-center gap-1.5 text-[11px] font-bold text-cream/40 hover:text-cream transition-colors duration-200"
+                            >
+                                <Keyboard className="h-3 w-3" />
+                                Type instead
+                            </button>
+                        )}
                     </div>
                 ) : (
                     <div className="flex items-center gap-2">
@@ -114,7 +139,7 @@ export default function InteractionDock({ engine, emphasize = false }: {
                                     setTyped('')
                                 }
                             }}
-                            placeholder="Type your response…"
+                            placeholder={isWrite ? 'Write your response…' : 'Type your response…'}
                             className="flex-1 rounded-xl border border-white/10 bg-[#1A1A24] px-4 py-2.5 text-sm text-cream placeholder:text-cream/30 focus:outline-none focus:border-violet-500 transition-all duration-200"
                             autoFocus
                         />
@@ -131,6 +156,14 @@ export default function InteractionDock({ engine, emphasize = false }: {
                         >
                             <Send className="h-4 w-4" />
                         </button>
+                        {!isWrite && (
+                            <button
+                                onClick={() => setTypeMode(false)}
+                                className="text-[11px] text-cream/40 hover:text-cream"
+                            >
+                                Mic
+                            </button>
+                        )}
                     </div>
                 )}
 

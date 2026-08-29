@@ -58,6 +58,14 @@ export function validatePhases(phases: PhaseContent[], knownCodes: Set<string>):
                 else if (!knownCodes.has(r) && !proposed.has(r))
                     errors.push(`${id}: retention.reuseIn unknown code ${r}`)
             }
+            for (const rd of c.reading ?? []) {
+                if (!rd.passage?.trim()) errors.push(`${id}: reading missing passage`)
+                if (rd.passage && rd.passage.length > 280) warnings.push(`${id}: reading passage may be long for Pre-A1`)
+                if (!rd.options?.length || rd.options.length < 2) errors.push(`${id}: reading needs 2+ options`)
+            }
+            for (const wr of c.writing ?? []) {
+                if (!wr.prompt?.trim()) errors.push(`${id}: writing missing prompt`)
+            }
         }
     }
     return { passed: errors.length === 0, errors, warnings }

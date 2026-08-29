@@ -4,6 +4,7 @@ import os from 'os'
 import path from 'path'
 import { groq } from '../lib/groq'
 import { getOrSyncUserFast } from '../lib/auth'
+import { assessIntelligibility } from '../lib/pronunciationAssess'
 
 const router = Router()
 
@@ -34,6 +35,23 @@ router.post(
             const text = (transcription.text ?? '').trim()
             console.log(`[VOICE] ${Date.now() - started}ms → "${text}"`)
             res.json({ text })
+        } catch (error) { next(error) }
+    }
+)
+
+/** Phase 24: intelligibility assessment (transcript-based; upgradeable to acoustic). */
+router.post(
+    '/api/v1/voice/assess',
+    async (req: Request, res: Response, next: NextFunction) => {
+        try {
+            await getOrSyncUserFast(req)
+            const { transcript, target } = req.body ?? {}
+            if (typeof transcript !== 'string' || typeof target !== 'string') {
+                res.status(400).json({ error: 'transcript and target required' })
+                return
+            }
+            const result = assessIntelligibility(transcript, target)
+            res.json(result)
         } catch (error) { next(error) }
     }
 )

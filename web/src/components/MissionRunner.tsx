@@ -13,10 +13,12 @@
 
 import { useEffect, useRef, useState } from 'react'
 import { useAuth } from '@clerk/nextjs'
-import { Mic, Square, Loader2, X, Target, MessageCircle, Keyboard, CheckCircle2, XCircle, RefreshCcw, AlertTriangle } from 'lucide-react'
+import { Mic, Loader2, X, Target, MessageCircle, Keyboard, CheckCircle2, XCircle, RefreshCcw, AlertTriangle } from 'lucide-react'
 import Firefly from '@/components/Firefly'
 import { useEquippedGlow } from '@/lib/useEquippedGlow'
 import { speakSpanish, cancelSpeech } from '@/lib/speech'
+import { useMic } from '@/hooks/useMic'
+import MicButton from '@/components/ecla/MicButton'
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL ?? 'http://localhost:4000'
 const REPAIR_MARKERS = ['no entiendo', 'puedes repetir', 'despacio', 'significa', 'otra vez']
@@ -31,15 +33,14 @@ export default function MissionRunner({ competencyId, onClose }: { competencyId:
     const [missing, setMissing] = useState(false)
     const [phase, setPhase] = useState<'intro' | 'ai' | 'learner' | 'processing' | 'evaluating' | 'result'>('intro')
     const [history, setHistory] = useState<Turn[]>([])
-    const [recording, setRecording] = useState(false)
     const [heard, setHeard] = useState<string | null>(null)
     const [repairCount, setRepairCount] = useState(0)
     const [result, setResult] = useState<any>(null)
     const [typeMode, setTypeMode] = useState(false)
     const [typed, setTyped] = useState('')
 
-    const mediaRecorderRef = useRef<MediaRecorder | null>(null)
-    const chunksRef = useRef<Blob[]>([])
+    const learnerTurnRef = useRef<(text: string) => void>(() => {})
+    const mic = useMic(getToken, text => learnerTurnRef.current(text))
 
     useEffect(() => {
         async function load() {
@@ -80,11 +81,10 @@ export default function MissionRunner({ competencyId, onClose }: { competencyId:
 
     const start = () => aiSay([])
 
-    /** Learner turn → transcribe → detect repair → AI responds */
+    /** Learner turn → detect repair → AI responds */
     const learnerTurn = async (text: string) => {
         if (!text.trim()) return
         const clean = text.trim()
-        setHeard(clean)
         if (REPAIR_MARKERS.some(m => clean.toLowerCase().includes(m))) setRepairCount(c => c + 1)
         const next = [...history, { role: 'learner' as const, text: clean }]
         setHistory(next)
@@ -93,40 +93,20 @@ export default function MissionRunner({ competencyId, onClose }: { competencyId:
         aiSay(next)
     }
 
-    const startRecording = async () => {
+    learnerTurnRef.current = learnerTurn
+
+    const startRecording = () => {
         cancelSpeech()
-        try {
-            const stream = await navigator.mediaDevices.getUserMedia({ audio: true })
-            const rec = new MediaRecorder(stream)
-            mediaRecorderRef.current = rec
-            chunksRef.current = []
-            rec.ondataavailable = e => { if (e.data.size > 0) chunksRef.current.push(e.data) }
-            rec.onstop = async () => {
-                stream.getTracks().forEach(t => t.stop())
-                const blob = new Blob(chunksRef.current, { type: 'audio/webm' })
-                setPhase('processing')
-                try {
-                    const token = await getToken()
-                    const res = await fetch(`${API_URL}/api/v1/voice/transcribe`, {
-                        method: 'POST',
-                        headers: { Authorization: `Bearer ${token}`, 'Content-Type': blob.type },
-                        body: blob,
-                    })
-                    const data = await res.json()
-                    if (data.text?.trim()) learnerTurn(data.text)
-                    else setPhase('learner')
-                } catch { setPhase('learner') }
-            }
-            rec.start()
-            setRecording(true)
-        } catch { setTypeMode(true); setPhase('learner') }
+        if (mic.error) setTypeMode(true)
+        else mic.start()
     }
 
-    const stopRecording = () => {
-        const rec = mediaRecorderRef.current
-        if (rec && rec.state === 'recording') rec.stop()
-        setRecording(false)
-    }
+    const stopRecording = () => mic.stop()
+
+    useEffect(() => {
+        if (mic.state === 'processing') setPhase('processing')
+        else if (phase === 'processing' && mic.state === 'idle') setPhase('learner')
+    }, [mic.state, phase])
 
     /** End mission → FUNCTION evaluation */
     const finish = async () => {
@@ -207,13 +187,17 @@ export default function MissionRunner({ competencyId, onClose }: { competencyId:
                                 {phase === 'processing' && <p className="text-sm text-cream/60 flex items-center justify-center gap-2"><Loader2 className="h-4 w-4 animate-spin" /> Checking what you said…</p>}
                                 {phase === 'learner' && !typeMode && (
                                     <>
-                                        <button
-                                            onClick={recording ? stopRecording : startRecording}
-                                            className={`mx-auto flex h-20 w-20 items-center justify-center rounded-full transition-all ${recording ? 'bg-coral text-night-900 animate-pulse' : 'bg-glow text-night-900 hover:bg-glow-bright'}`}
-                                        >
-                                            {recording ? <Square className="h-7 w-7" /> : <Mic className="h-7 w-7" />}
-                                        </button>
-                                        <p className="text-xs text-cream/50">{recording ? 'Listening… tap to finish' : 'Your turn — tap and speak'}</p>
+                                        <MicButton
+                                            state={mic.state}
+                                            size="lg"
+                                            onTap={mic.state === 'recording' ? stopRecording : startRecording}
+                                            label={mic.state === 'recording' ? 'Listening… tap to finish' : 'Your turn — tap and speak'}
+                                        />
+                                        {mic.error && (
+                                            <p className="text-xs text-amber-400">
+                                                {mic.error === 'denied' ? 'Microphone blocked.' : 'Voice unavailable.'}
+                                            </p>
+                                        )}
                                         <button onClick={() => setTypeMode(true)} className="text-[11px] text-cream/40 flex items-center gap-1 mx-auto">
                                             <Keyboard className="h-3 w-3" /> Prefer typing?
                                         </button>

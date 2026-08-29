@@ -83,6 +83,23 @@ export type SceneBeat =
         challenge?: ChallengeSpec
         stage?: StageName
         captureName?: boolean
+        /** Phase 24: call /voice/assess and record intelligibility evidence. */
+        assessIntelligibility?: boolean
+    }
+    | {
+        kind: 'read'
+        passage: string
+        prompt: string
+        stage?: StageName
+        options: SceneOption[]
+    }
+    | {
+        kind: 'write'
+        prompt: string
+        expected: string[]
+        accept?: string[]
+        open?: boolean
+        stage?: StageName
     }
     | {
         kind: 'unexpected'
@@ -196,6 +213,7 @@ export const STAGE_META: Record<StageName, {
     UNDERSTAND: { order: 1, category: 'receptive',  interactive: true,  immersive: false },
     NOTICE:     { order: 2, category: 'receptive',  interactive: true,  immersive: false },
     RECOGNIZE:  { order: 3, category: 'receptive',  interactive: true,  immersive: false },
+    // read beats use UNDERSTAND/NOTICE stages; write beats use PRODUCE
     RETRIEVE:   { order: 4, category: 'productive', interactive: true,  immersive: false },
     PRODUCE:    { order: 5, category: 'productive', interactive: true,  immersive: false },
     INTERACT:   { order: 6, category: 'productive', interactive: true,  immersive: false },
