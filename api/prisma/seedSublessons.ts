@@ -214,66 +214,6 @@ function targetChunkList(target: Target): string[] {
     return target.chunks.length ? target.chunks.slice(0, 6) : target.examples.slice(0, 6);
 }
 
-// ─────────────── legacy bridge exercises (player-native) ───────────────
-
-/**
- * Renderable + gradable exercises for the CURRENT lesson player.
- * Mode-differentiated ordering; every item carries accept[] (Phase-1 ready).
- * The engine payload (subLessons) carries the pedagogical depth; this bridge
- * keeps today's player fully functional.
- */
-function legacyExercises(type: ExperienceType, target: Target, r: () => number): any[] {
-    const vocab = target.vocabItems;
-    const example = targetExample(target);
-    const ex: any[] = [];
-
-    const match: any[] = vocab.length >= 3
-        ? [{ type: "match", pairs: shuffle(r, vocab).slice(0, 5).map((v) => ({ a: v.word, b: v.translation })) }]
-        : [];
-
-    const blanks: any[] = [];
-    for (const p of target.patterns.slice(0, 2)) {
-        const b = blankPattern(p);
-        if (b) blanks.push({ type: "fill_blank", prompt: b.prompt, answer: b.answer, accept: b.accept });
-    }
-
-    const pool = shuffle(r, [...target.examples, ...target.patterns]);
-    const listenChoose: any[] = pool.length >= 2
-        ? [{ type: "listen_choose", prompt: "Listen and choose what you hear", audio: pool[0], options: pool.slice(0, 4), answer: pool[0], accept: [] }]
-        : [];
-
-    const listenType: any[] = target.examples[0]
-        ? [{ type: "listen_type", audio: example, answer: example, accept: target.examples.slice(1) }]
-        : [];
-
-    const mcqs: any[] = [];
-    for (const v of shuffle(r, vocab).slice(0, 2)) {
-        const d = shuffle(r, vocab.filter((x) => x.word !== v.word).map((x) => x.translation)).slice(0, 3);
-        if (d.length === 3) {
-            mcqs.push({
-                type: "mcq",
-                prompt: `What does “${v.word}” mean?`,
-                options: shuffle(r, [v.translation, ...d]),
-                answer: v.translation,
-                accept: [],
-            });
-        }
-    }
-
-    const translates: any[] = vocab
-        .slice(0, 2)
-        .map((v) => ({ type: "translate", prompt: `How do you say “${v.translation}”?`, answer: v.word, accept: [] }));
-
-    switch (type) {
-        case ExperienceType.STORY: ex.push(...listenChoose, ...mcqs, ...blanks, ...listenType); break;
-        case ExperienceType.DRILL: ex.push(...match, ...blanks, ...mcqs, ...translates); break;
-        case ExperienceType.IMMERSION: ex.push(...listenType, ...listenChoose, ...match); break;
-        case ExperienceType.PROFESSIONAL: ex.push(...translates, ...mcqs, ...blanks); break;
-        case ExperienceType.MISSION: ex.push(...listenChoose, ...mcqs); break; // warm-ups only
-    }
-    return ex.slice(0, 6);
-}
-
 // ─────────────────────── support ladder (§3.4) ───────────────────────
 
 function supportFor(stage: Stage): SubLesson["support"] {
@@ -434,12 +374,19 @@ function buildSubLesson(competency: any, target: Target, stage: Stage, order: nu
                     expectedOutput: `They are trying to ${canDo.toLowerCase()}.`,
                 }),
                 makeActivity(competency, target, stage, 1, {
-                    type: "comprehension",
-                    title: "Meaning in a second context",
-                    purpose: "Confirm that meaning survives a new but familiar situation.",
-                    prompt: "Choose what the learner should understand from the exchange.",
-                    input: { scenarioVariant: "new_context_same_function", target: example },
-                    expectedOutput: "correct_communicative_intent",
+                    type: "reading_comprehension",
+                    title: "Read and understand",
+                    purpose: "Connect written Spanish to communicative meaning.",
+                    prompt: "Read the line. What is happening?",
+                    input: {
+                        passage: example,
+                        options: [
+                            `They are trying to ${canDo.toLowerCase()}.`,
+                            "They are ending the conversation.",
+                            "They are asking for help.",
+                        ],
+                    },
+                    expectedOutput: `They are trying to ${canDo.toLowerCase()}.`,
                 }),
             );
             break;
@@ -527,12 +474,12 @@ function buildSubLesson(competency: any, target: Target, stage: Stage, order: nu
                     ],
                 }),
                 makeActivity(competency, target, stage, 1, {
-                    type: "free_retrieval",
-                    title: "Produce without the sentence frame",
-                    purpose: "Check whether the learner can retrieve the function independently.",
-                    prompt: "The situation is given, but the target phrase is not.",
+                    type: "writing_production",
+                    title: "Write it yourself",
+                    purpose: "Connect literacy to production at beginner level.",
+                    prompt: `Write a short sentence to ${canDo.toLowerCase()}.`,
                     input: { scenario: `You need to ${canDo.toLowerCase()}.` },
-                    expectedOutput: "independent_communicative_response",
+                    expectedOutput: "written_communicative_response",
                 }),
             );
             break;
@@ -679,12 +626,17 @@ function assessmentFor(competency: any, target: Target): JsonObject {
 
 function buildExperienceContent(competency: any, target: Target, type: ExperienceType): JsonObject {
     const canDo = competency.canDo as string;
-    const r = mulberry32(hashSeed(`${competency.code}:${type}`));
-    const example = targetExample(target);
-
     const subLessons = STAGES.map((stage, index) => buildSubLesson(competency, target, stage, index + 1));
 
-    const core = {
+    const modePurpose: Record<ExperienceType, string> = {
+        [ExperienceType.STORY]: "context_and_meaning",
+        [ExperienceType.DRILL]: "retrieval_and_automaticity",
+        [ExperienceType.IMMERSION]: "spontaneous_interaction",
+        [ExperienceType.PROFESSIONAL]: "purposeful_application",
+        [ExperienceType.MISSION]: "transfer_assessment",
+    };
+
+    return {
         schema: VERSION,
         language: "es",
         level: "PRE_A1",
@@ -706,119 +658,68 @@ function buildExperienceContent(competency: any, target: Target, type: Experienc
             culture: target.culture ?? null,
         },
         subLessons,
+        modePurpose: modePurpose[type],
     };
-
-    // Legacy-compatible bridge: the CURRENT player consumes teach/exercises/realLife;
-    // the future engine consumes subLessons + assessment.
-    switch (type) {
-        case ExperienceType.STORY:
-            return {
-                ...core,
-                modePurpose: "context_and_meaning",
-                teach: [
-                    { type: "story", text: `You enter a simple situation where you need to ${canDo.toLowerCase()}.` },
-                    { type: "context", text: `Listen for the language people use to ${canDo.toLowerCase()}.` },
-                ],
-                exercises: legacyExercises(type, target, r),
-                realLife: { prompt: canDo, chatSeed: example, evaluation: "function_first" },
-            };
-        case ExperienceType.DRILL:
-            return {
-                ...core,
-                modePurpose: "retrieval_and_automaticity",
-                teach: [
-                    { type: "rule", text: target.grammar ?? `Practice the language needed to ${canDo.toLowerCase()}.` },
-                    { type: "pattern", examples: target.patterns.slice(0, 6) },
-                ],
-                exercises: legacyExercises(type, target, r),
-                realLife: { prompt: canDo, chatSeed: example, evaluation: "function_first" },
-            };
-        case ExperienceType.IMMERSION:
-            return {
-                ...core,
-                modePurpose: "spontaneous_interaction",
-                teach: [
-                    { type: "context", text: target.culture ?? `Notice how people naturally ${canDo.toLowerCase()} in context.` },
-                ],
-                exercises: legacyExercises(type, target, r),
-                realLife: {
-                    prompt: `You are in a natural conversation. ${canDo}`,
-                    chatSeed: example,
-                    partnerBehavior: "natural_not_teacher_like",
-                    evaluation: "communicative_success_plus_form_diagnostics",
-                },
-            };
-        case ExperienceType.PROFESSIONAL:
-            return {
-                ...core,
-                modePurpose: "purposeful_application",
-                teach: [
-                    { type: "context", text: `Use clear, polite language when you need to ${canDo.toLowerCase()}.` },
-                ],
-                exercises: legacyExercises(type, target, r),
-                realLife: { prompt: `A practical/workplace variation: ${canDo}`, chatSeed: example, register: "polite_clear_beginner" },
-            };
-        case ExperienceType.MISSION:
-            return {
-                ...core,
-                modePurpose: "transfer_assessment",
-                teach: [{ type: "mission", text: `Complete a real-world task: ${canDo}` }],
-                exercises: legacyExercises(type, target, r), // warm-ups; the mission itself is realLife
-                realLife: {
-                    prompt: canDo,
-                    chatSeed: example,
-                    support: "minimal",
-                    unexpectedVariation: true,
-                    evaluation: "evidence_rubric",
-                },
-            };
-    }
 }
 
-/** Merge hand-written content over generic generation (legacy bridge + engine payload). */
+/** Merge hand-written content over generic generation (engine payload only — Phase 21). */
 function applyOverride(base: any, o: CompetencyContent | undefined, type: ExperienceType, target: Target): any {
     if (!o) return base
-    if (o.pronunciation?.length) base.teach.push(...o.pronunciation.map(p => ({ type: 'tip', text: `${p.target}: ${p.note}` })))
-    if (o.culture) base.teach.push({ type: 'context', text: o.culture })
-    if (o.listening?.length) base.exercises.push(...o.listening.map(l => ({ type: 'listening', prompt: l.action, audio: l.utterance, answer: l.utterance, accept: [] })))
+    if (o.pronunciation?.length) {
+        base.languageTargets.pronunciation = o.pronunciation.map(p => `${p.target}: ${p.note}`).join(' · ')
+    }
+    if (o.culture) base.languageTargets.culture = o.culture
+
+    const patchStage = (stage: string, actType: string, patch: (act: any) => void) => {
+        const sl = base.subLessons?.find((s: any) => s.stage === stage)
+        const act = sl?.activities?.find((a: any) => a.type === actType)
+        if (act) patch(act)
+    }
+
+    if (o.listening?.length) {
+        patchStage('ENCOUNTER', 'listening', act => {
+            act.input = { ...(act.input ?? {}), utterances: o.listening!.map(l => l.utterance) }
+        })
+    }
 
     switch (type) {
         case ExperienceType.STORY:
             if (o.story) {
-                base.teach[0] = { type: 'story', text: o.story.beat }   // surfaces as variant.storyBeat
-                if (o.story.dialogue?.length) base.teach.splice(1, 0, ...o.story.dialogue.map(d => ({ type: 'example', es: d.line, en: '' })))
+                patchStage('ENCOUNTER', 'context', act => {
+                    act.input = { ...(act.input ?? {}), scenario: o.story!.beat }
+                })
             }
             break
         case ExperienceType.DRILL:
             if (o.drill?.length) {
-                base.exercises = o.drill.map(d => d.kind === 'mcq'
-                    ? { type: 'mcq', prompt: d.prompt, options: unique([d.answer, ...(d.accept ?? []), ...target.examples]).slice(0, 4), answer: d.answer, accept: d.accept ?? [] }
-                    : d.kind === 'shadowing'
-                        ? { type: 'listening', prompt: d.prompt ?? 'Listen and repeat.', audio: d.answer, answer: d.answer, accept: d.accept ?? [] }
-                        : { type: 'recall', prompt: d.prompt, answer: d.answer, accept: d.accept ?? [] })
+                const item = o.drill[0]
+                patchStage('RETRIEVE', 'recall', act => {
+                    act.prompt = item.prompt
+                    act.expectedOutput = { accepted: [item.answer, ...(item.accept ?? [])] }
+                })
             }
             break
         case ExperienceType.IMMERSION:
             if (o.immersion?.script?.length) {
                 const lines = o.immersion.script.map(s => s.line)
-                base.teach[0] = { type: 'context', text: o.immersion.variationNote ?? 'Listen to a natural exchange.' }
-                base.exercises.push({ type: 'listening', prompt: 'Listen. Type the last line you hear.', audio: lines[lines.length - 1], answer: lines[lines.length - 1], accept: lines })
+                patchStage('ENCOUNTER', 'listening', act => {
+                    act.input = { ...(act.input ?? {}), utterances: lines }
+                })
             }
             break
         case ExperienceType.PROFESSIONAL:
             if (o.professional) {
-                base.teach[0] = { type: 'context', text: o.professional.scenario }
-                if (o.professional.registerNote) base.teach.push({ type: 'tip', text: o.professional.registerNote })
+                patchStage('ENCOUNTER', 'context', act => {
+                    act.input = { ...(act.input ?? {}), scenario: o.professional!.scenario }
+                })
             }
             break
         case ExperienceType.MISSION:
             if (o.mission) {
-                base.realLife = {
-                    ...base.realLife, prompt: o.mission.scenario,
+                base.missionMeta = {
+                    scenario: o.mission.scenario,
                     acceptableResponses: o.mission.acceptableResponses,
                     unexpectedEvent: o.mission.unexpectedEvent ?? null,
-                    support: 'minimal', unexpectedVariation: !!o.mission.unexpectedEvent,
-                    evaluation: 'evidence_rubric',
                 }
             }
             break

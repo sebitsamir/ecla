@@ -45,6 +45,28 @@ const MAX_ATTEMPTS = 3
 const PACE_MS = 500
 const ACTION_MS = 1300
 const TTS_BACKSTOP_MS = 4000
+const API_URL = process.env.NEXT_PUBLIC_API_URL ?? 'http://localhost:4000'
+
+/** Phase 24: assess intelligibility via API. */
+async function assessPronunciation(
+    getToken: () => Promise<string | null>,
+    transcript: string,
+    target: string,
+): Promise<{ intelligible: boolean; score: number } | null> {
+    try {
+        const token = await getToken()
+        const res = await fetch(`${API_URL}/api/v1/voice/assess`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+            body: JSON.stringify({ transcript, target }),
+        })
+        if (!res.ok) return null
+        const data = await res.json()
+        return { intelligible: !!data.intelligible, score: Number(data.score) || 0 }
+    } catch {
+        return null
+    }
+}
 
 /** Repair = survival skill. Any of these counts as successful communication. */
 const REPAIR_RE = /(no entiendo|puedes repetir|repite|m[áa]s despacio|c[óo]mo se dice|qu[ée] significa|otra vez)/i
@@ -69,6 +91,7 @@ type EvidenceTracker = {
     transfer: { correct: number; total: number }
     supportUsed: number
     repairUsed: boolean
+    intelligibility: { scores: number[]; attempts: number }
 }
 
 const initialEvidence = (): EvidenceTracker => ({
@@ -79,6 +102,7 @@ const initialEvidence = (): EvidenceTracker => ({
     transfer: { correct: 0, total: 0 },
     supportUsed: 0,
     repairUsed: false,
+    intelligibility: { scores: [], attempts: 0 },
 })
 
 export function useSceneEngine({ scene, support = 'medium', getToken, onStage }: {
@@ -170,8 +194,17 @@ export function useSceneEngine({ scene, support = 'medium', getToken, onStage }:
 
     const handleSpeech = async (text: string) => {
         const b = beatsRef.current[idx]
-        if (!b || (b.kind !== 'speak' && b.kind !== 'unexpected')) return
+        if (!b || (b.kind !== 'speak' && b.kind !== 'write' && b.kind !== 'unexpected')) return
         push({ who: 'you', text, mine: true })
+
+        // Phase 24: pronunciation intelligibility (listen-then-repeat beats)
+        if (b.kind === 'speak' && b.assessIntelligibility && b.expected[0]) {
+            const assess = await assessPronunciation(getToken, text, b.expected[0])
+            if (assess) {
+                evidence.current.intelligibility.attempts += 1
+                evidence.current.intelligibility.scores.push(assess.score)
+            }
+        }
 
         // 1) Repair phrases always win — the NPC complies naturally.
         if (isRepairPhrase(text)) {
@@ -188,11 +221,13 @@ export function useSceneEngine({ scene, support = 'medium', getToken, onStage }:
         }
 
         // 2) Grade meaning (unexpected beats are open by definition).
-        const expected = b.kind === 'unexpected' ? (b.accept?.length ? b.accept : [b.es]) : b.expected
+        const expected = b.kind === 'unexpected'
+            ? (b.accept?.length ? b.accept : [b.es])
+            : (b.kind === 'speak' || b.kind === 'write') ? b.expected : []
         const res = await grade(text, {
             expected,
-            accept: b.accept,
-            open: b.kind === 'unexpected' || (b.kind === 'speak' && b.open === true),
+            accept: b.kind === 'unexpected' ? b.accept : (b.kind === 'speak' || b.kind === 'write') ? b.accept : undefined,
+            open: b.kind === 'unexpected' || ((b.kind === 'speak' || b.kind === 'write') && b.open === true),
         })
 
         if (res.ok) {
@@ -290,7 +325,7 @@ export function useSceneEngine({ scene, support = 'medium', getToken, onStage }:
             return
         }
         // 'example' — model the target (support fading: counts as a hint)
-        const ex = b?.kind === 'speak' ? b.expected[0]
+        const ex = b?.kind === 'speak' || b?.kind === 'write' ? b.expected[0]
             : b?.kind === 'unexpected' ? (b.accept?.[0] ?? b.es) : ''
         push({ who: npcRef.current, text: ex })
         say(ex)
@@ -319,13 +354,13 @@ export function useSceneEngine({ scene, support = 'medium', getToken, onStage }:
 
     const pick = useCallback((option: SceneOption) => {
         const b = beatsRef.current[idx]
-        if (!b || b.kind !== 'choice') return
+        if (!b || (b.kind !== 'choice' && b.kind !== 'read')) return
         push({ who: 'you', text: option.label, mine: true })
         if (option.correct) {
             counts.current.correct++
             recordAttempt(b.stage, true)
             flash('correct')
-            if (b.coach) push({ who: 'narrator', text: b.coach })
+            if (b.kind === 'choice' && b.coach) push({ who: 'narrator', text: b.coach })
             setTimeout(advance, PACE_MS + 100)
         } else {
             counts.current.incorrect++
@@ -412,13 +447,14 @@ export function useSceneEngine({ scene, support = 'medium', getToken, onStage }:
                 t = setTimeout(advance, 50)
             }
         } else if (b.kind === 'speak') {
-            // Present the NPC's question if it wasn't said yet
-            // (spliced challenge beats carry their own line).
+            const speakBeat = b
             const last = linesRef.current[linesRef.current.length - 1]
-            if (b.npcLine && last?.text !== b.npcLine) {
-                push({ who: npcRef.current, text: b.npcLine })
-                say(b.npcLine)
+            if (speakBeat.npcLine && last?.text !== speakBeat.npcLine) {
+                push({ who: npcRef.current, text: speakBeat.npcLine })
+                say(speakBeat.npcLine)
             }
+        } else if (b.kind === 'write') {
+            // Typed production — dock waits for input.
         } else if (b.kind === 'unexpected') {
             npcRef.current = b.character
             if (b.es?.trim()) {
@@ -438,12 +474,17 @@ export function useSceneEngine({ scene, support = 'medium', getToken, onStage }:
     const getEvidence = useCallback(() => {
         const e = evidence.current
         const calc = (num: number, den: number) => den > 0 ? Math.round((num / den) * 100) : null
+        const intel = e.intelligibility
+        const intelScore = intel.scores.length
+            ? Math.round(intel.scores.reduce((a, b) => a + b, 0) / intel.scores.length)
+            : null
         return {
             comprehension: calc(e.comprehension.correct, e.comprehension.total),
             retrieval: calc(e.retrieval.correct, e.retrieval.total),
             production: calc(e.production.correct, e.production.total),
             interaction: calc(e.interaction.correct, e.interaction.total),
             transfer: calc(e.transfer.correct, e.transfer.total),
+            intelligibility: intelScore,
             supportUsed: e.supportUsed,
             repairUsed: e.repairUsed,
             completed: true,

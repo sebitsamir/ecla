@@ -16,8 +16,8 @@ export type CourseCompetency = {
     id: string | number
     code: string
     canDo?: string | null
-    /** Lenient on purpose; unknown values render as "upcoming". */
     status: string
+    prerequisites?: string[]
 }
 
 export type CourseUnit = {

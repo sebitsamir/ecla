@@ -33,6 +33,8 @@ export type CompetencyContent = {
         unexpectedEvent?: string
     }
     listening?: { utterance: string; context: string; action: string }[]
+    reading?: { passage: string; prompt: string; options: string[]; answer: string }[]
+    writing?: { prompt: string; scenario?: string; accept?: string[] }[]
     pronunciation?: { target: string; note: string }[]
     culture?: string
     retention?: { reuseIn: string[] }   // codes where this language must reappear

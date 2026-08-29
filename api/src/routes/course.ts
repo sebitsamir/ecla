@@ -34,7 +34,12 @@ router.get('/api/v1/course/map', async (req: Request, res: Response, next: NextF
                                 experiences: {
                                     select: { id: true, progress: { where: { userId: user.id }, select: { status: true } } },
                                 },
-                                prerequisitesAsCompetency: { select: { prerequisiteId: true } },
+                                prerequisitesAsCompetency: {
+                                    select: {
+                                        prerequisiteId: true,
+                                        prerequisite: { select: { code: true } },
+                                    },
+                                },
                             },
                         },
                     },
@@ -71,6 +76,8 @@ router.get('/api/v1/course/map', async (req: Request, res: Response, next: NextF
                     return {
                         id: comp.id, code: comp.code, title: comp.title, canDo: comp.canDo,
                         status, href: `/learn/${comp.id}`,
+                        prerequisites: (comp.prerequisitesAsCompetency as { prerequisite: { code: string } }[])
+                            .map(p => p.prerequisite.code),
                     }
                 })
                 return {
