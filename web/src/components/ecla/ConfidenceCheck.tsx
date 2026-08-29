@@ -1,5 +1,7 @@
 'use client'
 
+import { API_URL } from '@/lib/apiClient'
+
 /**
  * ConfidenceCheck — Phase 36: learner self-report (does not determine mastery).
  */
@@ -22,7 +24,7 @@ export default function ConfidenceCheck({
     const submit = async (level: number) => {
         try {
             const token = await getToken()
-            await fetch(`${process.env.NEXT_PUBLIC_API_URL ?? 'http://localhost:4000'}/api/v1/learner/confidence`, {
+            await fetch(`${API_URL}/api/v1/learner/confidence`, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
                 body: JSON.stringify({ competencyId, level }),

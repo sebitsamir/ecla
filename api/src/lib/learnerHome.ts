@@ -170,7 +170,7 @@ export async function buildLearnerHome(user: { id: string; displayName?: string 
         }),
     ])
 
-    const retentionReviews = buildRetentionReviews(dueReviews, soonRows)
+    const retentionReviews = await buildRetentionReviews(dueReviews, soonRows)
 
     const mastered = finishedSet(masteryByCompetency)
     const progressed = progressedSet(masteryByCompetency)

@@ -15,8 +15,7 @@ import {
 import { streetEncounter } from '@/content/scenes/streetEncounter'
 import { MODE_LABELS, MODE_PURPOSE, normalizeMode } from '@/lib/modeStages'
 import { retrievalTargetsFromLesson } from '@/lib/retrievalTargets'
-
-const API_URL = process.env.NEXT_PUBLIC_API_URL ?? 'http://localhost:4000'
+import { API_URL } from '@/lib/apiClient'
 
 function LearnPlayer() {
     const params = useParams()
@@ -119,7 +118,6 @@ function LearnPlayer() {
                     mode,
                     correctCount: correct,
                     incorrectCount: incorrect,
-                    xpEarned: activeExp?.xpReward ?? lesson.xpReward ?? 20,
                     review: isReview,
                 }),
             })
@@ -132,6 +130,10 @@ function LearnPlayer() {
                     correct,
                     incorrect,
                     evidence: sceneEvidence ?? null,
+                    sceneId: scene?.id,
+                    environmentId: typeof scene?.environment === 'object'
+                        ? (scene.environment as { id?: string }).id
+                        : scene?.environment,
                     contextId: scene?.id ?? lesson.conceptId,
                     review: isReview,
                 }),

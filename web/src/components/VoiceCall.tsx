@@ -1,5 +1,7 @@
 'use client'
 
+import { API_URL } from '@/lib/apiClient'
+
 import { useEffect, useRef, useState } from 'react'
 import { useAuth } from '@clerk/nextjs'
 import { PhoneOff, Loader2, AudioLines, Volume2 } from 'lucide-react'
@@ -8,7 +10,6 @@ import { useEquippedGlow } from '@/lib/useEquippedGlow'
 import { speak, cancelSpeech } from '@/lib/speech'
 import { useHandsFreeVoice } from '@/lib/useHandsFreeVoice'
 
-const API_URL = process.env.NEXT_PUBLIC_API_URL ?? 'http://localhost:4000'
 const GREETING = '¡Hola! Soy Ecla. ¿Cómo estás hoy?'
 
 export type CallLine = { role: 'user' | 'assistant'; text: string }

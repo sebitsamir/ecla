@@ -1,5 +1,7 @@
 'use client'
 
+import { API_URL } from '@/lib/apiClient'
+
 /**
  * /review — Phase 29: scene-based spaced retrieval.
  * "People and situations are returning" — not flashcard #327.
@@ -13,7 +15,6 @@ import { directionFor } from '@/content/scenes/unitDirections'
 import { CAST } from '@/content/cast'
 import type { CharacterId } from '@/lib/sceneTypes'
 
-const API_URL = process.env.NEXT_PUBLIC_API_URL ?? 'http://localhost:4000'
 
 type ReviewItem = {
     id: string

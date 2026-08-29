@@ -1,5 +1,7 @@
 'use client'
 
+import { API_URL } from '@/lib/apiClient'
+
 /**
  * /progress — the evidence ledger (premium pass).
  * Every demonstrated competency with its dimension scores and review
@@ -16,7 +18,6 @@ import AbilityProfile from '@/components/ecla/dashboard/AbilityProfile'
 import WeekEvidence from '@/components/ecla/dashboard/WeekEvidence'
 import { fetchSummary, type LearnerSummary } from '@/lib/summary'
 
-const API_URL = process.env.NEXT_PUBLIC_API_URL ?? 'http://localhost:4000'
 
 type CompetencyRow = {
     competencyCode?: string

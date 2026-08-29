@@ -1,5 +1,7 @@
 'use client'
 
+import { API_URL } from '@/lib/apiClient'
+
 /**
  * useGatewayEngine — The continuous simulation state machine (Phase 10).
  * 
@@ -18,7 +20,6 @@ import {
     type GatewayEvidence 
 } from '@/lib/gatewayTypes'
 
-const API_URL = process.env.NEXT_PUBLIC_API_URL ?? 'http://localhost:4000'
 const MAX_TURNS_PER_SCENARIO = 4 // Advance to next scenario after 4 learner inputs
 
 export function useGatewayEngine(getToken: () => Promise<string | null>) {

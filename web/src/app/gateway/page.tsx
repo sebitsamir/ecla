@@ -1,5 +1,7 @@
 'use client'
 
+import { API_URL } from '@/lib/apiClient'
+
 /**
  * /gateway — Pre-A1 Gateway (Phase 15).
  * Landing shows honest readiness; simulation runs via GatewayPlayer.
@@ -14,7 +16,6 @@ import GraduationCard, { type GatewayGraduation } from '@/components/ecla/Gradua
 import { fetchSummary, type LearnerSummary } from '@/lib/summary'
 import type { GatewayEvidence } from '@/lib/gatewayTypes'
 
-const API_URL = process.env.NEXT_PUBLIC_API_URL ?? 'http://localhost:4000'
 
 type GComp = { id: string | number; code?: string; canDo?: string; status?: string }
 type GUnit = { id: string | number; title?: string; description?: string; competencies?: GComp[] }

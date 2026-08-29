@@ -21,12 +21,13 @@ import gatewayRoutes from './routes/gateway'
 import performanceRoutes from './routes/performance'
 import transferRoutes from './routes/transfer'
 import contentRoutes from './routes/content'
+import scenesRoutes from './routes/scenes'
 
 const app = express()
 
 const allowedOrigin =
     process.env.FRONTEND_URL ||
-    process.env.NEXT_PUBLIC_APP_URL ||
+    process.env.APP_ORIGIN ||
     'http://localhost:3000'
 
 app.use(cors({
@@ -69,6 +70,7 @@ app.use(missionRoutes)
 app.use(memoryRoutes)
 app.use(gatewayRoutes)
 app.use(contentRoutes)
+app.use(scenesRoutes)
 app.use(performanceRoutes)
 app.use(transferRoutes)
 

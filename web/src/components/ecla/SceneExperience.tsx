@@ -1,5 +1,7 @@
 'use client'
 
+import { API_URL } from '@/lib/apiClient'
+
 /**
  * SceneExperience — three-zone organism with mobile drawers (Phase S3.3 + S3.5 + S3.7 + Adaptive + Phase 3).
  * Phase S3.7: mobile toggles are ONE centered pill with bottom clearance.
@@ -17,7 +19,6 @@ import AudioControls from './AudioControls'
 import type { SceneSpec } from '@/lib/sceneTypes'
 import { recommendSupport } from '@/lib/support'
 
-const API_URL = process.env.NEXT_PUBLIC_API_URL ?? 'http://localhost:4000'
 
 export default function SceneExperience({ scene, tools, mastery, getToken, onComplete }: {
     scene: SceneSpec

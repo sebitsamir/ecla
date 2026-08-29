@@ -1,5 +1,7 @@
 'use client'
 
+import { API_URL } from '@/lib/apiClient'
+
 /**
  * Can-Do Truth Panel — ECLA Dashboard Component
  * 
@@ -19,7 +21,6 @@ import {
     CheckCircle2, Clock, Circle, Sparkles
 } from 'lucide-react'
 
-const API_URL = process.env.NEXT_PUBLIC_API_URL ?? 'http://localhost:4000'
 
 type Competency = {
     competencyId: string

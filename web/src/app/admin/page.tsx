@@ -1,5 +1,7 @@
 'use client'
 
+import { API_URL } from '@/lib/apiClient'
+
 /**
  * /admin — Competency authoring (Phase 19).
  * Browse course tree, edit competency metadata, validate content.
@@ -10,7 +12,6 @@ import { useAuth } from '@clerk/nextjs'
 import { ArrowLeft, Save, Loader2, CheckCircle2, AlertTriangle } from 'lucide-react'
 import AppShell from '@/components/layout/AppShell'
 
-const API_URL = process.env.NEXT_PUBLIC_API_URL ?? 'http://localhost:4000'
 
 type CompRef = { id: string; code: string; title: string; canDo: string; domain: string }
 type UnitRef = { id: string; title: string; competencies: CompRef[] }

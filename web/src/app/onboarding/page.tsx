@@ -1,5 +1,7 @@
 'use client'
 
+import { API_URL } from '@/lib/apiClient'
+
 /**
  * /onboarding — New user setup flow (premium pass).
  * Motivation → Mode → Level → Goal → Review.
@@ -16,7 +18,6 @@ import {
 import posthog from 'posthog-js'
 import AppShell from '@/components/layout/AppShell'
 
-const API_URL = process.env.NEXT_PUBLIC_API_URL ?? 'http://localhost:4000'
 
 type ExperienceLevel = 'BEGINNER' | 'SOME_BASICS' | 'INTERMEDIATE_PLUS'
 

@@ -1,7 +1,18 @@
 /**
- * API client — Phase 40: structured errors with retry guidance.
+ * API client — centralized URL resolution and structured errors.
  */
-const API_URL = process.env.NEXT_PUBLIC_API_URL ?? 'http://localhost:4000'
+function resolveApiUrl(): string {
+    const url = process.env.NEXT_PUBLIC_API_URL?.trim()
+    if (url) return url.replace(/\/$/, '')
+    if (process.env.NODE_ENV === 'production') {
+        throw new Error(
+            'NEXT_PUBLIC_API_URL is required in production. Set it to your deployed API origin (e.g. https://ecla-api.onrender.com).',
+        )
+    }
+    return 'http://localhost:4000'
+}
+
+export const API_URL = resolveApiUrl()
 
 export type ApiErrorKind =
     | 'unauthorized'
@@ -30,9 +41,8 @@ export async function apiFetch<T>(
     getToken: () => Promise<string | null>,
     init?: RequestInit,
 ): Promise<T> {
-    let token: string | null = null
     try {
-        token = await getToken()
+        const token = await getToken()
         const res = await fetch(`${API_URL}${path}`, {
             ...init,
             headers: {
