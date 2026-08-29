@@ -259,3 +259,25 @@ button, a, [role="button"] {
 .scrollbar-hide::-webkit-scrollbar {
     display: none;
 }
+
+/* ── Phase 41-42: mobile safe areas + accessibility ── */
+@supports (padding: env(safe-area-inset-bottom)) {
+    .safe-bottom { padding-bottom: env(safe-area-inset-bottom); }
+}
+
+:focus-visible {
+    outline: 2px solid var(--color-glow);
+    outline-offset: 2px;
+}
+
+@media (prefers-reduced-motion: reduce) {
+    *, *::before, *::after {
+        animation-duration: 0.01ms !important;
+        animation-iteration-count: 1 !important;
+        transition-duration: 0.01ms !important;
+    }
+}
+
+@media (max-width: 390px) {
+    .scene-mobile-compact { padding-left: 0.75rem; padding-right: 0.75rem; }
+}

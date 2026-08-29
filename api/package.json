@@ -4,7 +4,7 @@
   "description": "",
   "main": "index.js",
   "scripts": {
-    "test": "echo \"Error: no test specified\" && exit 1",
+    "test": "tsx --test tests/**/*.test.ts",
     "dev": "tsx watch src/server.ts",
     "start": "tsx src/server.ts",
     "build": "prisma generate",
@@ -14,7 +14,8 @@
     "seed:structure": "tsx prisma/seed.ts",
     "seed:content": "tsx prisma/seedSublessons.ts",
     "seed:all": "tsx prisma/seedAll.ts",
-    "validate:content": "tsx prisma/content/validate-cli.ts"
+    "validate:content": "tsx prisma/content/validate-cli.ts",
+    "validate:curriculum": "tsx prisma/content/validate-curriculum-cli.ts"
   },
   "prisma": {
     "seed": "tsx prisma/seed.ts"
