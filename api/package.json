@@ -10,7 +10,11 @@
     "build": "prisma generate",
     "prisma:migrate": "prisma migrate dev",
     "prisma:generate": "prisma generate",
-    "prisma:studio": "prisma studio"
+    "prisma:studio": "prisma studio",
+    "seed:structure": "tsx prisma/seed.ts",
+    "seed:content": "tsx prisma/seedSublessons.ts",
+    "seed:all": "tsx prisma/seedAll.ts",
+    "validate:content": "tsx prisma/content/validate-cli.ts"
   },
   "prisma": {
     "seed": "tsx prisma/seed.ts"

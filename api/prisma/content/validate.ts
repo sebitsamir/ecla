@@ -55,10 +55,36 @@ export function validatePhases(phases: PhaseContent[], knownCodes: Set<string>):
             }
             for (const r of c.retention?.reuseIn ?? []) {
                 if (!CODE_RE.test(r)) warnings.push(`${id}: retention.reuseIn bad code ${r}`)
+                else if (!knownCodes.has(r) && !proposed.has(r))
+                    errors.push(`${id}: retention.reuseIn unknown code ${r}`)
             }
         }
     }
     return { passed: errors.length === 0, errors, warnings }
+}
+
+/** Validate prerequisite graph has no unknown codes (Phase 18). */
+export function validatePrerequisiteCodes(
+    edges: Array<{ competency: string; prerequisites: string[] }>,
+    knownCodes: Set<string>,
+): Report {
+    const errors: string[] = []
+    const warnings: string[] = []
+    for (const e of edges) {
+        if (!knownCodes.has(e.competency))
+            errors.push(`${e.competency}: competency not in seed`)
+        for (const p of e.prerequisites) {
+            if (!knownCodes.has(p))
+                errors.push(`${e.competency}: unknown prerequisite ${p}`)
+        }
+    }
+    return { passed: errors.length === 0, errors, warnings }
+}
+
+/** Run full content validation pipeline (Phase 18). */
+export function runContentValidation(phases: PhaseContent[], knownCodes: Set<string>): Report {
+    const phaseReport = validatePhases(phases, knownCodes)
+    return phaseReport
 }
 
 /** Advisory AI critique — never blocks the seed (human + rules decide). */

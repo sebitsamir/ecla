@@ -39,7 +39,8 @@ export function useGrader(getToken: () => Promise<string | null>) {
                             accept: target.accept ?? [],
                         }),
                     })
-                    if ((await res.json()).correct) return { ok: true, method: 'ai' }
+                    const data = await res.json()
+                    if (data.correct) return { ok: true, method: 'ai' }
                 } catch {
                     // Judge unreachable → treat as not-ok, never as learner failure.
                 }

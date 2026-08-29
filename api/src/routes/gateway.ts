@@ -11,6 +11,7 @@
 import { Router, Request, Response, NextFunction } from 'express'
 import { getOrSyncUserFast } from '../lib/auth'
 import { prisma } from '../lib/prisma'
+import { scoreGatewayGraduation } from '../lib/gatewayScoring'
 import { GATEWAY_CONFIGS, type GatewayScenarioId, type GatewayTurn } from '../types/gateway'
 
 const router = Router()
@@ -124,33 +125,18 @@ router.post('/api/v1/gateway/turn', async (req: Request, res: Response, next: Ne
 })
 
 /**
- * POST /api/v1/gateway/complete — persist graduation evidence (Phase 15).
- * Multi-dimensional summary; marks learner as Pre-A1 ready when evidence supports it.
+ * POST /api/v1/gateway/complete — Phase 16 multi-dimensional graduation.
  */
 router.post('/api/v1/gateway/complete', async (req: Request, res: Response, next: NextFunction) => {
     try {
         const user = await getOrSyncUserFast(req)
-        const { evidence } = (req.body ?? {}) as { evidence?: Array<{ scenario: string; communicated?: boolean; repaired?: boolean }> }
-
-        const items = Array.isArray(evidence) ? evidence : []
-        const communicated = items.filter(e => e.communicated).length
-        const repaired = items.filter(e => e.repaired).length
-        const total = items.length || 1
-        const ratio = communicated / total
-
-        const result = {
-            preA1Ready: ratio >= 0.67 && communicated >= 4,
-            communicated,
-            repaired,
-            total,
-            dimensions: {
-                communication: ratio >= 0.8 ? 'Strong' : ratio >= 0.5 ? 'Developing' : 'Needs practice',
-                repair: repaired >= 1 ? 'Strong' : 'Developing',
-                transfer: communicated >= 5 ? 'Strong' : 'Developing',
-            },
+        const { evidence } = (req.body ?? {}) as {
+            evidence?: Array<{ scenario: string; transcript?: GatewayTurn[]; communicated?: boolean; repaired?: boolean }>
         }
 
-        // Mark gateway unit competencies as demonstrated where applicable
+        const items = Array.isArray(evidence) ? evidence : []
+        const graduation = scoreGatewayGraduation(items)
+
         const gatewayUnit = await prisma.course.findFirst({
             where: { isPublished: true },
             include: {
@@ -161,27 +147,33 @@ router.post('/api/v1/gateway/complete', async (req: Request, res: Response, next
             },
         })
         const gatewayComps = gatewayUnit?.units?.[0]?.competencies ?? []
+        const scorePct = Math.round((graduation.communicated / Math.max(graduation.total, 1)) * 100)
+
         for (const comp of gatewayComps) {
             await prisma.competencyMastery.upsert({
                 where: { userId_competencyId: { userId: user.id, competencyId: comp.id } },
                 update: {
-                    level: result.preA1Ready ? 'TRANSFERRED' : 'CONTROLLED',
+                    level: graduation.preA1Ready ? 'TRANSFERRED' : 'CONTROLLED',
                     lastAssessedAt: new Date(),
-                    transferScore: Math.round(ratio * 100),
-                    interactionScore: Math.round(ratio * 100),
+                    transferScore: scorePct,
+                    interactionScore: scorePct,
+                    comprehensionScore: graduation.dimensions.comprehension === 'Strong' ? 80 : 60,
+                    applicationScore: graduation.dimensions.production === 'Strong' ? 80 : 60,
                 },
                 create: {
                     userId: user.id,
                     competencyId: comp.id,
-                    level: result.preA1Ready ? 'TRANSFERRED' : 'CONTROLLED',
+                    level: graduation.preA1Ready ? 'TRANSFERRED' : 'CONTROLLED',
                     lastAssessedAt: new Date(),
-                    transferScore: Math.round(ratio * 100),
-                    interactionScore: Math.round(ratio * 100),
+                    transferScore: scorePct,
+                    interactionScore: scorePct,
+                    comprehensionScore: graduation.dimensions.comprehension === 'Strong' ? 80 : 60,
+                    applicationScore: graduation.dimensions.production === 'Strong' ? 80 : 60,
                 },
             })
         }
 
-        res.json({ ok: true, graduation: result })
+        res.json({ ok: true, graduation })
     } catch (error) {
         next(error)
     }

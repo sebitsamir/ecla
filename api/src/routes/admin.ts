@@ -1,132 +1,111 @@
+/**
+ * Admin routes — Phase 19: competency-aligned authoring.
+ * Replaces legacy Concept/SubLesson with current Prisma models.
+ */
 import { Router, Request, Response, NextFunction } from 'express'
 import { prisma } from '../lib/prisma'
 import { groq } from '../lib/groq'
 import { requireAdmin } from '../lib/auth'
 import { AppError } from '../lib/errors'
 import { sanitizeAIOutput, CONTENT_SYSTEM_PROMPT } from '../lib/ai'
-import { conceptSchema, generateSchema, exerciseGenSchema } from '../lib/schemas'
+import { generateSchema, exerciseGenSchema } from '../lib/schemas'
+import { phases, runContentValidation } from '../lib/contentValidation'
 
 const router = Router()
 
-const db = prisma as any;
-
-router.get('/api/v1/admin/concepts', async (req: Request, res: Response, next: NextFunction) => {
+/** Course tree for authoring navigation. */
+router.get('/api/v1/admin/course-tree', async (req: Request, res: Response, next: NextFunction) => {
     try {
         requireAdmin(req)
-        const concepts = await db.concept.findMany({
-            orderBy: { orderIndex: 'asc' },
-            include: { 
-                variants: true, 
-                unit: true,
-                subLessons: { orderBy: { orderIndex: 'asc' } },
+        const courses = await prisma.course.findMany({
+            where: { isPublished: true },
+            include: {
+                units: {
+                    orderBy: { orderIndex: 'asc' },
+                    include: {
+                        competencies: {
+                            orderBy: { orderIndex: 'asc' },
+                            select: { id: true, code: true, title: true, canDo: true, domain: true },
+                        },
+                    },
+                },
             },
         })
-        res.json({ concepts })
+        res.json({ courses })
     } catch (error) { next(error) }
 })
 
-router.post('/api/v1/admin/concepts', async (req: Request, res: Response, next: NextFunction) => {
+/** Full competency detail for editing. */
+router.get('/api/v1/admin/competencies/:code', async (req: Request, res: Response, next: NextFunction) => {
     try {
         requireAdmin(req)
+        const code = String(req.params.code).trim()
+        const comp = await prisma.competency.findFirst({
+            where: { code },
+            include: {
+                experiences: { orderBy: { orderIndex: 'asc' } },
+                realizations: true,
+                vocabulary: { include: { vocabulary: true } },
+                missions: true,
+                prerequisitesAsCompetency: { include: { prerequisite: { select: { code: true } } } },
+            },
+        })
+        if (!comp) throw new AppError('Competency not found', 404)
+        res.json({ competency: comp })
+    } catch (error) { next(error) }
+})
 
-        // Extract subLessons BEFORE zod parse strips unknown fields
-        const subLessonsRaw = req.body.subLessons as any[] | undefined
+/** Update competency metadata + realization (content depth stays in seed phases). */
+router.patch('/api/v1/admin/competencies/:code', async (req: Request, res: Response, next: NextFunction) => {
+    try {
+        requireAdmin(req)
+        const code = String(req.params.code).trim()
+        const { title, canDo, grammarNote, pronunciationNote, culturalNote } = req.body ?? {}
 
-        const parsed = conceptSchema.safeParse(req.body)
-        if (!parsed.success) {
-            console.error('Zod validation errors:', parsed.error.flatten())
-            throw new AppError('Invalid concept data', 400)
-        }
+        const comp = await prisma.competency.findFirst({ where: { code } })
+        if (!comp) throw new AppError('Competency not found', 404)
 
-        const data = parsed.data
-        const cleanVariants = data.variants.map(v => ({
-            ...v,
-            storyBeat: sanitizeAIOutput(v.storyBeat),
-            culturalRef: sanitizeAIOutput(v.culturalRef),
-            formalPhrase: sanitizeAIOutput(v.formalPhrase),
-        }))
-
-        let conceptId: string
-
-        if (data.id) {
-            // ─── UPDATE EXISTING CONCEPT ───
-            await db.concept.update({
-                where: { id: data.id },
+        if (title || canDo) {
+            await prisma.competency.update({
+                where: { id: comp.id },
                 data: {
-                    unitId: data.unitId, name: data.name, cefrLevel: data.cefrLevel,
-                    grammarNote: data.grammarNote, vocabItems: data.vocabItems,
-                    orderIndex: data.orderIndex, xpReward: data.xpReward,
+                    ...(title ? { title: String(title) } : {}),
+                    ...(canDo ? { canDo: String(canDo) } : {}),
                 },
             })
-            conceptId = data.id
+        }
 
-            // Upsert variants
-            for (const v of cleanVariants) {
-                await db.lessonVariant.upsert({
-                    where: { conceptId_mode: { conceptId: data.id, mode: v.mode } },
-                    update: { 
-                        storyBeat: v.storyBeat, 
-                        culturalRef: v.culturalRef, 
-                        formalPhrase: v.formalPhrase, 
-                        exercises: v.exercises 
-                    },
-                    create: { 
-                        conceptId: data.id, mode: v.mode, 
-                        storyBeat: v.storyBeat, culturalRef: v.culturalRef, 
-                        formalPhrase: v.formalPhrase, exercises: v.exercises 
-                    },
-                })
-            }
-        } else {
-            // ─── CREATE NEW CONCEPT ───
-            const concept = await db.concept.create({
-                data: {
-                    id: `concept-${Date.now()}`,
-                    unitId: data.unitId, name: data.name, cefrLevel: data.cefrLevel,
-                    grammarNote: data.grammarNote, vocabItems: data.vocabItems,
-                    orderIndex: data.orderIndex, xpReward: data.xpReward,
+        const lang = await prisma.language.findFirst({ where: { code: 'es' } })
+        if (lang && (grammarNote || pronunciationNote || culturalNote)) {
+            await prisma.languageRealization.upsert({
+                where: { competencyId_languageId: { competencyId: comp.id, languageId: lang.id } },
+                update: {
+                    ...(grammarNote !== undefined ? { grammarNote: String(grammarNote) } : {}),
+                    ...(pronunciationNote !== undefined ? { pronunciationNote: String(pronunciationNote) } : {}),
+                    ...(culturalNote !== undefined ? { culturalNote: String(culturalNote) } : {}),
+                },
+                create: {
+                    competencyId: comp.id,
+                    languageId: lang.id,
+                    grammarNote: grammarNote ? String(grammarNote) : null,
+                    pronunciationNote: pronunciationNote ? String(pronunciationNote) : null,
+                    culturalNote: culturalNote ? String(culturalNote) : null,
                 },
             })
-            conceptId = concept.id
-
-            // Create variants
-            for (const v of cleanVariants) {
-                await db.lessonVariant.create({
-                    data: { 
-                        conceptId: concept.id, mode: v.mode, 
-                        storyBeat: v.storyBeat, culturalRef: v.culturalRef, 
-                        formalPhrase: v.formalPhrase, exercises: v.exercises 
-                    },
-                })
-            }
         }
 
-        // ─── SUB-LESSONS (4-part structure) ───
-        if (Array.isArray(subLessonsRaw) && subLessonsRaw.length > 0) {
-            // Delete existing sub-lessons for this concept to prevent orphans
-            await db.subLesson.deleteMany({ where: { conceptId } })
+        res.json({ ok: true })
+    } catch (error) { next(error) }
+})
 
-            // Insert new sub-lessons in order
-            for (let i = 0; i < subLessonsRaw.length; i++) {
-                const sub = subLessonsRaw[i]
-                if (!sub) continue
-
-                await db.subLesson.create({
-                    data: {
-                        conceptId,
-                        orderIndex: i,
-                        title: sub.title || `Part ${i + 1}`,
-                        icon: sub.icon || 'book-open',
-                        xpReward: typeof sub.xpReward === 'number' ? sub.xpReward : 5,
-                        teach: Array.isArray(sub.teach) ? sub.teach : [],
-                        exercises: Array.isArray(sub.exercises) ? sub.exercises : [],
-                        realLife: sub.realLife || null,
-                    },
-                })
-            }
-        }
-
-        res.json({ success: true, conceptId })
+/** Validate all phase content against DB (Phase 18 gate). */
+router.post('/api/v1/admin/validate-content', async (req: Request, res: Response, next: NextFunction) => {
+    try {
+        requireAdmin(req)
+        const comps = await prisma.competency.findMany({ select: { code: true } })
+        const knownCodes = new Set(comps.map(c => String(c.code).trim()))
+        const report = runContentValidation(phases, knownCodes)
+        res.json(report)
     } catch (error) { next(error) }
 })
 
@@ -138,13 +117,13 @@ router.post('/api/v1/admin/generate-flavor', async (req: Request, res: Response,
 
         const { mode, conceptName } = parsed.data
 
-        let prompt = ""
+        let prompt = ''
         if (mode === 'STORY') {
-            prompt = `Write EXACTLY one sentence (max 15 words) of story context for a Spanish lesson about "${conceptName}". Stay in-character. No meta-commentary. No self-reference.`
+            prompt = `Write EXACTLY one sentence (max 15 words) of story context for a Spanish lesson about "${conceptName}". Stay in-character. No meta-commentary.`
         } else if (mode === 'IMMERSION') {
-            prompt = `Write EXACTLY one sentence (max 15 words) of cultural context for a Spanish lesson about "${conceptName}". Stay in-character. No meta-commentary.`
+            prompt = `Write EXACTLY one sentence (max 15 words) of cultural context for a Spanish lesson about "${conceptName}". Stay in-character.`
         } else if (mode === 'PROFESSIONAL') {
-            prompt = `Write EXACTLY one sentence (max 15 words) of workplace context for a Spanish lesson about "${conceptName}". Stay in-character. No meta-commentary.`
+            prompt = `Write EXACTLY one sentence (max 15 words) of workplace context for a Spanish lesson about "${conceptName}". Stay in-character.`
         }
 
         const completion = await groq.chat.completions.create({
@@ -169,16 +148,11 @@ router.post('/api/v1/admin/generate-exercises', async (req: Request, res: Respon
 
         const { mode, conceptName, grammarNote, vocabItems } = parsed.data
 
-        const prompt = `You are a Spanish language teacher. 
+        const prompt = `Generate exactly 3 exercises for a ${mode} mode Spanish Pre-A1 lesson.
 Concept: "${conceptName}"
 Rule: ${grammarNote}
 Vocab: ${vocabItems.map((v: any) => v.word).join(', ')}
-
-Generate exactly 3 exercises for a ${mode} mode lesson. 
-Types allowed: "mcq" (needs 'options' array), "fill_blank", or "translate".
-
-Return ONLY a valid JSON array. Do not use markdown backticks. Do not add text outside the JSON.
-Example format: [{"type":"mcq","prompt":"I eat","options":["Como","Comes"],"answer":"Como"}]`
+Return ONLY a valid JSON array of exercises.`
 
         const completion = await groq.chat.completions.create({
             model: 'openai/gpt-oss-20b',

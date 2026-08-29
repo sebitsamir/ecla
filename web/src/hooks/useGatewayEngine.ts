@@ -92,8 +92,8 @@ export function useGatewayEngine(getToken: () => Promise<string | null>) {
             // Capture evidence silently
             const evidence: GatewayEvidence = {
                 scenario: scenarioId,
-                communicated: true, // Simplified MVP: if they survived the turns, they communicated
-                repaired: finalHistory.some(t => t.role === 'learner' && /perdón|repite|repita|despacio/i.test(t.text)),
+                communicated: false, // scored server-side from transcript
+                repaired: finalHistory.some(t => t.role === 'learner' && /perdón|repite|repita|despacio|no entiendo/i.test(t.text)),
                 transcript: finalHistory,
             }
 
