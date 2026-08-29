@@ -17,6 +17,13 @@ export const lessonCompleteSchema = z.object({
     review: z.boolean().optional(),
 })
 
+export const gradeRequestSchema = z.object({
+    answer: z.string().min(1).max(500),
+    expected: z.string().min(1).max(300),
+    accept: z.array(z.string()).optional(),
+    context: z.string().max(300).optional(),
+})
+
 export const modeSchema = z.object({
     mode: z.enum(['STORY', 'DRILL', 'IMMERSION', 'PROFESSIONAL']),
 })

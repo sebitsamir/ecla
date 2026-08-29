@@ -10,7 +10,7 @@ import { useAuth } from '@clerk/nextjs'
 import { ArrowRight, Check, Flag, Lock } from 'lucide-react'
 import AppShell from '@/components/layout/AppShell'
 import GatewayPlayer from '@/components/ecla/GatewayPlayer'
-import GraduationCard from '@/components/ecla/GraduationCard'
+import GraduationCard, { type GatewayGraduation } from '@/components/ecla/GraduationCard'
 import { fetchSummary, type LearnerSummary } from '@/lib/summary'
 import type { GatewayEvidence } from '@/lib/gatewayTypes'
 
@@ -29,6 +29,7 @@ export default function GatewayPage() {
     const [loading, setLoading] = useState(true)
     const [phase, setPhase] = useState<Phase>('landing')
     const [evidence, setEvidence] = useState<GatewayEvidence[]>([])
+    const [graduation, setGraduation] = useState<GatewayGraduation | null>(null)
     const [tick, setTick] = useState(0)
 
     useEffect(() => {
@@ -56,11 +57,13 @@ export default function GatewayPage() {
         setEvidence(ev)
         try {
             const token = await getToken()
-            await fetch(`${API_URL}/api/v1/gateway/complete`, {
+            const res = await fetch(`${API_URL}/api/v1/gateway/complete`, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
                 body: JSON.stringify({ evidence: ev }),
             })
+            const data = await res.json()
+            setGraduation(data.graduation ?? null)
             window.dispatchEvent(new Event('ecla:progress-updated'))
         } catch (e) {
             console.error('Gateway graduation save failed:', e)
@@ -76,6 +79,7 @@ export default function GatewayPage() {
         return (
             <GraduationCard
                 evidence={evidence}
+                graduation={graduation}
                 onContinue={() => router.push('/dashboard')}
             />
         )

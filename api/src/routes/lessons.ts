@@ -18,10 +18,10 @@
 import { Router, Request, Response, NextFunction } from 'express'
 import { prisma } from '../lib/prisma'
 import { getOrSyncUserFast, requireAuth } from '../lib/auth'
-import { groq } from '../lib/groq'
 import { AppError } from '../lib/errors'
-import { lessonCompleteSchema } from '../lib/schemas'
+import { lessonCompleteSchema, gradeRequestSchema } from '../lib/schemas'
 import { nextReviewDate } from './adaptive'
+import { functionalJudge } from '../lib/functionalJudge'
 
 const router = Router()
 
@@ -232,34 +232,18 @@ router.get('/api/v1/lessons/:conceptId', async (req: Request, res: Response, nex
 router.post('/api/v1/lessons/grade', async (req: Request, res: Response, next: NextFunction) => {
     try {
         requireAuth(req)
-        const { answer, expected, accept } = req.body ?? {}
-        if (typeof answer !== 'string' || typeof expected !== 'string') {
-            throw new AppError('Invalid grade request', 400)
-        }
+        const parsed = gradeRequestSchema.safeParse(req.body)
+        if (!parsed.success) throw new AppError('Invalid grade request', 400)
 
-        const completion = await groq.chat.completions.create({
-            model: 'openai/gpt-oss-20b',
-            temperature: 0,
-            max_tokens: 60,
-            reasoning_effort: 'low',
-            response_format: { type: 'json_object' } as any,
-            messages: [
-                {
-                    role: 'system',
-                    content:
-                        'You are a strict Spanish assessment function. Reply with JSON only: {"accept":true|false,"reason":"max 8 words"}.' +
-                        'Accept when the learner answer communicates the same core meaning as ANY reference, allowing minor grammar errors, missing words, wrong order, missing accents/punctuation.' +
-                        'Reject when the meaning differs, is opposite, or key information is missing.' +
-                        `References: ${JSON.stringify([expected, ...(Array.isArray(accept) ? accept : [])])}`,
-                },
-                { role: 'user', content: answer },
-            ],
-        } as any)
+        const { answer, expected, accept, context } = parsed.data
+        const result = await functionalJudge({ answer, expected, accept, context })
 
-        const text = completion.choices[0]?.message?.content ?? '{}'
-        const match = text.match(/\{[\s\S]*\}/)
-        const parsed = JSON.parse(match?.[0] ?? '{}')
-        res.json({ correct: parsed.accept === true, reason: String(parsed.reason ?? '') })
+        res.json({
+            correct: result.accept,
+            reason: result.reason,
+            evidence: result.evidence,
+            source: result.source,
+        })
     } catch (error) { next(error) }
 })
 
