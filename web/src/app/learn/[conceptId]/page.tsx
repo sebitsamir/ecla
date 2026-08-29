@@ -2,7 +2,7 @@
 
 import { useEffect, useMemo, useRef, useState, Suspense } from 'react'
 import { useParams, useRouter, useSearchParams } from 'next/navigation'
-import { useAuth, useUser } from '@clerk/nextjs'
+import { useUser } from '@clerk/nextjs'
 import { ArrowLeft } from 'lucide-react'
 import SceneExperience from '@/components/ecla/SceneExperience'
 import MissionRunner from '@/components/MissionRunner'
@@ -16,12 +16,13 @@ import { streetEncounter } from '@/content/scenes/streetEncounter'
 import { MODE_LABELS, MODE_PURPOSE, normalizeMode } from '@/lib/modeStages'
 import { retrievalTargetsFromLesson } from '@/lib/retrievalTargets'
 import { API_URL } from '@/lib/apiClient'
+import { useAuthReady } from '@/hooks/useAuthReady'
 
 function LearnPlayer() {
     const params = useParams()
     const router = useRouter()
     const searchParams = useSearchParams()
-    const { getToken } = useAuth()
+    const { isLoaded, isSignedIn, getToken } = useAuthReady()
     const { user } = useUser()
 
     const mode = normalizeMode(searchParams.get('mode'))
@@ -29,27 +30,48 @@ function LearnPlayer() {
 
     const [lesson, setLesson] = useState<any>(null)
     const [loading, setLoading] = useState(true)
+    const [loadError, setLoadError] = useState<string | null>(null)
     const [memory, setMemory] = useState<LearnerMemory | null>(null)
     const [completing, setCompleting] = useState(false)
     const recordedSceneRef = useRef<string | null>(null)
 
     useEffect(() => {
-        (async () => {
+        if (!isLoaded) return
+        if (!isSignedIn) {
+            router.push('/')
+            return
+        }
+
+        let cancelled = false
+        ;(async () => {
+            setLoading(true)
+            setLoadError(null)
             try {
                 const token = await getToken()
                 const res = await fetch(
                     `${API_URL}/api/v1/lessons/${params.conceptId}?mode=${mode}`,
                     { headers: { Authorization: `Bearer ${token}` } },
                 )
-                const data = await res.json()
-                setLesson(data.lesson)
+                const data = await res.json().catch(() => ({}))
+                if (!res.ok) {
+                    if (!cancelled) setLoadError(data.error ?? `Could not load lesson (${res.status})`)
+                    return
+                }
+                if (!data.lesson) {
+                    if (!cancelled) setLoadError('Lesson not found.')
+                    return
+                }
+                if (!cancelled) setLesson(data.lesson)
             } catch (e) {
                 console.error('Failed to load lesson:', e)
+                if (!cancelled) setLoadError('Could not reach the server. Check your connection.')
             } finally {
-                setLoading(false)
+                if (!cancelled) setLoading(false)
             }
         })()
-    }, [getToken, params.conceptId, mode])
+
+        return () => { cancelled = true }
+    }, [isLoaded, isSignedIn, getToken, params.conceptId, mode, router])
 
     useEffect(() => { seedNameFromProfile(user?.firstName ?? null) }, [user])
     useEffect(() => { (async () => setMemory(await fetchMemory(getToken)))() }, [getToken])
@@ -60,29 +82,44 @@ function LearnPlayer() {
         [lesson, mode],
     )
 
-    const baseScene = !isReview && mode !== 'MISSION' && lesson?.code
+    const baseScene = mode !== 'MISSION' && lesson?.code
         ? sceneFor(lesson.code, lesson, mode)
         : undefined
 
-    const retrievalTarget = lesson ? retrievalTargetsFromLesson(lesson, 'STORY') : []
+    const retrievalTarget = lesson ? retrievalTargetsFromLesson(lesson, mode) : []
 
     const learned = ['CONTROLLED', 'TRANSFERRED', 'RETAINED'].includes(lesson?.mastery?.level ?? '')
     const learnerName = memory?.name ?? getLearnerName()
 
     const scene = useMemo(() => {
-        if (mode === 'MISSION') return undefined
-        let s = baseScene
+        if (mode === 'MISSION' || !lesson?.code) return undefined
+
+        const fullScene = baseScene
             ? { ...baseScene, beats: applyLearnerName(baseScene.beats, learnerName) }
-            : (isReview || learned) && retrievalTarget.length > 0
-                ? streetEncounter({
+            : undefined
+
+        if (!isReview) {
+            if (fullScene) return personalizeScene(fullScene, memory)
+            if (learned && retrievalTarget.length > 0) {
+                return personalizeScene(streetEncounter({
                     name: learnerName,
-                    canDo: lesson?.canDo ?? '',
+                    canDo: lesson.canDo ?? '',
                     expected: retrievalTarget,
-                })
-                : undefined
-        if (s) s = personalizeScene(s, memory)
-        return s
-    }, [baseScene, learnerName, isReview, learned, retrievalTarget, lesson?.canDo, memory, mode])
+                }), memory)
+            }
+            return undefined
+        }
+
+        if (retrievalTarget.length > 0) {
+            return personalizeScene(streetEncounter({
+                name: learnerName,
+                canDo: lesson.canDo ?? '',
+                expected: retrievalTarget,
+            }), memory)
+        }
+
+        return fullScene ? personalizeScene(fullScene, memory) : undefined
+    }, [baseScene, learnerName, isReview, learned, retrievalTarget, lesson?.canDo, lesson?.code, memory, mode])
 
     useEffect(() => {
         if (!scene || recordedSceneRef.current === scene.id) return
@@ -97,12 +134,8 @@ function LearnPlayer() {
     }, [scene, getToken, learnerName])
 
     useEffect(() => {
-        if (!loading && !lesson) router.push('/course')
-        else if (!loading && lesson && mode !== 'MISSION' && !scene) {
-            console.warn('[ecla] Redirecting: no scene for', JSON.stringify(lesson?.code))
-            router.push('/course')
-        }
-    }, [loading, lesson, scene, router, mode])
+        if (!loading && !lesson && !loadError) router.push('/course')
+    }, [loading, lesson, loadError, router])
 
     const completeScene = async (correct: number, incorrect: number, sceneEvidence?: any) => {
         if (completing) return
@@ -147,7 +180,7 @@ function LearnPlayer() {
         }
     }
 
-    if (loading || !lesson) {
+    if (!isLoaded || loading) {
         return (
             <main className="min-h-screen flex flex-col items-center justify-center bg-[#0B0B10]">
                 <div className="h-8 w-8 animate-spin rounded-full border-2 border-glow border-t-transparent mb-4" />
@@ -155,6 +188,23 @@ function LearnPlayer() {
             </main>
         )
     }
+
+    if (loadError) {
+        return (
+            <main className="min-h-screen flex flex-col items-center justify-center bg-[#0B0B10] px-6 text-center">
+                <p className="text-lg font-semibold text-cream mb-2">Could not open this scene</p>
+                <p className="text-sm text-cream/50 mb-6 max-w-md">{loadError}</p>
+                <button
+                    onClick={() => router.push('/course')}
+                    className="rounded-xl bg-glow px-5 py-2.5 text-sm font-bold text-night-900"
+                >
+                    Back to course
+                </button>
+            </main>
+        )
+    }
+
+    if (!lesson) return null
 
     if (mode === 'MISSION') {
         return (
@@ -177,7 +227,29 @@ function LearnPlayer() {
         )
     }
 
-    if (!scene) return null
+    if (!scene) {
+        return (
+            <main className="min-h-screen flex flex-col items-center justify-center bg-[#0B0B10] px-6 text-center">
+                <p className="text-lg font-semibold text-cream mb-2">Scene not ready yet</p>
+                <p className="text-sm text-cream/50 mb-6 max-w-md">
+                    This competency does not have playable content for {MODE_LABELS[mode]} mode yet.
+                    Try Story mode from the course map.
+                </p>
+                <button
+                    onClick={() => router.push(`/learn/${lesson.conceptId}?mode=STORY`)}
+                    className="rounded-xl bg-glow px-5 py-2.5 text-sm font-bold text-night-900 mr-3"
+                >
+                    Open in Story mode
+                </button>
+                <button
+                    onClick={() => router.push('/course')}
+                    className="mt-3 text-sm text-cream/50 hover:text-cream"
+                >
+                    Back to course
+                </button>
+            </main>
+        )
+    }
 
     const tools = {
         ...lesson.tools,

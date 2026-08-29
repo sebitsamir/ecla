@@ -126,14 +126,14 @@ export default function StageCard({ unit, index, defaultOpen = false, onSelect }
                             {list.map(cp => {
                                 const clickable = cp.status !== 'locked'
                                 const sceneTitle = sceneTitleFor(cp.code, cp.title ?? cp.canDo)
-                                const href = cp.href ?? `/learn/${cp.id}`
+                                const href = cp.href ?? `/learn/${cp.id}?mode=STORY`
                                 return (
                                     <li key={cp.id}>
                                         <button
                                             onClick={() => {
                                                 if (!clickable) return
-                                                if (onSelect) onSelect(cp)
-                                                else router.push(href)
+                                                onSelect?.(cp)
+                                                router.push(href)
                                             }}
                                             disabled={!clickable}
                                             aria-disabled={!clickable}

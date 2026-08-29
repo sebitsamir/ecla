@@ -74,6 +74,7 @@ function computeNextActionFromSnapshot(
     }
 
     const finished = finishedSet(masteryByCompetency)
+    const progressed = progressedSet(masteryByCompetency)
     const weakest = [...dimensions]
         .filter((d): d is { key: string; avg: number; band: string } => d.avg != null)
         .sort((a, b) => a.avg - b.avg)[0]
@@ -82,7 +83,7 @@ function computeNextActionFromSnapshot(
         for (const unit of course.units) {
             for (const comp of unit.competencies) {
                 if (finished.has(comp.id)) continue
-                const open = comp.prerequisiteIds.every(id => finished.has(id))
+                const open = comp.prerequisiteIds.every(id => progressed.has(id))
                 if (open) {
                     const mode = weakest ? MODE_BY_DIM[weakest.key] ?? 'STORY' : 'STORY'
                     const reason = weakest
