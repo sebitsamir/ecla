@@ -18,6 +18,8 @@ import adaptiveRoutes from './routes/adaptive'
 import missionRoutes from './routes/missions'
 import memoryRoutes from './routes/memory'
 import gatewayRoutes from './routes/gateway'
+import performanceRoutes from './routes/performance'
+import transferRoutes from './routes/transfer'
 import contentRoutes from './routes/content'
 
 const app = express()
@@ -64,6 +66,8 @@ app.use(missionRoutes)
 app.use(memoryRoutes)
 app.use(gatewayRoutes)
 app.use(contentRoutes)
+app.use(performanceRoutes)
+app.use(transferRoutes)
 
 // 404
 app.use((_req: Request, res: Response) => {
