@@ -10,8 +10,8 @@
 import { Router, Request, Response, NextFunction } from 'express'
 import { prisma } from '../lib/prisma'
 import { getOrSyncUserFast } from '../lib/auth'
-import { computeNextAction, dueReviewsFor, nextReviewDate } from './adaptive'
-import { MasteryLevel } from '@prisma/client'
+import { dueReviewsFor, nextReviewDate } from './adaptive'
+import { buildLearnerHome } from '../lib/learnerHome'
 
 const router = Router()
 
@@ -91,82 +91,26 @@ router.get('/api/v1/learner/competencies', async (req: Request, res: Response, n
 })
 
 /**
+ * GET /api/v1/learner/home
+ * Dashboard + course in one round-trip (summary, course map, retention nudges).
+ */
+router.get('/api/v1/learner/home', async (req: Request, res: Response, next: NextFunction) => {
+    try {
+        const user = await getOrSyncUserFast(req)
+        const home = await buildLearnerHome(user)
+        res.json(home)
+    } catch (error) { next(error) }
+})
+
+/**
  * GET /api/v1/learner/summary
  * Separates MASTERY (finished) from PROGRESSION (unlocks next steps).
  */
 router.get('/api/v1/learner/summary', async (req: Request, res: Response, next: NextFunction) => {
     try {
         const user = await getOrSyncUserFast(req)
-        const weekAgo = new Date(Date.now() - 7 * 86400000)
-
-        // Separate Mastery from Progression
-        const MASTERY_LEVELS: MasteryLevel[] = ['TRANSFERRED', 'RETAINED']
-        const PROGRESSION_LEVELS: MasteryLevel[] = ['CONTROLLED', 'TRANSFERRED', 'RETAINED']
-
-        const [total, masteredRows, progressedRows, weekRows, attempts, units] = await Promise.all([
-            prisma.competency.count({ where: { level: 'PRE_A1' } }),
-            prisma.competencyMastery.findMany({
-                where: { userId: user.id, level: { in: MASTERY_LEVELS } },
-                select: { competencyId: true },
-            }),
-            prisma.competencyMastery.findMany({
-                where: { userId: user.id, level: { in: PROGRESSION_LEVELS } },
-                select: { competencyId: true },
-            }),
-            prisma.competencyMastery.findMany({
-                where: { userId: user.id, level: { in: PROGRESSION_LEVELS }, lastAssessedAt: { gte: weekAgo } },
-                select: { competencyId: true },
-            }),
-            prisma.missionAttempt.findMany({
-                where: { userId: user.id, completedAt: { gte: weekAgo } },
-                select: { evidence: true },
-            }),
-            prisma.unit.findMany({
-                where: { course: { isPublished: true } },
-                orderBy: { orderIndex: 'asc' },
-                include: {
-                    competencies: {
-                        orderBy: { orderIndex: 'asc' },
-                        select: {
-                            id: true, title: true,
-                            prerequisitesAsCompetency: { select: { prerequisiteId: true } },
-                        },
-                    },
-                },
-            }),
-        ])
-
-        const mastered = new Set(masteredRows.map(r => r.competencyId))
-        const progressed = new Set(progressedRows.map(r => r.competencyId))
-        const repairs = attempts.filter(a => (a.evidence as any)?.repairUsed === true).length
-        const { dimensions, next } = await computeNextAction(user.id)
-
-        // "Continue learning" cards: demonstrated counts + first open competency.
-        const unitCards = units.slice(0, 4).map(u => {
-            const done = u.competencies.filter(c => mastered.has(c.id)).length
-            const firstOpen = u.competencies.find(c =>
-                !progressed.has(c.id) &&
-                (c.prerequisitesAsCompetency as { prerequisiteId: string }[]).every(p => progressed.has(p.prerequisiteId)),
-            )
-            return {
-                id: u.id, title: u.title,
-                demonstrated: done, total: u.competencies.length,
-                href: firstOpen ? `/learn/${firstOpen.id}` : null,
-            }
-        })
-
-        res.json({
-            summary: {
-                name: (user as any).displayName ?? null,
-                demonstrated: mastered.size, // True mastery count
-                total,
-                week: { demonstrated: weekRows.length, conversations: attempts.length, repairs },
-                dimensions,
-                dueReviews: await dueReviewsFor(user.id),
-                nextAction: next,
-                units: unitCards,
-            },
-        })
+        const { summary } = await buildLearnerHome(user)
+        res.json({ summary })
     } catch (error) { next(error) }
 })
 

@@ -1,52 +1,21 @@
 'use client'
 
 /**
- * RetentionCard — spaced retrieval made human (Phase C).
- *
- * "Sofía wants to see you tomorrow."
- * Shows up to 3 learned competencies due for review; the CTA drops the
- * learner straight into the scene (authored scene, or a Street Encounter
- * for mastered competencies without one — the learn page decides).
- *
- * Renders NOTHING when nothing is due — no clutter, no guilt streaks.
+ * RetentionCard — spaced retrieval nudges (included in /learner/home).
  */
-import { useEffect, useState } from 'react'
 import Link from 'next/link'
 import { ArrowRight, Clock } from 'lucide-react'
 import { directionFor } from '@/content/scenes/unitDirections'
 import { CAST } from '@/content/cast'
 import type { CharacterId } from '@/lib/sceneTypes'
-
-const API_URL = process.env.NEXT_PUBLIC_API_URL ?? 'http://localhost:4000'
-
-type Review = { code: string; title: string; level: string; dueInHours: number }
+import type { RetentionReview } from '@/lib/summary'
 
 const charFor = (code: string): CharacterId => directionFor(code).cast[0] ?? 'sofia'
 
 const dueLabel = (h: number) => (h <= 0 ? 'due now' : h <= 24 ? 'tomorrow' : `in ${Math.round(h / 24)}d`)
 
-export default function RetentionCard({ getToken }: {
-    getToken: () => Promise<string | null>
-}) {
-    const [reviews, setReviews] = useState<Review[] | null>(null)
-
-    useEffect(() => {
-        (async () => {
-            try {
-                const token = await getToken()
-                const r = await fetch(`${API_URL}/api/v1/learner/upcoming-reviews`, {
-                    headers: { Authorization: `Bearer ${token}` },
-                })
-                const j = await r.json()
-                setReviews(Array.isArray(j?.reviews) ? j.reviews : [])
-            } catch {
-                setReviews([])
-            }
-        })()
-    }, [getToken])
-
-    // Nothing due → the card stays invisible. Silence is a feature.
-    if (!reviews || reviews.length === 0) return null
+export default function RetentionCard({ reviews }: { reviews?: RetentionReview[] | null }) {
+    if (!reviews?.length) return null
 
     return (
         <section className="rounded-2xl border border-white/10 bg-[#13131B] p-5 sm:p-6">

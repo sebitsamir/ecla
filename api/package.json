@@ -14,6 +14,8 @@
     "seed:structure": "tsx prisma/seed.ts",
     "seed:content": "tsx prisma/seedSublessons.ts",
     "seed:all": "tsx prisma/seedAll.ts",
+    "db:patch": "prisma db execute --schema prisma/schema.prisma --file prisma/migrations/20260829180000_phase31_learner_extensions/migration.sql",
+    "db:status": "prisma migrate status",
     "validate:content": "tsx prisma/content/validate-cli.ts",
     "validate:curriculum": "tsx prisma/content/validate-curriculum-cli.ts"
   },

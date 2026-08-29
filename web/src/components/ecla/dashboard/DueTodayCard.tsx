@@ -27,7 +27,7 @@ export default function DueTodayCard({ reviews }: { reviews: DueReview[] }) {
                     return (
                         <li key={rv.id ?? rv.code}>
                             <Link
-                                href={`/learn/${rv.code}?review=1`}
+                                href={rv.id ? `/learn/${rv.id}?review=1` : `/learn/${rv.code}?review=1`}
                                 className="flex items-center gap-3 rounded-xl border border-white/10 bg-[#13131B] px-4 py-3 transition-colors hover:border-glow/40"
                             >
                                 <div className="min-w-0 flex-1">

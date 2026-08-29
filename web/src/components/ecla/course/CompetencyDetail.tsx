@@ -5,12 +5,15 @@
  */
 import Link from 'next/link'
 import { ArrowRight } from 'lucide-react'
+import { sceneTitleFor } from '@/content/sceneTitles'
 
 export type CompetencyEvidence = {
     id: string | number
     code: string
+    title?: string | null
     canDo?: string | null
     status: string
+    href?: string
     patterns?: string[]
     evidence?: {
         comprehension?: number | null
@@ -50,11 +53,16 @@ export default function CompetencyDetail({ competency }: { competency: Competenc
 
     const mastered = competency.status === 'mastered'
     const ev = competency.evidence ?? {}
+    const sceneTitle = sceneTitleFor(competency.code, competency.title ?? competency.canDo)
+    const href = competency.href ?? `/learn/${competency.id}`
 
     return (
         <section className="rounded-2xl border border-white/10 bg-[#13131B] p-5 sm:p-6">
-            <p className="text-[11px] font-semibold uppercase tracking-widest text-glow">Can do</p>
+            <p className="text-[11px] font-semibold uppercase tracking-widest text-glow">Scene</p>
             <p className="mt-2 font-display text-lg font-bold leading-snug text-cream">
+                {sceneTitle}
+            </p>
+            <p className="mt-2 text-sm leading-relaxed text-cream/60">
                 &ldquo;{competency.canDo ?? competency.code}&rdquo;
             </p>
             <p className="mt-1 text-[10px] font-semibold uppercase tracking-widest text-cream/35">{competency.code}</p>
@@ -89,7 +97,7 @@ export default function CompetencyDetail({ competency }: { competency: Competenc
 
             {competency.status !== 'locked' && (
                 <Link
-                    href={`/learn/${competency.code}`}
+                    href={href}
                     className="mt-5 flex w-full items-center justify-center gap-2 rounded-xl bg-glow py-3 text-sm font-bold text-night-900 transition-all hover:bg-glow/90 active:scale-[0.98]"
                 >
                     {competency.status === 'mastered' ? 'Review in scene' : 'Continue'}

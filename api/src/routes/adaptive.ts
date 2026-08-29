@@ -37,7 +37,7 @@ export const bandOf = (v: number | null): string | null =>
 export async function finishedSetFor(userId: string): Promise<Set<string>> {
     const rows = await prisma.competencyMastery.findMany({
         where: { userId, level: { in: FINISHED } },
-        include: { competency: true },
+        select: { competencyId: true },
     })
     return new Set(rows.map(r => r.competencyId))
 }
@@ -87,7 +87,18 @@ export async function computeNextAction(userId: string) {
                 },
             },
         }),
-        prisma.competencyMastery.findMany({ where: { userId } }),
+        prisma.competencyMastery.findMany({
+            where: { userId },
+            select: {
+                competencyId: true,
+                level: true,
+                comprehensionScore: true,
+                retrievalScore: true,
+                interactionScore: true,
+                applicationScore: true,
+                transferScore: true,
+            },
+        }),
     ])
 
     // ── Dimension averages across everything assessed ──
@@ -125,7 +136,7 @@ export async function computeNextAction(userId: string) {
                 title: rv.title,
                 canDo: rv.canDo,
                 mode: 'STORY',
-                href: `/learn/${rv.code}?review=1`,
+                href: `/learn/${rv.id}?review=1`,
                 reason: 'Someone wants to see you again — a quick hello keeps it alive.',
             },
         }

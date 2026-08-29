@@ -11,12 +11,15 @@
 import { useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { Check, ChevronDown, Lock } from 'lucide-react'
+import { sceneTitleFor } from '@/content/sceneTitles'
 
 export type CourseCompetency = {
     id: string | number
     code: string
+    title?: string | null
     canDo?: string | null
     status: string
+    href?: string
     prerequisites?: string[]
     patterns?: string[]
     evidence?: {
@@ -122,12 +125,15 @@ export default function StageCard({ unit, index, defaultOpen = false, onSelect }
                         <ul className="border-t border-white/5">
                             {list.map(cp => {
                                 const clickable = cp.status !== 'locked'
+                                const sceneTitle = sceneTitleFor(cp.code, cp.title ?? cp.canDo)
+                                const href = cp.href ?? `/learn/${cp.id}`
                                 return (
                                     <li key={cp.id}>
                                         <button
                                             onClick={() => {
-                                                if (clickable) onSelect?.(cp)
-                                                if (clickable && !onSelect) router.push(`/learn/${cp.code}`)
+                                                if (!clickable) return
+                                                if (onSelect) onSelect(cp)
+                                                else router.push(href)
                                             }}
                                             disabled={!clickable}
                                             aria-disabled={!clickable}
@@ -138,8 +144,13 @@ export default function StageCard({ unit, index, defaultOpen = false, onSelect }
                                             <StatusIcon status={cp.status} />
                                             <span className="min-w-0 flex-1">
                                                 <span className={`block text-sm leading-snug ${cp.status === 'mastered' ? 'text-cream/70' : 'text-cream/90'}`}>
-                                                    {cp.canDo ?? cp.code}
+                                                    {sceneTitle}
                                                 </span>
+                                                {cp.canDo && cp.canDo !== sceneTitle && (
+                                                    <span className="mt-1 block text-xs leading-relaxed text-cream/45">
+                                                        {cp.canDo}
+                                                    </span>
+                                                )}
                                                 <span className="mt-1 block text-[10px] font-semibold uppercase tracking-widest text-cream/30">
                                                     {cp.code}
                                                 </span>

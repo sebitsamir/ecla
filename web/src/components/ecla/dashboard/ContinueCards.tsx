@@ -18,6 +18,7 @@ export type ContinueUnit = {
     description?: string | null
     counts?: unknown
     competencies?: unknown
+    href?: string | null
 }
 
 const num = (v: unknown): number => (typeof v === 'number' && isFinite(v) ? v : 0)
@@ -27,18 +28,21 @@ export default function ContinueCards({ units }: { units?: ContinueUnit[] | null
     const list = (units ?? []).slice(0, 4)
 
     /** First competency the learner can actually enter. */
-    const firstOpen = (u: ContinueUnit): string | undefined => {
+    const firstOpenHref = (u: ContinueUnit): string => {
+        if (u.href) return u.href
         const comps = Array.isArray(u.competencies)
             ? (u.competencies as Array<Record<string, unknown>>)
             : []
         const hit = comps.find(c => c.status === 'developing' || c.status === 'upcoming')
-        return typeof hit?.code === 'string' ? hit.code : undefined
+        if (typeof hit?.href === 'string') return hit.href
+        if (hit?.id != null) return `/learn/${hit.id}`
+        return '/course'
     }
 
     return (
         <div className="scrollbar-hide -mx-4 flex snap-x snap-mandatory gap-4 overflow-x-auto px-4 pb-2 md:mx-0 md:grid md:grid-cols-2 md:overflow-visible md:px-0 xl:grid-cols-4">
             {list.map((u, i) => {
-                const code = firstOpen(u)
+                const href = firstOpenHref(u)
                 const c = (u.counts ?? {}) as Record<string, unknown>
                 const mastered = num(c.mastered)
                 const open = num(c.developing) + num(c.upcoming)
@@ -46,7 +50,7 @@ export default function ContinueCards({ units }: { units?: ContinueUnit[] | null
                 return (
                     <button
                         key={u.id}
-                        onClick={() => router.push(code ? `/learn/${code}` : '/course')}
+                        onClick={() => router.push(href)}
                         className="group min-w-[240px] snap-start rounded-2xl border border-white/10 bg-[#13131B] p-5 text-left transition-all duration-300 hover:border-violet-500/40 hover:bg-[#171722] active:scale-[0.98] md:min-w-0"
                     >
                         <div className="mb-3 flex items-center justify-between">
