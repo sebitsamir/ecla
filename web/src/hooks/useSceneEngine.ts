@@ -27,7 +27,7 @@ import { useTTS } from './useTTS'
 import { useMic, type MicError, type MicState } from './useMic'
 import { useGrader } from './useGrader'
 import type { RepairAction } from '@/components/ecla/RepairDock'
-import { parseLearnerName, recordEncounter } from '@/lib/memory'
+import { parseLearnerName, rememberLearnerName, recordCharacterEncounter } from '@/lib/memory'
 
 export type SceneLine = {
     id: number
@@ -176,13 +176,13 @@ export function useSceneEngine({ scene, support = 'medium', getToken, onStage }:
         // 1) Repair phrases always win — the NPC complies naturally.
         if (isRepairPhrase(text)) {
             counts.current.correct++
-            recordAttempt(b.stage, true) // Phase 3: counts as success for this stage
-            evidence.current.repairUsed = true // Phase 3: track repair skill
+            recordAttempt(b.stage, true)
+            evidence.current.repairUsed = true
             flash('correct')
-            push({ who: 'coach', text: 'Good repair — asking for help is a real communication skill.' })
             setRepairOpen(false); setAttempts(0); setHintLevel(0)
             const line = currentNpcLine(b) ?? 'Más despacio, claro.'
             push({ who: npcRef.current, text: line })
+            push({ who: 'coach', text: 'Repair successful — interaction maintained' })
             say(line, () => setTimeout(advance, PACE_MS + 400))
             return
         }
@@ -204,15 +204,16 @@ export function useSceneEngine({ scene, support = 'medium', getToken, onStage }:
             if (b.kind === 'speak' && b.captureName) {
                 const name = parseLearnerName(text)
                 if (name) {
-                    recordEncounter(name)
-                    push({ who: 'coach', text: `Noted — from now on, they\u2019ll call you ${name}.` })
+                    rememberLearnerName(name)
+                    recordCharacterEncounter(getToken, npcRef.current, name)
+                    push({ who: npcRef.current, text: `¡Encantada, ${name}!` })
                 }
             }
 
             const clean = res.method === 'exact' || res.method === 'normalized'
-            if (!clean) push({ who: 'coach', text: `They understood you. A natural form: \u201c${expected[0]}\u201d` })
+            if (!clean) push({ who: 'coach', text: 'Meaning achieved' })
             if (b.kind === 'unexpected') {
-                push({ who: 'coach', text: 'Nice — you handled a question you never practiced. That is real ability.' })
+                push({ who: 'coach', text: 'Handled an unexpected turn' })
             }
 
             // Branch: first-try clean success → splice the challenge beat.
@@ -259,8 +260,9 @@ export function useSceneEngine({ scene, support = 'medium', getToken, onStage }:
             say(repairLine)
             setRepairOpen(true)   // learner agency: RepairDock appears
         } else {
-            // Model the target, then the conversation continues anyway.
-            push({ who: 'coach', text: `No problem. You can say: \u201c${expected[0]}\u201d` })
+            // Model the target through the person in the scene, then continue.
+            push({ who: npcRef.current, text: expected[0] })
+            say(expected[0])
             setAttempts(0); setHintLevel(0); setRepairOpen(false)
             if (b.kind === 'speak' && b.replyOnSuccess) {
                 push({ who: npcRef.current, text: b.replyOnSuccess })
@@ -290,7 +292,7 @@ export function useSceneEngine({ scene, support = 'medium', getToken, onStage }:
         // 'example' — model the target (support fading: counts as a hint)
         const ex = b?.kind === 'speak' ? b.expected[0]
             : b?.kind === 'unexpected' ? (b.accept?.[0] ?? b.es) : ''
-        push({ who: 'coach', text: `You can say: \u201c${ex}\u201d` })
+        push({ who: npcRef.current, text: ex })
         say(ex)
         setHintLevel(h => h + 1)
         setRepairOpen(false)
@@ -321,15 +323,15 @@ export function useSceneEngine({ scene, support = 'medium', getToken, onStage }:
         push({ who: 'you', text: option.label, mine: true })
         if (option.correct) {
             counts.current.correct++
-            recordAttempt(b.stage, true) // Phase 3: success
+            recordAttempt(b.stage, true)
             flash('correct')
-            if (b.coach) push({ who: 'coach', text: b.coach })
+            if (b.coach) push({ who: 'narrator', text: b.coach })
             setTimeout(advance, PACE_MS + 100)
         } else {
             counts.current.incorrect++
-            recordAttempt(b.stage, false) // Phase 3: failure
+            recordAttempt(b.stage, false)
             flash('incorrect')
-            push({ who: 'coach', text: 'Not quite. Think about the situation — try again.' })
+            push({ who: 'narrator', text: 'That didn\u2019t fit the moment — try again.' })
         }
     }, [idx, push, advance, flash])
 

@@ -17,6 +17,7 @@ import { ARCHETYPES, type Ctx, type Target } from './archetypes'
 import { getLearnerName } from '@/lib/memory'
 import { applyLearnerName } from './personalize'
 import { extractEngine, type StagePayload } from '@/lib/lessonPayload'
+import { buildSceneSpecSections } from '@/lib/sceneSpec'
 
 const norm = (s: string) => s.toLowerCase().replace(/[¡!.,¿?]/g, '').trim()
 const str = (v: unknown): string | null => (typeof v === 'string' && v.trim() ? v.trim() : null)
@@ -225,11 +226,19 @@ export function compileScene(bp: SceneBlueprint, lesson: any): SceneSpec {
     // Runtime personalization: once the learner's name is known, the world uses it.
     beats = applyLearnerName(beats, getLearnerName())
 
+    const specSections = buildSceneSpecSections(bp, lesson)
+    const world = specSections.world
+    const envLabel = world
+        ? (world.location === 'cafe' ? 'A small café' : world.location.charAt(0).toUpperCase() + world.location.slice(1))
+        : (bp.environment === 'cafe' ? 'A small café' : 'The street')
+
     return {
         id: bp.id,
         competencyCodes: [bp.competency],
         environment: bp.environment,
-        setting: `Madrid · ${bp.environment === 'cafe' ? 'A small café' : 'The street'} · ${bp.timeOfDay === 'evening' ? '19:30' : '9:42'}`,
+        setting: world
+            ? `Madrid · ${envLabel} · ${world.time}`
+            : `Madrid · ${envLabel} · ${bp.timeOfDay === 'evening' ? '19:30' : '9:42'}`,
         title: bp.title,
         timeOfDay: bp.timeOfDay,
         mood: bp.mood,
@@ -240,6 +249,7 @@ export function compileScene(bp: SceneBlueprint, lesson: any): SceneSpec {
             'use it with a new person',
         ],
         beats,
+        ...specSections,
     }
 }
 

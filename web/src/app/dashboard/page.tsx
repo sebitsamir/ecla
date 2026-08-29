@@ -2,8 +2,7 @@
 
 /**
  * /dashboard — the learning control center.
- * Fixes: summary fetch restored, ContinueUnit imported, 
- * ContinueCards fed by course-map units (true counts).
+ * Summary + course map fetched in parallel; loading clears when summary lands.
  */
 import { useEffect, useState } from 'react'
 import { useAuth, useUser } from '@clerk/nextjs'

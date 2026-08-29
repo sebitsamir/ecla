@@ -13,6 +13,8 @@ export type ToolsData = {
     grammar?: string | null
     pronunciation?: string | null
     culture?: string | null
+    scenePurpose?: string
+    scenePatterns?: string[]
 }
 
 export type MasteryData = {
@@ -41,6 +43,24 @@ export function MasteryBars({ mastery }: { mastery: MasteryData }) {
 export default function ToolsPanel({ tools, mastery }: { tools?: ToolsData; mastery?: MasteryData | null }) {
     return (
         <aside className="space-y-4 sticky top-20">
+            {tools?.scenePurpose && (
+                <div className="rounded-2xl border border-white/10 bg-[#13131B] p-4">
+                    <p className="text-xs font-bold uppercase tracking-wider text-cream/50 mb-2">Your goal</p>
+                    <p className="text-sm text-cream/70 leading-relaxed">{tools.scenePurpose}</p>
+                </div>
+            )}
+
+            {!!tools?.scenePatterns?.length && (
+                <div className="rounded-2xl border border-white/10 bg-[#13131B] p-4">
+                    <p className="text-xs font-bold uppercase tracking-wider text-cream/50 mb-2">Patterns</p>
+                    <ul className="space-y-1.5">
+                        {tools.scenePatterns.slice(0, 4).map(p => (
+                            <li key={p} className="text-sm text-cream/80 font-mono">{p}</li>
+                        ))}
+                    </ul>
+                </div>
+            )}
+
             {!!tools?.vocabulary?.length && (
                 <div className="rounded-2xl border border-white/10 bg-[#13131B] p-4">
                     <p className="text-xs font-bold uppercase tracking-wider text-cream/50 mb-3">Vocabulary</p>

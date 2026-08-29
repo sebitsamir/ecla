@@ -1,26 +1,15 @@
 'use client'
 
-/**
- * ECLA Learn Page — Pure Scene-driven language experiences.
- * 
- * Rules:
- * 1. If a competency has an authored scene, it plays.
- * 2. If it's a mastered competency without a scene, it plays a Street Encounter (spaced retrieval).
- * 3. If neither, it gracefully redirects to the Course map.
- * 
- * Phase 3 Integration:
- * - Receives structured evidence from SceneExperience via onComplete(correct, incorrect, evidence)
- * - Forwards it to POST /api/v1/learner/demonstrate
- */
-
-import { useEffect, useRef, useState, Suspense } from 'react'
-import { useParams, useRouter, useSearchParams } from 'next/navigation'
+import { useEffect, useMemo, useRef, useState, Suspense } from 'react'
+import { useParams, useRouter } from 'next/navigation'
 import { useAuth, useUser } from '@clerk/nextjs'
-import { Check, ArrowRight } from 'lucide-react'
+import { Check, ArrowRight, ArrowLeft } from 'lucide-react'
 import SceneExperience from '@/components/ecla/SceneExperience'
-import { sceneFor } from '@/content/scenes'
-import { getLearnerName, recordEncounter, seedNameFromProfile } from '@/lib/memory'
-import { applyLearnerName } from '@/content/scenes/personalize'
+import { sceneFor, applyLearnerName, personalizeScene } from '@/content/scenes'
+import {
+    fetchMemory, getLearnerName, recordCharacterEncounter,
+    seedNameFromProfile, type LearnerMemory,
+} from '@/lib/memory'
 import { streetEncounter } from '@/content/scenes/streetEncounter'
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL ?? 'http://localhost:4000'
@@ -28,18 +17,16 @@ const API_URL = process.env.NEXT_PUBLIC_API_URL ?? 'http://localhost:4000'
 function LearnPlayer() {
     const params = useParams()
     const router = useRouter()
-    const searchParams = useSearchParams()
-    const modeParam = searchParams.get('mode')
     const { getToken } = useAuth()
     const { user } = useUser()
 
     const [lesson, setLesson] = useState<any>(null)
     const [loading, setLoading] = useState(true)
+    const [memory, setMemory] = useState<LearnerMemory | null>(null)
     const [finished, setFinished] = useState(false)
     const [evidence, setEvidence] = useState<{ correct: number; incorrect: number } | null>(null)
     const recordedSceneRef = useRef<string | null>(null)
 
-    // 1. Fetch lesson data
     useEffect(() => {
         (async () => {
             try {
@@ -57,16 +44,15 @@ function LearnPlayer() {
         })()
     }, [getToken, params.conceptId])
 
-    // Learner memory: seed the name from the profile once (learner-given names win).
     useEffect(() => {
         seedNameFromProfile(user?.firstName ?? null)
     }, [user])
 
-    // 2. Determine the scene (Strictly Scene-Driven)
-    const sceneModeOk = !modeParam || modeParam === 'STORY'
-    const baseScene = sceneModeOk && lesson?.code
-        ? sceneFor(lesson.code, lesson)
-        : undefined
+    useEffect(() => {
+        (async () => setMemory(await fetchMemory(getToken)))()
+    }, [getToken])
+
+    const baseScene = lesson?.code ? sceneFor(lesson.code, lesson) : undefined
 
     const storyExp = (lesson?.subLessons ?? []).find((s: any) => s.type === 'STORY')
     const retrievalTarget = (storyExp?.exercises ?? [])
@@ -74,15 +60,18 @@ function LearnPlayer() {
         .map((e: any) => String(e.answer))
 
     const learned = ['CONTROLLED', 'TRANSFERRED', 'RETAINED'].includes(lesson?.mastery?.level ?? '')
+    const learnerName = memory?.name ?? getLearnerName()
 
-    const learnerName = getLearnerName()
-    const scene = baseScene
-        ? { ...baseScene, beats: applyLearnerName(baseScene.beats, learnerName) }
-        : (learned && retrievalTarget.length > 0)
-            ? streetEncounter({ name: learnerName, canDo: lesson?.canDo ?? '', expected: retrievalTarget })
-            : undefined
+    const scene = useMemo(() => {
+        let s = baseScene
+            ? { ...baseScene, beats: applyLearnerName(baseScene.beats, learnerName) }
+            : (learned && retrievalTarget.length > 0)
+                ? streetEncounter({ name: learnerName, canDo: lesson?.canDo ?? '', expected: retrievalTarget })
+                : undefined
+        if (s) s = personalizeScene(s, memory)
+        return s
+    }, [baseScene, learnerName, learned, retrievalTarget, lesson?.canDo, memory])
 
-    // 3. Record character encounters for memory (once per scene load)
     useEffect(() => {
         if (!scene || recordedSceneRef.current === scene.id) return
         recordedSceneRef.current = scene.id
@@ -90,15 +79,11 @@ function LearnPlayer() {
             scene.beats
                 .filter((b: any) => b.kind === 'say' || b.kind === 'listen' || b.kind === 'unexpected')
                 .map((b: any) => b.character as string)
+                .filter((c: string) => c && c !== 'you'),
         ))
-        chars.forEach(c => {
-            if (learnerName && c === 'you') {
-                recordEncounter(learnerName)
-            }
-        })
-    }, [scene, learnerName])
+        chars.forEach(c => recordCharacterEncounter(getToken, c, learnerName))
+    }, [scene, getToken, learnerName])
 
-    // 4. Safe redirect if no scene is available for this competency
     useEffect(() => {
         if (!loading && !lesson) {
             router.push('/course')
@@ -108,12 +93,9 @@ function LearnPlayer() {
         }
     }, [loading, lesson, scene, router])
 
-    // 5. Scene completion handler
-    // Phase 3: Accepts structured evidence as the 3rd argument from SceneExperience
     const completeScene = async (correct: number, incorrect: number, sceneEvidence?: any) => {
         const token = await getToken()
 
-        // 1. Record legacy completion (for XP/SubLesson progress)
         const exp = (lesson.subLessons ?? []).find((s: any) => s.type === 'STORY')
         await fetch(`${API_URL}/api/v1/lessons/complete`, {
             method: 'POST',
@@ -128,16 +110,15 @@ function LearnPlayer() {
             }),
         })
 
-        // 2. Record Mastery Evidence (Constitutional alignment - Phase 3)
         await fetch(`${API_URL}/api/v1/learner/demonstrate`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
-            body: JSON.stringify({ 
-                competencyId: lesson.conceptId, 
-                correct, 
+            body: JSON.stringify({
+                competencyId: lesson.conceptId,
+                correct,
                 incorrect,
                 evidence: sceneEvidence ?? null,
-                contextId: scene?.id ?? lesson.conceptId
+                contextId: scene?.id ?? lesson.conceptId,
             }),
         })
 
@@ -146,7 +127,6 @@ function LearnPlayer() {
         setFinished(true)
     }
 
-    // 6. Render States: Loading or Redirecting
     if (loading || !lesson || !scene) {
         return (
             <main className="min-h-screen flex flex-col items-center justify-center bg-[#0B0B10]">
@@ -156,7 +136,6 @@ function LearnPlayer() {
         )
     }
 
-    // 7. Evidence-based completion screen
     if (finished && evidence) {
         return (
             <main className="min-h-screen bg-[#0B0B10] flex items-center justify-center p-6 animate-fade-in">
@@ -201,23 +180,34 @@ function LearnPlayer() {
         )
     }
 
-    // 8. Active Scene Experience
+    const tools = {
+        ...lesson.tools,
+        scenePurpose: scene.purpose?.stakes,
+        scenePatterns: scene.targetLanguage?.patterns,
+    }
+
     return (
         <main className="min-h-screen font-body bg-[#0B0B10]">
             <header className="sticky top-0 z-40 border-b border-white/5 bg-[#0B0B10]/95 backdrop-blur">
                 <div className="mx-auto max-w-[1400px] px-4 h-14 flex items-center gap-3">
-                    <button onClick={() => router.push('/course')} className="text-sm text-cream/60 hover:text-cream transition-colors">← Exit</button>
+                    <button
+                        onClick={() => router.push('/course')}
+                        className="inline-flex items-center gap-1.5 text-sm text-cream/60 hover:text-cream transition-colors"
+                    >
+                        <ArrowLeft className="h-4 w-4" />
+                        <span>Exit</span>
+                    </button>
                     <p className="text-sm font-semibold text-cream/80 truncate">{scene.title}</p>
                     <p className="ml-auto text-[11px] uppercase tracking-widest text-cream/40">Spanish · Pre-A1</p>
                 </div>
             </header>
             <div className="relative z-0 mx-auto max-w-[1400px] px-4 py-6">
-                <SceneExperience 
-                    scene={scene} 
-                    tools={lesson.tools} 
-                    mastery={lesson.mastery} 
-                    getToken={getToken} 
-                    onComplete={completeScene} 
+                <SceneExperience
+                    scene={scene}
+                    tools={tools}
+                    mastery={lesson.mastery}
+                    getToken={getToken}
+                    onComplete={completeScene}
                 />
             </div>
         </main>
