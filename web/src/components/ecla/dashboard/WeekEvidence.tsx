@@ -2,8 +2,7 @@
 
 /**
  * WeekEvidence — this week's activity as a quiet pulse (Phase D).
- * Boundary note: normalizes at runtime; stat tiles render the probed
- * `stats` array directly (old stats.scenes/wins/xp refs were dead).
+ * Stat tiles render the probed `stats` array directly.
  */
 import { Activity } from 'lucide-react'
 

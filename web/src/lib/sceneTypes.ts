@@ -1,13 +1,14 @@
 /**
- * ECLA Scene Engine — shared type contracts.
+ * ECLA Scene Engine — shared type contracts (Phase 6: first-class scene spec).
  *
  * A SceneSpec is the "world" description a lesson plays:
- * where it happens, who is there, and the ordered beats the learner
- * moves through. Beats map onto the 9-stage ECLA ladder so the
- * Journey rail and the learner model stay in sync with the story.
+ * where it happens, who is there, why the learner is there,
+ * what language the world offers, how support fades, how the world
+ * pushes back, and what counts as evidence — plus the ordered beats.
  *
- * These types are consumed by the hooks and components in Phase 7
- * and, later, by seed-generated scene content (Phase 13 pipeline).
+ * Phase 6 adds eight spec sections populated by the Lesson Compiler from
+ * the curriculum (competency → realization → engine payload → assessment).
+ * All sections are optional on SceneSpec so older consumers keep compiling.
  */
 
 /** The reusable 9-stage acquisition ladder (spec §11). */
@@ -23,6 +24,9 @@ export type CharacterId = 'sofia' | 'marta' | 'daniel' | 'luis' | 'ana' | 'you'
 
 /** Environments get distinct visual treatment (gradient + label). */
 export type Environment = 'cafe' | 'street' | 'shop' | 'home' | 'hotel' | 'office'
+
+/** Support ladder (§3.4) — measured, fadeable, never invisible. */
+export type SupportLevel = 'maximum' | 'high' | 'medium' | 'low' | 'minimal'
 
 export type SceneOption = { label: string; correct?: boolean }
 
@@ -45,16 +49,15 @@ export type ChallengeSpec = {
 
 /**
  * One moment in a scene. Kinds:
- * - action:         narrator stage direction (auto-advances)
- * - say:            NPC speaks (auto TTS, then advances)
- * - listen:         NPC line the learner must actively tap to hear
- * - transfer-intro: "Same ability. New situation." — swaps the setting
- * - choice:         meaning-discovery / recognition options
- * - speak:          mic-first production; graded by useGrader
- * - unexpected:     NPC speaks slightly beyond comfort (Phase 8);
- *                   responding OR repairing both count as evidence (Arts. 14/15)
+ * action:         narrator stage direction (auto-advances)
+ * say:            NPC speaks (auto TTS, then advances)
+ * listen:         NPC line the learner must actively tap to hear
+ * transfer-intro: "Same ability. New situation." — swaps the setting
+ * choice:         meaning-discovery / recognition options
+ * speak:          mic-first production; graded by useGrader
+ * unexpected:     NPC speaks slightly beyond comfort (Phase 8);
+ *                 responding OR repairing both count as evidence (Arts. 14/15)
  */
-
 export type SceneBeat =
     | { kind: 'action'; text: string; stage?: StageName }
     | { kind: 'say'; character: CharacterId; es: string; en?: string; gloss?: string; stage?: StageName }
@@ -74,15 +77,11 @@ export type SceneBeat =
         open?: boolean
         /** NPC's natural reply when the learner succeeds — the world reacts. */
         replyOnSuccess?: string
-        /**
-         * What the NPC actually said that the learner is answering (Phase 8).
-         * Used when the learner asks them to repeat during repair.
-         */
+        /** What the NPC actually said that the learner is answering (Phase 8). */
         npcLine?: string
         /** First-try clean success → insert this harder follow-up (Phase 8 branching). */
         challenge?: ChallengeSpec
         stage?: StageName
-
         captureName?: boolean
     }
     | {
@@ -97,6 +96,66 @@ export type SceneBeat =
         stage?: StageName
     }
 
+// ── Phase 6: first-class scene spec sections ─────────────────────────────
+
+/** WORLD — where the scene lives. */
+export type SceneWorld = {
+    location: Environment
+    atmosphere: string
+    objects: string[]
+    time: string
+}
+
+/** CHARACTERS — people, not mascots. */
+export type SceneCharacterSpec = {
+    id: CharacterId
+    role: 'primary' | 'secondary' | 'learner'
+    relationship: string
+    register: string
+}
+
+/** PURPOSE — the learner's lived goal (curriculum truth, world stakes). */
+export type ScenePurpose = {
+    canDo: string
+    goal: string
+    stakes: string
+}
+
+/** TARGET LANGUAGE — what the world offers the learner. */
+export type SceneTargetLanguage = {
+    functions: string[]
+    patterns: string[]
+    vocabulary: { word: string; translation?: string }[]
+    pronunciation?: string
+    culture?: string
+}
+
+/** SUPPORT — measured, fadeable, never invisible (Art. 12). */
+export type SceneSupportPolicy = {
+    initial: SupportLevel
+    ladder: SupportLevel[]
+    translation: 'hidden_by_default' | 'on_request'
+    hintSource: 'pattern' | 'keyword' | 'model'
+    retryPolicy: 'repair_open' | 'model_after_three'
+}
+
+/** CHALLENGE — the world pushes back (Phase 8 + transfer design). */
+export type SceneChallengeSpec = {
+    misunderstanding: string
+    variation: string
+    unexpected: string
+}
+
+/** EVIDENCE — what counts as proof (from the assessment contract §6.4). */
+export type SceneEvidenceRequirements = {
+    minimumEvidence: string[]
+    interactionRequired: boolean
+    repairRequired: boolean
+    intelligibilityRequired: boolean
+    repeatedContextsRequired: boolean
+    dimensions: ('comprehension' | 'retrieval' | 'production' | 'interaction' | 'transfer')[]
+}
+
 /** A complete, playable scene for one or more competencies. */
 export type SceneSpec = {
     id: string
@@ -109,9 +168,16 @@ export type SceneSpec = {
     outcomes: string[]
     beats: SceneBeat[]
     cast?: CharacterId[]
-
     timeOfDay?: 'morning' | 'afternoon' | 'evening' | 'night'
     mood?: 'warm' | 'calm' | 'busy' | 'quiet'
+    // Phase 6 — first-class spec sections (compiler-populated, optional).
+    world?: SceneWorld
+    characters?: SceneCharacterSpec[]
+    purpose?: ScenePurpose
+    targetLanguage?: SceneTargetLanguage
+    support?: SceneSupportPolicy
+    challenge?: SceneChallengeSpec
+    evidenceRequirements?: SceneEvidenceRequirements
 }
 
 /** Stage categories — drives layout decisions without string matching. */

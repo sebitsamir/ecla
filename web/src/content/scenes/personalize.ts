@@ -1,16 +1,12 @@
 /**
- * personalize — runtime name injection over compiled beats.
+ * personalize — runtime transforms over compiled beats (Phases 9 + A).
  *
- * Two mechanisms:
- *   1. Explicit token: any authored line may contain `{{name}}`
- *      (Unit 2 dialogue scripts will use this).
- *   2. Natural greeting: the FIRST NPC "Hola…" say-beat becomes
- *      "¡Hola, <Name>! …" — the rest of the line is preserved, so no
- *      teaching content is lost ("Hola buenos días." → "¡Hola, Samir! Buenos días.").
- *
- * Pure function: same input → same output; safe under Strict Mode.
+ * applyLearnerName: injects the learner's name into greetings.
+ * personalizeScene: reunion beats when a character has met the learner before.
  */
-import type { SceneBeat } from '@/lib/sceneTypes'
+import type { SceneBeat, SceneSpec } from '@/lib/sceneTypes'
+import type { LearnerMemory } from '@/lib/memory'
+import { CAST } from '@/content/cast'
 
 const TOKEN = '{{name}}'
 const cap = (s: string) => (s ? s.charAt(0).toUpperCase() + s.slice(1) : s)
@@ -38,4 +34,35 @@ export function applyLearnerName(beats: SceneBeat[], name: string | null): Scene
 
         return { ...b, es, gloss } as SceneBeat
     })
+}
+
+/** Reunion greetings when characters remember the learner (Phase 9). */
+export function personalizeScene(scene: SceneSpec, memory: LearnerMemory | null): SceneSpec {
+    if (!memory?.name) return scene
+    const met = new Map(memory.characters.map(c => [c.characterId, c]))
+
+    const beats: SceneBeat[] = []
+    let reunionDone = false
+
+    for (const b of scene.beats) {
+        if (
+            !reunionDone &&
+            b.kind === 'say' &&
+            b.character !== 'you' &&
+            (met.get(b.character)?.encounters ?? 0) > 0
+        ) {
+            reunionDone = true
+            const who = CAST[b.character].name
+            beats.push({
+                kind: 'action',
+                stage: b.stage,
+                text: `${who} looks up — and recognizes you.`,
+            })
+            beats.push({ ...b, es: `¡Hola, ${memory.name}! ¡Qué gusto verte!` })
+            continue
+        }
+        beats.push(b)
+    }
+
+    return reunionDone ? { ...scene, beats } : scene
 }

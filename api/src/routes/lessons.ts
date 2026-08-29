@@ -165,6 +165,7 @@ router.get('/api/v1/lessons/:conceptId', async (req: Request, res: Response, nex
                 xpReward: perPartXp,
                 content,                                        
                 journey: content.subLessons ?? [],
+                assessment: e.assessment ?? null, 
                 teach: normalizeTeach(content.teach),
                 exercises: (content.exercises ?? []).map(normalizeExercise),
                 realLife: content.realLife ?? null,

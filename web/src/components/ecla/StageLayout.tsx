@@ -47,8 +47,10 @@ export default function StageLayout({
         engine.beat?.kind === 'listen' ||
         engine.beat?.kind === 'unexpected'
     const bd = {
-        environment: engine.environment,
-        setting: engine.setting,
+        environment: scene.world?.location ?? engine.environment,
+        setting: scene.world
+            ? `Madrid · ${scene.setting.split('·').slice(1).join('·').trim() || scene.setting}`
+            : engine.setting,
         title: scene.title,
         timeOfDay: scene.timeOfDay,
         mood: scene.mood,
@@ -118,6 +120,31 @@ export default function StageLayout({
                             ))}
                         </ul>
                     </div>
+
+                    {/* Phase 6: purpose + what counted as evidence */}
+                    {(scene.purpose || scene.evidenceRequirements) && (
+                        <div className="mt-6 rounded-2xl border border-white/10 bg-[#13131B] p-6">
+                            {scene.purpose?.stakes && (
+                                <p className="mb-4 text-sm leading-relaxed text-cream/70">{scene.purpose.stakes}</p>
+                            )}
+                            {scene.evidenceRequirements && (
+                                <div className="flex flex-wrap gap-2">
+                                    {scene.evidenceRequirements.interactionRequired && (
+                                        <span className="rounded-full border border-violet-500/30 bg-violet-600/10 px-3 py-1 text-[10px] font-semibold text-violet-300">real interaction</span>
+                                    )}
+                                    {scene.evidenceRequirements.repairRequired && (
+                                        <span className="rounded-full border border-glow/30 bg-glow/10 px-3 py-1 text-[10px] font-semibold text-glow">repair counted</span>
+                                    )}
+                                    {scene.evidenceRequirements.repeatedContextsRequired && (
+                                        <span className="rounded-full border border-leaf/30 bg-leaf/10 px-3 py-1 text-[10px] font-semibold text-leaf">new context</span>
+                                    )}
+                                    {scene.evidenceRequirements.intelligibilityRequired && (
+                                        <span className="rounded-full border border-white/10 bg-white/5 px-3 py-1 text-[10px] font-semibold text-cream/60">intelligible speech</span>
+                                    )}
+                                </div>
+                            )}
+                        </div>
+                    )}
 
                     {/* Phase 3: Pass evidence as the 3rd argument */}
                     <button
