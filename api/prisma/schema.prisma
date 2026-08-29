@@ -65,14 +65,31 @@ model User {
 }
 
 model CharacterMemory {
-  id          String   @id @default(cuid())
-  userId      String
-  characterId String
-  encounters  Int      @default(1)
-  firstMetAt  DateTime @default(now())
-  lastMetAt   DateTime @default(now())
+  id           String   @id @default(cuid())
+  userId       String
+  characterId  String
+  encounters   Int      @default(1)
+  firstMetAt   DateTime @default(now())
+  lastMetAt    DateTime @default(now())
+  personality  String?
+  occupation   String?
+  location     String?
+  relationship String?  @default("stranger")
+  memories     Json?
 
   @@unique([userId, characterId])
+}
+
+model LearnerEvent {
+  id           String   @id @default(cuid())
+  userId       String
+  competencyId String?
+  type         String
+  payload      Json     @default("{}")
+  createdAt    DateTime @default(now())
+
+  @@index([userId, type])
+  @@index([userId, competencyId])
 }
 
 model Language {
@@ -299,6 +316,8 @@ model CompetencyMastery {
   overallScore       Float?  
   
   retentionScore Float?
+  confidenceLevel Int?
+  performanceJson Json?
   lastAssessedAt DateTime?
   nextReviewAt   DateTime?
 
