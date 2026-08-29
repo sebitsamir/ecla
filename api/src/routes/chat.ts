@@ -86,7 +86,7 @@ router.post('/api/v1/chat', async (req: Request, res: Response, next: NextFuncti
 
                     let chunks = 0
                     let finish = ''
-                    for await (const chunk of stream) {
+                    for await (const chunk of stream as any) {
                         const choice = chunk.choices?.[0]
                         if (choice?.finish_reason) finish = choice.finish_reason
                         const delta = choice?.delta?.content

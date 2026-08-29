@@ -1,11 +1,8 @@
 'use client'
 
 /**
- * /dashboard — the learning control center (Phase 11 + C + D).
- * "What is the best thing for me to do right now?" first;
- * everything else is evidence and context. Premium, responsive shell.
- *
- * Fixes: summary fetch restored (loading flag), ContinueUnit imported,
+ * /dashboard — the learning control center.
+ * Fixes: summary fetch restored, ContinueUnit imported, 
  * ContinueCards fed by course-map units (true counts).
  */
 import { useEffect, useState } from 'react'
@@ -35,7 +32,6 @@ export default function DashboardPage() {
     return () => window.removeEventListener('ecla:progress-updated', fn)
   }, [])
 
-  // Summary + course map in parallel; loading clears when summary lands.
   useEffect(() => {
     (async () => {
       try {
@@ -67,7 +63,6 @@ export default function DashboardPage() {
         <p className="text-sm text-cream/60">Couldn't load your learning control center. Refresh to retry.</p>
       ) : (
         <div className="space-y-6 sm:space-y-8">
-          {/* Greeting + the adaptive WHY, up front */}
           <header>
             <h1 className="font-display text-2xl font-bold text-cream sm:text-3xl md:text-4xl">
               {`Hola, ${summary?.name ?? user?.firstName ?? 'there'}.`}
@@ -77,7 +72,6 @@ export default function DashboardPage() {
             </p>
           </header>
 
-          {/* Row 1: next mission (dominant) + proven ability */}
           <div className="grid gap-4 md:gap-6 lg:grid-cols-3">
             <div className="min-w-0 lg:col-span-2">
               <NextActionCard action={summary.nextAction} />
@@ -87,7 +81,6 @@ export default function DashboardPage() {
             </div>
           </div>
 
-          {/* Row 2: ability bands + week evidence + retention nudge */}
           <div className="grid gap-4 md:grid-cols-2 md:gap-6 xl:grid-cols-3">
             <div className="min-w-0">
               <AbilityProfile dimensions={summary.dimensions} />
@@ -100,7 +93,6 @@ export default function DashboardPage() {
             </div>
           </div>
 
-          {/* Row 3: nearby curriculum (course-map counts win when available) */}
           <section>
             <p className="mb-3 text-xs font-bold uppercase tracking-wider text-cream/50">Continue learning</p>
             <ContinueCards units={mapUnits.length ? mapUnits : summary.units} />

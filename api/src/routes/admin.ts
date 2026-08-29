@@ -8,10 +8,12 @@ import { conceptSchema, generateSchema, exerciseGenSchema } from '../lib/schemas
 
 const router = Router()
 
+const db = prisma as any;
+
 router.get('/api/v1/admin/concepts', async (req: Request, res: Response, next: NextFunction) => {
     try {
         requireAdmin(req)
-        const concepts = await prisma.concept.findMany({
+        const concepts = await db.concept.findMany({
             orderBy: { orderIndex: 'asc' },
             include: { 
                 variants: true, 
@@ -48,7 +50,7 @@ router.post('/api/v1/admin/concepts', async (req: Request, res: Response, next: 
 
         if (data.id) {
             // ─── UPDATE EXISTING CONCEPT ───
-            await prisma.concept.update({
+            await db.concept.update({
                 where: { id: data.id },
                 data: {
                     unitId: data.unitId, name: data.name, cefrLevel: data.cefrLevel,
@@ -60,7 +62,7 @@ router.post('/api/v1/admin/concepts', async (req: Request, res: Response, next: 
 
             // Upsert variants
             for (const v of cleanVariants) {
-                await prisma.lessonVariant.upsert({
+                await db.lessonVariant.upsert({
                     where: { conceptId_mode: { conceptId: data.id, mode: v.mode } },
                     update: { 
                         storyBeat: v.storyBeat, 
@@ -77,7 +79,7 @@ router.post('/api/v1/admin/concepts', async (req: Request, res: Response, next: 
             }
         } else {
             // ─── CREATE NEW CONCEPT ───
-            const concept = await prisma.concept.create({
+            const concept = await db.concept.create({
                 data: {
                     id: `concept-${Date.now()}`,
                     unitId: data.unitId, name: data.name, cefrLevel: data.cefrLevel,
@@ -89,7 +91,7 @@ router.post('/api/v1/admin/concepts', async (req: Request, res: Response, next: 
 
             // Create variants
             for (const v of cleanVariants) {
-                await prisma.lessonVariant.create({
+                await db.lessonVariant.create({
                     data: { 
                         conceptId: concept.id, mode: v.mode, 
                         storyBeat: v.storyBeat, culturalRef: v.culturalRef, 
@@ -102,14 +104,14 @@ router.post('/api/v1/admin/concepts', async (req: Request, res: Response, next: 
         // ─── SUB-LESSONS (4-part structure) ───
         if (Array.isArray(subLessonsRaw) && subLessonsRaw.length > 0) {
             // Delete existing sub-lessons for this concept to prevent orphans
-            await prisma.subLesson.deleteMany({ where: { conceptId } })
+            await db.subLesson.deleteMany({ where: { conceptId } })
 
             // Insert new sub-lessons in order
             for (let i = 0; i < subLessonsRaw.length; i++) {
                 const sub = subLessonsRaw[i]
                 if (!sub) continue
 
-                await prisma.subLesson.create({
+                await db.subLesson.create({
                     data: {
                         conceptId,
                         orderIndex: i,

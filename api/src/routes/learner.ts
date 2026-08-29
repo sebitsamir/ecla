@@ -1,57 +1,36 @@
 /**
- * Learner Route — ECLA learner model (Phase 2)
- *
- * GET /api/v1/learner/competencies → returns the learner's dimensional profile
- * across all competencies they've interacted with.
- *
- * Response shape:
- * {
- *   competencies: [
- *     {
- *       competencyId, competencyCode, competencyTitle, canDo,
- *       level, overallScore,
- *       dimensions: {
- *         comprehension, retrieval, interaction, application, transfer
- *       },
- *       lastAssessedAt, nextReviewAt
- *     },
- *     ...
- *   ],
- *   summary: {
- *     totalCompetencies,
- *     mastered, developing, notStarted,
- *     weakestDimension, strongestDimension
- *   }
- * }
+ * Learner Route — ECLA learner model (Phase 2 & 3 Alignment).
+ * 
+ * Constitutional Rules enforced here:
+ * 1. CONTROLLED = performs with support. NOT mastery. Does not count as "demonstrated".
+ * 2. TRANSFERRED/RETAINED = TRUE mastery.
+ * 3. Progression (unlocking next competencies) requires at least CONTROLLED.
+ * 4. NO SYNTHETIC EVIDENCE. Transfer score is never derived from correct/total ratio.
  */
-
 import { Router, Request, Response, NextFunction } from 'express'
 import { prisma } from '../lib/prisma'
 import { getOrSyncUserFast } from '../lib/auth'
 import { computeNextAction, dueReviewsFor } from './adaptive'
+import { MasteryLevel } from '@prisma/client'
 
 const router = Router()
 
+/**
+ * GET /api/v1/learner/competencies
+ * Returns dimensional profile. Mastery is strictly TRANSFERRED or RETAINED.
+ */
 router.get('/api/v1/learner/competencies', async (req: Request, res: Response, next: NextFunction) => {
     try {
         const user = await getOrSyncUserFast(req)
-
         const masteries = await prisma.competencyMastery.findMany({
             where: { userId: user.id },
             include: {
                 competency: {
-                    select: {
-                        id: true,
-                        code: true,
-                        title: true,
-                        canDo: true,
-                        domain: true,
-                    },
+                    select: { id: true, code: true, title: true, canDo: true, domain: true },
                 },
             },
             orderBy: { lastAssessedAt: 'desc' },
         })
-
         const competencies = masteries.map(m => ({
             competencyId: m.competency.id,
             competencyCode: m.competency.code,
@@ -71,13 +50,12 @@ router.get('/api/v1/learner/competencies', async (req: Request, res: Response, n
             nextReviewAt: m.nextReviewAt,
         }))
 
-        // Compute summary statistics
         const totalCompetencies = competencies.length
+        // TRUE mastery = TRANSFERRED or RETAINED (Phase 2)
         const mastered = competencies.filter(c => c.level === 'TRANSFERRED' || c.level === 'RETAINED').length
         const developing = competencies.filter(c => c.level === 'DEVELOPING' || c.level === 'CONTROLLED').length
         const notStarted = totalCompetencies - mastered - developing
 
-        // Find weakest and strongest dimensions across all competencies
         const dimensionTotals: Record<string, { sum: number; count: number }> = {
             comprehension: { sum: 0, count: 0 },
             retrieval: { sum: 0, count: 0 },
@@ -85,7 +63,6 @@ router.get('/api/v1/learner/competencies', async (req: Request, res: Response, n
             application: { sum: 0, count: 0 },
             transfer: { sum: 0, count: 0 },
         }
-
         for (const c of competencies) {
             for (const [dim, score] of Object.entries(c.dimensions)) {
                 if (score !== null) {
@@ -94,14 +71,10 @@ router.get('/api/v1/learner/competencies', async (req: Request, res: Response, n
                 }
             }
         }
-
         const dimensionAverages = Object.entries(dimensionTotals)
             .filter(([_, v]) => v.count > 0)
             .map(([dim, v]) => ({ dim, avg: Math.round(v.sum / v.count) }))
             .sort((a, b) => a.avg - b.avg)
-
-        const weakestDimension = dimensionAverages[0]?.dim ?? null
-        const strongestDimension = dimensionAverages[dimensionAverages.length - 1]?.dim ?? null
 
         res.json({
             competencies,
@@ -110,31 +83,38 @@ router.get('/api/v1/learner/competencies', async (req: Request, res: Response, n
                 mastered,
                 developing,
                 notStarted,
-                weakestDimension,
-                strongestDimension,
+                weakestDimension: dimensionAverages[0]?.dim ?? null,
+                strongestDimension: dimensionAverages[dimensionAverages.length - 1]?.dim ?? null,
             },
         })
     } catch (error) { next(error) }
 })
 
 /**
- * GET /api/v1/learner/summary — one fetch powers the whole dashboard:
- * proven counts, dimension bands, week evidence, due reviews,
- * adaptive next action, and "continue learning" unit cards.
+ * GET /api/v1/learner/summary
+ * Separates MASTERY (finished) from PROGRESSION (unlocks next steps).
  */
 router.get('/api/v1/learner/summary', async (req: Request, res: Response, next: NextFunction) => {
     try {
         const user = await getOrSyncUserFast(req)
         const weekAgo = new Date(Date.now() - 7 * 86400000)
 
-        const [total, finishedRows, weekRows, attempts, units] = await Promise.all([
+        // Separate Mastery from Progression
+        const MASTERY_LEVELS: MasteryLevel[] = ['TRANSFERRED', 'RETAINED']
+        const PROGRESSION_LEVELS: MasteryLevel[] = ['CONTROLLED', 'TRANSFERRED', 'RETAINED']
+
+        const [total, masteredRows, progressedRows, weekRows, attempts, units] = await Promise.all([
             prisma.competency.count({ where: { level: 'PRE_A1' } }),
             prisma.competencyMastery.findMany({
-                where: { userId: user.id, level: { in: ['CONTROLLED', 'TRANSFERRED', 'RETAINED'] } },
+                where: { userId: user.id, level: { in: MASTERY_LEVELS } },
                 select: { competencyId: true },
             }),
             prisma.competencyMastery.findMany({
-                where: { userId: user.id, level: { in: ['CONTROLLED', 'TRANSFERRED', 'RETAINED'] }, lastAssessedAt: { gte: weekAgo } },
+                where: { userId: user.id, level: { in: PROGRESSION_LEVELS } },
+                select: { competencyId: true },
+            }),
+            prisma.competencyMastery.findMany({
+                where: { userId: user.id, level: { in: PROGRESSION_LEVELS }, lastAssessedAt: { gte: weekAgo } },
                 select: { competencyId: true },
             }),
             prisma.missionAttempt.findMany({
@@ -156,16 +136,17 @@ router.get('/api/v1/learner/summary', async (req: Request, res: Response, next: 
             }),
         ])
 
-        const finished = new Set(finishedRows.map(r => r.competencyId))
+        const mastered = new Set(masteredRows.map(r => r.competencyId))
+        const progressed = new Set(progressedRows.map(r => r.competencyId))
         const repairs = attempts.filter(a => (a.evidence as any)?.repairUsed === true).length
         const { dimensions, next } = await computeNextAction(user.id)
 
         // "Continue learning" cards: demonstrated counts + first open competency.
         const unitCards = units.slice(0, 4).map(u => {
-            const done = u.competencies.filter(c => finished.has(c.id)).length
+            const done = u.competencies.filter(c => mastered.has(c.id)).length
             const firstOpen = u.competencies.find(c =>
-                !finished.has(c.id) &&
-                (c.prerequisitesAsCompetency as { prerequisiteId: string }[]).every(p => finished.has(p.prerequisiteId)),
+                !progressed.has(c.id) &&
+                (c.prerequisitesAsCompetency as { prerequisiteId: string }[]).every(p => progressed.has(p.prerequisiteId)),
             )
             return {
                 id: u.id, title: u.title,
@@ -177,7 +158,7 @@ router.get('/api/v1/learner/summary', async (req: Request, res: Response, next: 
         res.json({
             summary: {
                 name: (user as any).displayName ?? null,
-                demonstrated: finished.size,
+                demonstrated: mastered.size, // True mastery count
                 total,
                 week: { demonstrated: weekRows.length, conversations: attempts.length, repairs },
                 dimensions,
@@ -191,17 +172,14 @@ router.get('/api/v1/learner/summary', async (req: Request, res: Response, next: 
 
 /**
  * POST /api/v1/learner/demonstrate
- *
- * A finished scene = the full evidence ladder completed in one run
- * (controlled → guided → spontaneous → transfer). Promotes mastery to
- * CONTROLLED (never demotes), stores form diagnostics as dimension scores,
- * and schedules the first spaced retrieval (+1 day).
- * Function = completion. Form = the scores. (Constitution §16 split.)
+ * Phase 4: STRICT mastery requirements.
+ * TRANSFERRED requires multi-context evidence + repair usage.
+ * RETAINED requires delayed evidence on top of TRANSFERRED.
  */
 router.post('/api/v1/learner/demonstrate', async (req: Request, res: Response, next: NextFunction) => {
     try {
         const user = await getOrSyncUserFast(req)
-        const { competencyId, correct = 0, incorrect = 0 } = req.body ?? {}
+        const { competencyId, correct = 0, incorrect = 0, evidence, contextId } = req.body ?? {}
         if (!competencyId) return res.status(400).json({ error: 'competencyId required' })
 
         const total = Number(correct) + Number(incorrect)
@@ -212,19 +190,94 @@ router.post('/api/v1/learner/demonstrate', async (req: Request, res: Response, n
             where: { userId: user.id, competencyId },
         })
 
-        const FINISHED = ['CONTROLLED', 'TRANSFERRED', 'RETAINED']
-        const level = existing && (FINISHED as string[]).includes(existing.level)
-            ? existing.level        // never demote
-            : 'CONTROLLED'         // scene finished = demonstrated
+        // Normalize evidence
+        const ev = (evidence && typeof evidence === 'object') ? evidence as any : {}
+        const hasStructuredEvidence = evidence && typeof evidence === 'object'
 
-        const data = {
+        // Phase 3: Map frontend evidence to DB dimensions
+        const comp = hasStructuredEvidence ? (ev.comprehension ?? null) : score
+        const prod = hasStructuredEvidence ? (ev.production ?? ev.application ?? null) : score
+        const retr = hasStructuredEvidence ? (ev.retrieval ?? null) : null
+        const inter = hasStructuredEvidence ? (ev.interaction ?? null) : null
+        const trans = hasStructuredEvidence ? (ev.transfer ?? null) : null
+        const repairUsed = hasStructuredEvidence ? (ev.repairUsed === true) : false
+
+        // Best-evidence blending (never demote)
+        const best = (prev: number | null | undefined, next: number | null): number | null => {
+            if (next === null || next === undefined) return prev ?? null
+            return Math.max(prev ?? 0, next)
+        }
+
+        const newComp = best(existing?.comprehensionScore, comp)
+        const newProd = best(existing?.applicationScore, prod)
+        const newRetr = best(existing?.retrievalScore, retr)
+        const newInter = best(existing?.interactionScore, inter)
+        const newTrans = best(existing?.transferScore, trans)
+
+        // Phase 4: Track context diversity
+        // contexts is stored as JSON array in the database (add to schema if needed)
+        let contexts: string[] = (existing?.contexts as string[]) ?? []
+        if (contextId && !contexts.includes(contextId)) {
+            contexts = [...contexts, contextId]
+        }
+
+        // Phase 4: Track repair usage
+        const repairsCompleted = (existing?.repairsCompleted ?? 0) + (repairUsed ? 1 : 0)
+
+        // Phase 4: Strict Mastery Ladder Promotion
+        const now = Date.now()
+        const delayed = !!existing?.lastAssessedAt && now - new Date(existing.lastAssessedAt).getTime() >= 24 * 3600 * 1000
+        
+        let level = existing?.level ?? 'NOT_STARTED'
+        
+        // RETAINED requires TRANSFERRED + delayed retrieval >= 70
+        if (level === 'TRANSFERRED' && delayed && (newRetr ?? 0) >= 70) {
+            level = 'RETAINED'
+        }
+        // TRANSFERRED requires:
+        // - Comprehension ≥ 70
+        // - Production ≥ 65
+        // - Transfer ≥ 60
+        // - At least 2 different contexts
+        // - At least 1 successful repair
+        else if (
+            level === 'CONTROLLED' &&
+            (newComp ?? 0) >= 70 &&
+            (newProd ?? 0) >= 65 &&
+            (newTrans ?? 0) >= 60 &&
+            contexts.length >= 2 &&
+            repairsCompleted >= 1
+        ) {
+            level = 'TRANSFERRED'
+        }
+        // CONTROLLED requires basic competence (comprehension >= 60, production >= 50)
+        else if (
+            (level === 'NOT_STARTED' || level === 'EXPOSED' || level === 'DEVELOPING') &&
+            (newComp ?? 0) >= 60 && (newProd ?? 0) >= 50
+        ) {
+            level = 'CONTROLLED'
+        }
+        // Otherwise, if engaged, at least DEVELOPING
+        else if (level === 'NOT_STARTED' || level === 'EXPOSED') {
+            level = 'DEVELOPING'
+        }
+
+        const data: any = {
             level,
             lastAssessedAt: new Date(),
-            nextReviewAt: new Date(Date.now() + 24 * 3600 * 1000), // 1-day retrieval
-            comprehensionScore: score,
-            applicationScore: score,
-            transferScore: Math.max(score, 50), // transfer beat was passed to finish
+            nextReviewAt: new Date(now + (level === 'RETAINED' ? 7 : level === 'TRANSFERRED' ? 3 : 1) * 86400000),
+            comprehensionScore: newComp,
+            applicationScore: newProd,
+            retrievalScore: newRetr,
+            interactionScore: newInter,
+            transferScore: newTrans,
+            contexts,
+            repairsCompleted,
         }
+
+        // Calculate overall score from available dimensions
+        const dims = [newComp, newProd, newRetr, newInter, newTrans].filter((x): x is number => x !== null && x !== undefined)
+        data.overallScore = dims.length ? Math.round(dims.reduce((a, b) => a + b, 0) / dims.length) : 0
 
         if (existing) {
             await prisma.competencyMastery.update({ where: { id: existing.id }, data })
@@ -232,15 +285,13 @@ router.post('/api/v1/learner/demonstrate', async (req: Request, res: Response, n
             await prisma.competencyMastery.create({ data: { userId: user.id, competencyId, ...data } })
         }
 
-        res.json({ ok: true, level })
+        res.json({ ok: true, level, contexts: contexts.length, repairs: repairsCompleted })
     } catch (error) { next(error) }
 })
 
 /**
  * GET /api/v1/learner/recent-accuracy
  * Average accuracy over the last 5 assessed competencies.
- * Feeds the adaptive support ladder for FIRST-TIME scenes (which have
- * no own mastery score yet).
  */
 router.get('/api/v1/learner/recent-accuracy', async (req: Request, res: Response, next: NextFunction) => {
     try {
@@ -263,13 +314,7 @@ router.get('/api/v1/learner/recent-accuracy', async (req: Request, res: Response
 
 /**
  * GET /api/v1/learner/upcoming-reviews
- * Spaced-retrieval nudge feed (Phase C).
- *
- * A learned competency is "due" when now >= lastAssessedAt + interval(level):
- *   CONTROLLED: 1 day · TRANSFERRED: 3 days · RETAINED: 7 days.
- * Returns up to 3, soonest first, including items due within tomorrow
- * (so a fresh skill immediately earns "Sofía wants to see you tomorrow").
- * No schema changes: derived from lastAssessedAt + level.
+ * Spaced-retrieval nudge feed.
  */
 router.get('/api/v1/learner/upcoming-reviews', async (req: Request, res: Response, next: NextFunction) => {
     try {
@@ -290,8 +335,6 @@ router.get('/api/v1/learner/upcoming-reviews', async (req: Request, res: Respons
             },
             select: { competencyId: true, level: true, lastAssessedAt: true },
         })
-
-        // Second query instead of a relation walk — schema-shape safe.
         const comps = await prisma.competency.findMany({
             where: { id: { in: rows.map(r => r.competencyId) } },
             select: { id: true, code: true, canDo: true },

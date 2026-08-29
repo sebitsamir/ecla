@@ -7,13 +7,13 @@ import { AppError } from './lib/errors'
 import healthRoutes from './routes/health'
 import userRoutes from './routes/user'
 import dashboardRoutes from './routes/dashboard'
-import lessonsRoutes from './routes/lessons'
 import courseRoutes from './routes/course'
 import flashcardsRoutes from './routes/flashcards'
 import chatRoutes from './routes/chat'
 import adminRoutes from './routes/admin'
 import voiceRoutes from './routes/voice'
 import learnerRoutes from './routes/learner'
+import lessonsRoutes from './routes/lessons'
 import adaptiveRoutes from './routes/adaptive'
 import missionRoutes from './routes/missions'
 import memoryRoutes from './routes/memory'
@@ -51,13 +51,13 @@ app.set('trust proxy', 1)
 app.use(healthRoutes)
 app.use(userRoutes)
 app.use(dashboardRoutes)
-app.use(lessonsRoutes)
 app.use(courseRoutes)
 app.use(flashcardsRoutes)
 app.use(chatRoutes)
 app.use(adminRoutes)
 app.use(voiceRoutes)
 app.use(learnerRoutes)
+app.use(lessonsRoutes)
 app.use(adaptiveRoutes)
 app.use(missionRoutes)
 app.use(memoryRoutes)

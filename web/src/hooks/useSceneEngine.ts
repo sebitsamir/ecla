@@ -1,7 +1,7 @@
 'use client'
 
 /**
- * useSceneEngine — the scene runtime (Phases 8 + S2 + S3 + A).
+ * useSceneEngine — the scene runtime (Phases 8 + S2 + S3 + A + Phase 3 Evidence + Phase 5).
  *
  * Behaviors:
  * - Repair phrases from the learner ("¿Puedes repetir?") are ALWAYS a win —
@@ -9,14 +9,16 @@
  * - First failure opens the RepairDock: retry / repeat / example (agency).
  * - First-try clean success can splice a `challenge` beat (branching).
  * - `unexpected` beats: responding OR repairing both count (Art. 15).
- * - Phase A: `captureName` speak beats store the learner's name in memory;
- *   the coach confirms, and future scenes greet them by name.
+ * - Phase A: `captureName` speak beats store the learner's name in memory.
+ * - Phase 3: dimensional evidence (comprehension, retrieval, production,
+ *   interaction, transfer) + supportUsed + repairUsed.
+ * - Phase 5: listen beats are consumed by `listenTap` (hear → advance),
+ *   with a scheduler backstop so the learner is never stranded.
  *
  * Implementation notes:
  * - The scheduler reads beats through a ref and depends only on [idx, finished],
  *   so splicing mid-beat never re-triggers the effect (which would cancel TTS).
- * - Empty say/listen beats (missing curriculum payload) advance instantly and
- *   never render "…" bubbles — defense in depth.
+ * - Empty say/listen beats (missing curriculum payload) advance instantly.
  * - `feedback` drives the rail flashes + SFX (Phase 2/5).
  */
 import { useCallback, useEffect, useRef, useState } from 'react'
@@ -48,6 +50,37 @@ const TTS_BACKSTOP_MS = 4000
 const REPAIR_RE = /(no entiendo|puedes repetir|repite|m[áa]s despacio|c[óo]mo se dice|qu[ée] significa|otra vez)/i
 export const isRepairPhrase = (t: string) => REPAIR_RE.test(t)
 
+/** Phase 3: Map scene stages to evidence dimensions. */
+const STAGE_TO_DIM: Record<string, 'comprehension' | 'retrieval' | 'production' | 'interaction' | 'transfer'> = {
+    UNDERSTAND: 'comprehension',
+    NOTICE: 'comprehension',
+    RECOGNIZE: 'comprehension',
+    RETRIEVE: 'retrieval',
+    PRODUCE: 'production',
+    INTERACT: 'interaction',
+    TRANSFER: 'transfer',
+}
+
+type EvidenceTracker = {
+    comprehension: { correct: number; total: number }
+    retrieval: { correct: number; total: number }
+    production: { correct: number; total: number }
+    interaction: { correct: number; total: number }
+    transfer: { correct: number; total: number }
+    supportUsed: number
+    repairUsed: boolean
+}
+
+const initialEvidence = (): EvidenceTracker => ({
+    comprehension: { correct: 0, total: 0 },
+    retrieval: { correct: 0, total: 0 },
+    production: { correct: 0, total: 0 },
+    interaction: { correct: 0, total: 0 },
+    transfer: { correct: 0, total: 0 },
+    supportUsed: 0,
+    repairUsed: false,
+})
+
 export function useSceneEngine({ scene, support = 'medium', getToken, onStage }: {
     scene: SceneSpec
     support?: Support
@@ -71,6 +104,8 @@ export function useSceneEngine({ scene, support = 'medium', getToken, onStage }:
     const challengedRef = useRef(false)
     const pendingNpcRef = useRef<CharacterId | null>(null)
     const counts = useRef({ correct: 0, incorrect: 0 })
+    // Phase 3: Dimensional evidence tracker
+    const evidence = useRef<EvidenceTracker>(initialEvidence())
 
     // Refs mirror state so the scheduler sees fresh data without re-running.
     const beatsRef = useRef(beats)
@@ -93,6 +128,7 @@ export function useSceneEngine({ scene, support = 'medium', getToken, onStage }:
         setFinished(false); setAttempts(0); setHintLevel(0); setRepairOpen(false); setFeedback(null)
         pendingNpcRef.current = null
         counts.current = { correct: 0, incorrect: 0 }
+        evidence.current = initialEvidence() // Phase 3 reset
         // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [scene.id])
 
@@ -115,6 +151,15 @@ export function useSceneEngine({ scene, support = 'medium', getToken, onStage }:
     const speechRef = useRef<(text: string) => void>(() => { })
     const mic = useMic(getToken, text => speechRef.current(text))
 
+    /** Phase 3: Record an attempt for a specific dimension based on the beat's stage. */
+    const recordAttempt = (stageName: string | undefined, success: boolean) => {
+        if (!stageName) return
+        const dim = STAGE_TO_DIM[stageName]
+        if (!dim) return
+        evidence.current[dim].total += 1
+        if (success) evidence.current[dim].correct += 1
+    }
+
     /** The NPC line the learner is currently answering (for repeats). */
     const currentNpcLine = (b: SceneBeat | undefined): string | undefined => {
         if (!b) return undefined
@@ -131,6 +176,8 @@ export function useSceneEngine({ scene, support = 'medium', getToken, onStage }:
         // 1) Repair phrases always win — the NPC complies naturally.
         if (isRepairPhrase(text)) {
             counts.current.correct++
+            recordAttempt(b.stage, true) // Phase 3: counts as success for this stage
+            evidence.current.repairUsed = true // Phase 3: track repair skill
             flash('correct')
             push({ who: 'coach', text: 'Good repair — asking for help is a real communication skill.' })
             setRepairOpen(false); setAttempts(0); setHintLevel(0)
@@ -150,6 +197,7 @@ export function useSceneEngine({ scene, support = 'medium', getToken, onStage }:
 
         if (res.ok) {
             counts.current.correct++
+            recordAttempt(b.stage, true) // Phase 3: success
             flash('correct')
 
             // Phase A: capture the learner's name when they give it.
@@ -200,6 +248,7 @@ export function useSceneEngine({ scene, support = 'medium', getToken, onStage }:
 
         // 3) Failure = data. The person reacts; the learner chooses the repair.
         counts.current.incorrect++
+        recordAttempt(b.stage, false) // Phase 3: failure
         flash('incorrect')
         const n = attempts + 1
         setAttempts(n)
@@ -227,6 +276,10 @@ export function useSceneEngine({ scene, support = 'medium', getToken, onStage }:
     const repairChoice = useCallback((action: RepairAction) => {
         const b = beatsRef.current[idx]
         if (action === 'retry') { setRepairOpen(false); return }
+
+        // Phase 3: Using support counts as supportUsed
+        evidence.current.supportUsed += 1
+
         if (action === 'repeat') {
             const line = currentNpcLine(b) ?? 'Escucha.'
             push({ who: npcRef.current, text: line })
@@ -247,6 +300,10 @@ export function useSceneEngine({ scene, support = 'medium', getToken, onStage }:
     const unsure = useCallback(() => {
         const b = beatsRef.current[idx]
         const hints = b?.kind === 'speak' ? (b.hints ?? []) : []
+
+        // Phase 3: Using a hint counts as supportUsed
+        evidence.current.supportUsed += 1
+
         if (hints.length) setHintLevel(h => Math.min(h + 1, hints.length))
         else setRepairOpen(true)
     }, [idx])
@@ -264,23 +321,40 @@ export function useSceneEngine({ scene, support = 'medium', getToken, onStage }:
         push({ who: 'you', text: option.label, mine: true })
         if (option.correct) {
             counts.current.correct++
+            recordAttempt(b.stage, true) // Phase 3: success
             flash('correct')
             if (b.coach) push({ who: 'coach', text: b.coach })
             setTimeout(advance, PACE_MS + 100)
         } else {
             counts.current.incorrect++
+            recordAttempt(b.stage, false) // Phase 3: failure
             flash('incorrect')
             push({ who: 'coach', text: 'Not quite. Think about the situation — try again.' })
         }
     }, [idx, push, advance, flash])
 
+    /**
+     * Phase 5: consume a listen beat.
+     * First tap on the current listen beat: plays the audio (once) and
+     * advances on estimated duration — immune to TTS onend races.
+     * Later taps (or taps on non-listen lines): plain replay, no advance.
+     */
     const listenTap = useCallback((text: string) => {
         const consume = beatsRef.current[idx]?.kind === 'listen' && !listenConsumedRef.current
-        if (consume) listenConsumedRef.current = true
-        say(text, () => {
-            // Phase 1: 1.5s after the audio ends, the scene moves on.
-            if (consume) setTimeout(advance, 1500)
-        })
+        if (!consume) {
+            say(text) // replay only
+            return
+        }
+        listenConsumedRef.current = true
+        let done = false
+        const go = () => {
+            if (done) return
+            done = true
+            setTimeout(advance, 1200)
+        }
+        say(text, go)
+        // Backstop: if speech synthesis never reports "ended", move on anyway.
+        setTimeout(go, TTS_BACKSTOP_MS + text.length * 120)
     }, [idx, say, advance])
 
     const submitTyped = useCallback((text: string) => {
@@ -327,6 +401,11 @@ export function useSceneEngine({ scene, support = 'medium', getToken, onStage }:
             npcRef.current = b.character
             if (b.es?.trim()) {
                 push({ who: b.character, text: b.es, tap: b.es, gloss: b.gloss })
+                // Phase 5: never strand the learner — if no tap reaches
+                // listenTap within 9s, advance anyway.
+                t = setTimeout(() => {
+                    if (!listenConsumedRef.current) advance()
+                }, 9000)
             } else {
                 t = setTimeout(advance, 50)
             }
@@ -353,6 +432,22 @@ export function useSceneEngine({ scene, support = 'medium', getToken, onStage }:
         // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [idx, finished])
 
+    /** Phase 3: Calculate final dimensional evidence for the backend. */
+    const getEvidence = useCallback(() => {
+        const e = evidence.current
+        const calc = (num: number, den: number) => den > 0 ? Math.round((num / den) * 100) : null
+        return {
+            comprehension: calc(e.comprehension.correct, e.comprehension.total),
+            retrieval: calc(e.retrieval.correct, e.retrieval.total),
+            production: calc(e.production.correct, e.production.total),
+            interaction: calc(e.interaction.correct, e.interaction.total),
+            transfer: calc(e.transfer.correct, e.transfer.total),
+            supportUsed: e.supportUsed,
+            repairUsed: e.repairUsed,
+            completed: true,
+        }
+    }, [])
+
     return {
         // state
         lines, beat, stage, setting, environment: scene.environment, finished,
@@ -362,6 +457,8 @@ export function useSceneEngine({ scene, support = 'medium', getToken, onStage }:
         // actions
         pick, listenTap, submitTyped, repairChoice, unsure, replayLast,
         startMic: mic.start, stopMic: mic.stop,
+        // Phase 3: Expose evidence getter
+        getEvidence,
     }
 }
 
