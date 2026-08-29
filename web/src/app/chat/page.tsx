@@ -36,6 +36,7 @@ function ChatPageContent() {
     const [messages, setMessages] = useState<Msg[]>([])
     const [input, setInput] = useState('')
     const [thinking, setThinking] = useState(false)
+    const [chatContext, setChatContext] = useState<{ currentCompetency?: { canDo: string }; weakDimensions?: string[] } | null>(null)
     const [voiceMode, setVoiceMode] = useState(false)
     const [recording, setRecording] = useState(false)
     const [speaking, setSpeaking] = useState(false)
@@ -51,7 +52,19 @@ function ChatPageContent() {
         setVoiceMode(localStorage.getItem('ecla-voice-mode') === 'on')
         const seed = searchParams.get('seed')
         if (seed) setInput(seed)
-    }, [searchParams])
+        ;(async () => {
+            try {
+                const token = await getToken()
+                const res = await fetch(`${API_URL}/api/v1/learner/chat-context`, {
+                    headers: { Authorization: `Bearer ${token}` },
+                })
+                if (res.ok) {
+                    const data = await res.json()
+                    setChatContext(data.context)
+                }
+            } catch { /* non-blocking */ }
+        })()
+    }, [searchParams, getToken])
 
     useEffect(() => {
         scrollRef.current?.scrollTo({ top: scrollRef.current.scrollHeight, behavior: 'smooth' })
@@ -202,10 +215,17 @@ function ChatPageContent() {
                         {messages.length === 0 && !thinking ? (
                             <div className="flex flex-1 flex-col items-center justify-center gap-6">
                                 <div className="text-center">
-                                    <h2 className="font-display text-lg font-semibold text-cream">Ecla is ready</h2>
+                                    <h2 className="font-display text-lg font-semibold text-cream">Practice in context</h2>
                                     <p className="mt-1 text-sm text-cream/50">
-                                        Type in Spanish or use the mic — she'll guide you.
+                                        {chatContext?.currentCompetency
+                                            ? `Focused on: ${chatContext.currentCompetency.canDo}`
+                                            : 'Conversation stays inside your current competency.'}
                                     </p>
+                                    {chatContext?.weakDimensions?.length ? (
+                                        <p className="mt-2 text-xs text-glow">
+                                            Practicing: {chatContext.weakDimensions.join(', ')}
+                                        </p>
+                                    ) : null}
                                 </div>
                                 <div className="flex flex-wrap justify-center gap-2">
                                     {SUGGESTIONS.map(s => (

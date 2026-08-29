@@ -18,6 +18,15 @@ export type CourseCompetency = {
     canDo?: string | null
     status: string
     prerequisites?: string[]
+    patterns?: string[]
+    evidence?: {
+        comprehension?: number | null
+        retrieval?: number | null
+        interaction?: number | null
+        application?: number | null
+        transfer?: number | null
+        retention?: number | null
+    } | null
 }
 
 export type CourseUnit = {
@@ -53,10 +62,11 @@ function StatusIcon({ status }: { status: string }) {
     return <span className="mt-0.5 h-6 w-6 flex-shrink-0 rounded-full border border-white/15" />
 }
 
-export default function StageCard({ unit, index, defaultOpen = false }: {
+export default function StageCard({ unit, index, defaultOpen = false, onSelect }: {
     unit: CourseUnit
     index: number
     defaultOpen?: boolean
+    onSelect?: (comp: CourseCompetency) => void
 }) {
     const router = useRouter()
     const [open, setOpen] = useState(defaultOpen)
@@ -115,7 +125,10 @@ export default function StageCard({ unit, index, defaultOpen = false }: {
                                 return (
                                     <li key={cp.id}>
                                         <button
-                                            onClick={() => clickable && router.push(`/learn/${cp.code}`)}
+                                            onClick={() => {
+                                                if (clickable) onSelect?.(cp)
+                                                if (clickable && !onSelect) router.push(`/learn/${cp.code}`)
+                                            }}
                                             disabled={!clickable}
                                             aria-disabled={!clickable}
                                             className={`flex w-full items-start gap-3 px-4 py-3.5 text-left transition-colors sm:px-6 ${

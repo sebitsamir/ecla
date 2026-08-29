@@ -3,29 +3,12 @@ import { groq } from '../lib/groq'
 import { getOrSyncUserFast } from '../lib/auth'
 import { AppError } from '../lib/errors'
 import { chatSchema } from '../lib/schemas'
-import { motivationHints } from '../lib/ai'
+import { buildLearnerChatContext, formatChatSystemPrompt } from '../lib/learnerContext'
+import { aiRateLimit } from '../lib/rateLimit'
 
 const router = Router()
 
-console.log('[BOOT] chat routes v5 (reasoning fix) loaded')
-
-const VOICE_SYSTEM_PROMPT = `You are Ecla, a warm Spanish tutor, in a LIVE VOICE conversation with a learner.
-Rules for voice:
-- Reply in ONE or TWO short sentences maximum (under 25 words).
-- Use simple Spanish appropriate for the student's level. For A1/A2 use very basic vocabulary and present tense.
-- ALWAYS end with a short question or prompt so the conversation keeps flowing.
-- Plain speech only: no markdown, no emojis, no lists, no parentheses, no translations.
-- If the learner makes a mistake, model the correct sentence naturally in your reply — never lecture.
-- Be warm, playful, and encouraging, like a friend on a call.`
-
-const TEXT_SYSTEM_PROMPT = (level: string, motivation: string) => `You are the ecla AI Spanish tutor.
-The student's CEFR level is ${level}. Their motivation is: ${motivation}. ${motivationHints[motivation] ?? ''}
-Rules:
-- Reply mostly in Spanish, using vocabulary and grammar appropriate for level ${level}. For A1/A2 use short, simple sentences.
-- After your Spanish reply, add ONE short English translation on a new line starting with "EN:" — it is shown as a subtitle and never spoken aloud.
-- If the student makes a mistake, gently restate the correct sentence. Never be punishing.
-- Keep every reply under 80 words.
-- Be warm, encouraging, and a little fun.`
+console.log('[BOOT] chat routes v6 (curriculum-bound) loaded')
 
 async function callGroqWithRetry(params: any, maxRetries = 2): Promise<string | null> {
     for (let attempt = 0; attempt <= maxRetries; attempt++) {
@@ -42,7 +25,7 @@ async function callGroqWithRetry(params: any, maxRetries = 2): Promise<string | 
     return null
 }
 
-router.post('/api/v1/chat', async (req: Request, res: Response, next: NextFunction) => {
+router.post('/api/v1/chat', aiRateLimit, async (req: Request, res: Response, next: NextFunction) => {
     try {
         const isVoice = req.body?.voice === true
         const wantsStream = isVoice && req.body?.stream === true
@@ -54,12 +37,9 @@ router.post('/api/v1/chat', async (req: Request, res: Response, next: NextFuncti
         }
 
         const user = await getOrSyncUserFast(req)
-        const level = user.currentLevel ?? 'A1'
-        const motivation = user.motivation ?? 'FUN'
+        const ctx = await buildLearnerChatContext(user.id)
 
-        const systemPrompt = isVoice
-            ? `${VOICE_SYSTEM_PROMPT}\nThe student's CEFR level is ${level}.`
-            : TEXT_SYSTEM_PROMPT(level, motivation)
+        const systemPrompt = formatChatSystemPrompt(ctx, isVoice)
 
         const messages = [
             { role: 'system' as const, content: systemPrompt },
