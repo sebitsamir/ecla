@@ -66,7 +66,7 @@ export function discovery(ctx: Ctx): SceneBeat[] {
         { kind: 'choice', stage: 'UNDERSTAND', prompt: bp.understandPrompt, coach: bp.understandCoach ?? t.pronunciation, options: bp.understandOptions ?? [
             { label: 'Always keeps the same short sound', correct: true },
             { label: 'Changes like the English "a"' }, { label: 'Is silent' }] },
-        ...listens(ctx, [...vowels, ...syllables].map(v => ({ es: v, gloss: SOUND[norm(v)] })), 'Five vowels. Five stable sounds. Tap each one.'),
+        ...listens(ctx, [...vowels, ...syllables].map(v => ({ es: v, gloss: SOUND[norm(v)] })), 'Five vowels. Five stable sounds. Listen to each one.'),
         { kind: 'listen', stage: 'RECOGNIZE', character: ctx.main, es: mi },
         { kind: 'choice', stage: 'RECOGNIZE', prompt: 'Which word did you hear?', coach: `"${mi}" ends in "ee". "${me}" ends in "eh".`, options: [{ label: mi, correct: true }, { label: me }] },
         { kind: 'listen', stage: 'RECOGNIZE', character: ctx.main, es: musica },
@@ -89,7 +89,7 @@ export function encounter(ctx: Ctx): SceneBeat[] {
         { kind: 'say', stage: 'ENCOUNTER', character: ctx.main, es: cap(escucha.word), gloss: cap(escucha.translation) },
         { kind: 'choice', stage: 'UNDERSTAND', prompt: bp.understandPrompt, coach: bp.understandCoach ?? `${cap(escucha.word)} = ${escucha.translation}.`, options: bp.understandOptions ?? [
             { label: cap(escucha.translation ?? 'Listen'), correct: true }, { label: 'Speak' }, { label: 'Write' }] },
-        ...listens(ctx, [escucha, mira, repite, lee].map(x => ({ es: x.word, gloss: x.translation })), 'Four instructions run every practice. Tap each one.'),
+        ...listens(ctx, [escucha, mira, repite, lee].map(x => ({ es: x.word, gloss: x.translation })), 'Four instructions run every practice. Listen to each one.'),
         { kind: 'listen', stage: 'RECOGNIZE', character: ctx.main, es: repite.word },
         { kind: 'choice', stage: 'RECOGNIZE', prompt: `You just heard "${cap(repite.word)}". It means…`, coach: `${cap(repite.word)} = ${repite.translation}.`, options: [
             { label: cap(repite.translation ?? 'Repeat'), correct: true }, { label: cap(mira.translation ?? 'Look') }, { label: cap(lee.translation ?? 'Read') }] },
@@ -113,7 +113,7 @@ export function conversation(ctx: Ctx): SceneBeat[] {
         { kind: 'say', stage: 'ENCOUNTER', character: ctx.main, es: `${cap(g0.word)} ${g1.word}.`, gloss: `${g0.translation} — ${g1.translation}` },
         { kind: 'choice', stage: 'UNDERSTAND', prompt: bp.understandPrompt, coach: bp.understandCoach ?? t.culture, options: bp.understandOptions ?? [
             { label: 'Greeting you', correct: true }, { label: 'Saying goodbye' }, { label: 'Asking for your order' }] },
-        ...listens(ctx, [g0, g1, g2, g3].map(x => ({ es: cap(x.word), gloss: x.translation })), 'Four small words carry almost every encounter. Tap each.'),
+        ...listens(ctx, [g0, g1, g2, g3].map(x => ({ es: cap(x.word), gloss: x.translation })), 'Four small words carry almost every encounter. Listen to each.'),
         { kind: 'listen', stage: 'RECOGNIZE', character: ctx.main, es: cap(g2.word) },
         { kind: 'choice', stage: 'RECOGNIZE', prompt: `You heard "${cap(g2.word)}". What does it mean?`, coach: `${cap(g2.word)} = ${g2.translation}.`, options: [
             { label: cap(g2.translation ?? 'Good afternoon'), correct: true }, { label: g1.translation ?? 'Good morning' }, { label: 'Goodbye' }] },
@@ -140,7 +140,7 @@ export function transaction(ctx: Ctx): SceneBeat[] {
         { kind: 'say', stage: 'ENCOUNTER', character: ctx.main, es: cap(porFavor.word), gloss: porFavor.translation },
         { kind: 'choice', stage: 'UNDERSTAND', prompt: bp.understandPrompt, coach: bp.understandCoach ?? `${cap(porFavor.word)} = ${porFavor.translation}. Small words make requests polite.`, options: bp.understandOptions ?? [
             { label: 'Making the request polite', correct: true }, { label: 'Ordering two coffees' }, { label: 'Saying goodbye' }] },
-        ...listens(ctx, [porFavor, gracias, muchas, perdon].map(x => ({ es: cap(x.word), gloss: x.translation })), 'Three small kindnesses. Tap each.'),
+        ...listens(ctx, [porFavor, gracias, muchas, perdon].map(x => ({ es: cap(x.word), gloss: x.translation })), 'Three small kindnesses. Listen to each.'),
         { kind: 'listen', stage: 'RECOGNIZE', character: ctx.main, es: cap(gracias.word) },
         { kind: 'choice', stage: 'RECOGNIZE', prompt: `You heard "${cap(gracias.word)}". It means…`, coach: `${cap(gracias.word)} = ${gracias.translation}.`, options: [
             { label: cap(gracias.translation ?? 'Thank you'), correct: true }, { label: cap(porFavor.translation ?? 'Please') }, { label: 'Sorry' }] },

@@ -3,9 +3,7 @@
 /**
  * StageLayout — stage-specific visual language (Phase S3.3 + S3.4 + Phase 3 + Phase 5).
  *
- * Phase 5 fix: EVERY SceneLog receives `onListen={engine.listenTap}` so a tap
- * on the speaker consumes listen beats (hear → advance). `replayLast` was
- * replay-only and stranded the learner on the first listen beat.
+ * Speaker replays audio; listen beats auto-play on entry.
  *
  * onComplete passes structured evidence as the 3rd argument.
  * No string literals for stage matching — all logic flows through metadata.
@@ -185,7 +183,6 @@ export default function StageLayout({
                 </div>
                 <div className={`mx-auto max-w-2xl px-4 py-6 ${isEncounter ? '-mt-8 relative z-10' : ''}`}>
                     <div className={isEncounter ? 'rounded-2xl border border-white/10 bg-[#13131B]/95 p-5 shadow-2xl backdrop-blur' : ''}>
-                        {/* Phase 5 fix: listenTap consumes listen beats */}
                         <SceneLog lines={engine.lines} onListen={engine.listenTap} />
                         {meta?.interactive && (
                             <div className="mt-4">

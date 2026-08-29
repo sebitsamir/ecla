@@ -14,8 +14,7 @@ import { API_URL } from '@/lib/apiClient'
  * - Phase A: `captureName` speak beats store the learner's name in memory.
  * - Phase 3: dimensional evidence (comprehension, retrieval, production,
  *   interaction, transfer) + supportUsed + repairUsed.
- * - Phase 5: listen beats are consumed by `listenTap` (hear → advance),
- *   with a scheduler backstop so the learner is never stranded.
+ * - Phase 5: listen beats auto-play on entry; speaker button replays only.
  *
  * Implementation notes:
  * - The scheduler reads beats through a ref and depends only on [idx, finished],
@@ -125,7 +124,6 @@ export function useSceneEngine({ scene, support = 'medium', getToken, onStage }:
 
     const idRef = useRef(0)
     const npcRef = useRef<CharacterId>('sofia')
-    const listenConsumedRef = useRef(false)
     const challengedRef = useRef(false)
     const pendingNpcRef = useRef<CharacterId | null>(null)
     const counts = useRef({ correct: 0, incorrect: 0 })
@@ -372,28 +370,12 @@ export function useSceneEngine({ scene, support = 'medium', getToken, onStage }:
     }, [idx, push, advance, flash])
 
     /**
-     * Phase 5: consume a listen beat.
-     * First tap on the current listen beat: plays the audio (once) and
-     * advances on estimated duration — immune to TTS onend races.
-     * Later taps (or taps on non-listen lines): plain replay, no advance.
+     * Replay audio for a line. Listen beats auto-play on entry; the speaker
+     * button is always replay-only and never advances the scene.
      */
     const listenTap = useCallback((text: string) => {
-        const consume = beatsRef.current[idx]?.kind === 'listen' && !listenConsumedRef.current
-        if (!consume) {
-            say(text) // replay only
-            return
-        }
-        listenConsumedRef.current = true
-        let done = false
-        const go = () => {
-            if (done) return
-            done = true
-            setTimeout(advance, 1200)
-        }
-        say(text, go)
-        // Backstop: if speech synthesis never reports "ended", move on anyway.
-        setTimeout(go, TTS_BACKSTOP_MS + text.length * 120)
-    }, [idx, say, advance])
+        say(text)
+    }, [say])
 
     const submitTyped = useCallback((text: string) => {
         const t = text.trim()
@@ -408,7 +390,6 @@ export function useSceneEngine({ scene, support = 'medium', getToken, onStage }:
         const b = beatsRef.current[idx]
         if (!b) { setFinished(true); return }
         if (b.stage) onStage?.(b.stage)
-        listenConsumedRef.current = false
         challengedRef.current = false
 
         // A spliced challenge beat carries its own speaker.
@@ -439,11 +420,8 @@ export function useSceneEngine({ scene, support = 'medium', getToken, onStage }:
             npcRef.current = b.character
             if (b.es?.trim()) {
                 push({ who: b.character, text: b.es, tap: b.es, gloss: b.gloss })
-                // Phase 5: never strand the learner — if no tap reaches
-                // listenTap within 9s, advance anyway.
-                t = setTimeout(() => {
-                    if (!listenConsumedRef.current) advance()
-                }, 9000)
+                say(b.es, () => { if (t) clearTimeout(t); t = setTimeout(advance, PACE_MS) })
+                t = setTimeout(advance, TTS_BACKSTOP_MS + b.es.length * 120)
             } else {
                 t = setTimeout(advance, 50)
             }
