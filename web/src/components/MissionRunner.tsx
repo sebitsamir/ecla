@@ -1,5 +1,7 @@
 'use client'
 
+import { API_URL } from '@/lib/apiClient'
+
 /**
  * MissionRunner — voice-first AI role-play (Phase 6)
  *
@@ -20,7 +22,6 @@ import { speakSpanish, cancelSpeech } from '@/lib/speech'
 import { useMic } from '@/hooks/useMic'
 import MicButton from '@/components/ecla/MicButton'
 
-const API_URL = process.env.NEXT_PUBLIC_API_URL ?? 'http://localhost:4000'
 const REPAIR_MARKERS = ['no entiendo', 'puedes repetir', 'despacio', 'significa', 'otra vez']
 
 type Turn = { role: 'ai' | 'learner'; text: string }

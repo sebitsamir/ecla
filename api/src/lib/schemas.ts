@@ -13,7 +13,21 @@ export const lessonCompleteSchema = z.object({
     mode: z.enum(['STORY', 'DRILL', 'IMMERSION', 'PROFESSIONAL', 'MISSION']).default('STORY'),
     correctCount: z.number().int().min(0),
     incorrectCount: z.number().int().min(0),
-    xpEarned: z.number().int().min(0).max(100),
+    review: z.boolean().optional(),
+})
+
+export const demonstrateSchema = z.object({
+    competencyId: z.string(),
+    correct: z.number().int().min(0).optional(),
+    incorrect: z.number().int().min(0).optional(),
+    evidence: z.any().nullable().optional(),
+    contextId: z.string().optional(),
+    sceneId: z.string().optional(),
+    environmentId: z.string().optional(),
+    characterId: z.string().optional(),
+    interactionId: z.string().optional(),
+    attemptId: z.string().optional(),
+    transferAttemptId: z.string().optional(),
     review: z.boolean().optional(),
 })
 

@@ -1,5 +1,7 @@
 'use client'
 
+import { API_URL } from '@/lib/apiClient'
+
 /**
  * useMic — record → Whisper transcript, with honest failure states.
  * 'denied'  → permission blocked; caller should offer the typing fallback.
@@ -8,7 +10,6 @@
  */
 import { useCallback, useEffect, useRef, useState } from 'react'
 
-const API_URL = process.env.NEXT_PUBLIC_API_URL ?? 'http://localhost:4000'
 
 export type MicState = 'idle' | 'recording' | 'processing'
 export type MicError = 'denied' | 'network' | null

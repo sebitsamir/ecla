@@ -160,6 +160,7 @@ model Competency {
   experiences                 LearningExperience[]
   missions                    Mission[]
   mastery                     CompetencyMastery[]
+  scenes                      Scene[]
 
   @@index([unitId, orderIndex])
 }
@@ -356,4 +357,33 @@ model StreakLog {
 
   @@unique([userId, date])
   @@index([userId, date])
+}
+
+model Scene {
+  id           String   @id @default(cuid())
+  competencyId String
+  slug         String   @unique
+  archetype    String
+  title        String
+  environment  String
+  timeOfDay    String?
+  mood         String?
+  objective    String
+  mission      String?
+  context      Json     @default("{}")
+  characters   Json     @default("[]")
+  language     Json     @default("{}")
+  activities   Json     @default("[]")
+  variations   Json     @default("[]")
+  transfer     Json?
+  assessment   Json?
+  mastery      Json?
+  metadata     Json?
+  isPublished  Boolean  @default(false)
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  competency Competency @relation(fields: [competencyId], references: [id], onDelete: Cascade)
+
+  @@index([competencyId])
 }

@@ -1,10 +1,11 @@
 'use client'
 
+import { API_URL } from '@/lib/apiClient'
+
 import { useEffect, useState } from 'react'
 import { useAuth } from '@clerk/nextjs'
 import { COSMETICS, CosmeticId, DEFAULT_GLOW, GlowPalette } from '@/lib/cosmetics'
 
-const API_URL = process.env.NEXT_PUBLIC_API_URL ?? 'http://localhost:4000'
 
 /* Returns the equipped glow palette so every screen's firefly wears the user's choice */
 export function useEquippedGlow(): GlowPalette {

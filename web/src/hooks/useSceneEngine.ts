@@ -1,5 +1,7 @@
 'use client'
 
+import { API_URL } from '@/lib/apiClient'
+
 /**
  * useSceneEngine — the scene runtime (Phases 8 + S2 + S3 + A + Phase 3 Evidence + Phase 5).
  *
@@ -45,7 +47,6 @@ const MAX_ATTEMPTS = 3
 const PACE_MS = 500
 const ACTION_MS = 1300
 const TTS_BACKSTOP_MS = 4000
-const API_URL = process.env.NEXT_PUBLIC_API_URL ?? 'http://localhost:4000'
 
 /** Phase 24: assess intelligibility via API. */
 async function assessPronunciation(

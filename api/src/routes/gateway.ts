@@ -12,6 +12,7 @@ import { Router, Request, Response, NextFunction } from 'express'
 import { getOrSyncUserFast } from '../lib/auth'
 import { prisma } from '../lib/prisma'
 import { scoreGatewayGraduation } from '../lib/gatewayScoring'
+import { applyGatewayEvidence } from '../lib/evidenceService'
 import { GATEWAY_CONFIGS, type GatewayScenarioId, type GatewayTurn } from '../types/gateway'
 
 const router = Router()
@@ -148,28 +149,18 @@ router.post('/api/v1/gateway/complete', async (req: Request, res: Response, next
         })
         const gatewayComps = gatewayUnit?.units?.[0]?.competencies ?? []
         const scorePct = Math.round((graduation.communicated / Math.max(graduation.total, 1)) * 100)
+        const comprehension = graduation.dimensions.comprehension === 'Strong' ? 80 : 60
+        const production = graduation.dimensions.production === 'Strong' ? 80 : 60
 
         for (const comp of gatewayComps) {
-            await prisma.competencyMastery.upsert({
-                where: { userId_competencyId: { userId: user.id, competencyId: comp.id } },
-                update: {
-                    level: graduation.preA1Ready ? 'TRANSFERRED' : 'CONTROLLED',
-                    lastAssessedAt: new Date(),
-                    transferScore: scorePct,
-                    interactionScore: scorePct,
-                    comprehensionScore: graduation.dimensions.comprehension === 'Strong' ? 80 : 60,
-                    applicationScore: graduation.dimensions.production === 'Strong' ? 80 : 60,
-                },
-                create: {
-                    userId: user.id,
-                    competencyId: comp.id,
-                    level: graduation.preA1Ready ? 'TRANSFERRED' : 'CONTROLLED',
-                    lastAssessedAt: new Date(),
-                    transferScore: scorePct,
-                    interactionScore: scorePct,
-                    comprehensionScore: graduation.dimensions.comprehension === 'Strong' ? 80 : 60,
-                    applicationScore: graduation.dimensions.production === 'Strong' ? 80 : 60,
-                },
+            await applyGatewayEvidence({
+                userId: user.id,
+                competencyId: comp.id,
+                comprehension,
+                production,
+                transfer: scorePct,
+                interaction: scorePct,
+                gatewayContextKey: `gateway:${comp.code}`,
             })
         }
 

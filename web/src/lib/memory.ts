@@ -8,7 +8,8 @@
  * Character encounters sync to the API so reunion greetings work across sessions.
  * Every helper fails soft — memory must never block a scene.
  */
-const API_URL = process.env.NEXT_PUBLIC_API_URL ?? 'http://localhost:4000'
+import { API_URL } from '@/lib/apiClient'
+
 const KEY = 'ecla.learner.name'
 
 export type CharacterMemory = {

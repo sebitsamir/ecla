@@ -1,5 +1,7 @@
 'use client'
 
+import { API_URL } from '@/lib/apiClient'
+
 /**
  * useGrader — two-layer assessment (Constitution Arts. 16/18).
  * Layer 1 (form):  local tolerant matching — normalize, variants, typos. Free.
@@ -10,7 +12,6 @@
 import { useCallback } from 'react'
 import { gradeLocal } from '@/lib/grading'
 
-const API_URL = process.env.NEXT_PUBLIC_API_URL ?? 'http://localhost:4000'
 
 export type GradeTarget = { expected: string[]; accept?: string[]; open?: boolean }
 export type GradeResult = { ok: boolean; method: 'exact' | 'normalized' | 'variant' | 'fuzzy' | 'ai' | null }

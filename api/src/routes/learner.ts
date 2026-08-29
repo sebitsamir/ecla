@@ -10,8 +10,11 @@
 import { Router, Request, Response, NextFunction } from 'express'
 import { prisma } from '../lib/prisma'
 import { getOrSyncUserFast } from '../lib/auth'
-import { dueReviewsFor, nextReviewDate } from './adaptive'
+import { dueReviewsFor } from './adaptive'
 import { buildLearnerHome } from '../lib/learnerHome'
+import { demonstrateSchema } from '../lib/schemas'
+import { AppError } from '../lib/errors'
+import { recordDemonstrationEvidence } from '../lib/evidenceService'
 
 const router = Router()
 
@@ -116,122 +119,46 @@ router.get('/api/v1/learner/summary', async (req: Request, res: Response, next: 
 
 /**
  * POST /api/v1/learner/demonstrate
- * Phase 4: STRICT mastery requirements.
- * TRANSFERRED requires multi-context evidence + repair usage.
- * RETAINED requires delayed evidence on top of TRANSFERRED.
+ * POST /api/v1/evidence — canonical evidence endpoint (alias)
+ * Strict mastery via masteryEngine — never trusts client scores alone.
  */
-router.post('/api/v1/learner/demonstrate', async (req: Request, res: Response, next: NextFunction) => {
+async function handleDemonstrate(req: Request, res: Response, next: NextFunction) {
     try {
         const user = await getOrSyncUserFast(req)
-        const { competencyId, correct = 0, incorrect = 0, evidence, contextId, review } = req.body ?? {}
-        if (!competencyId) return res.status(400).json({ error: 'competencyId required' })
+        const parsed = demonstrateSchema.safeParse(req.body ?? {})
+        if (!parsed.success) throw new AppError('Invalid evidence payload', 400)
 
-        const total = Number(correct) + Number(incorrect)
-        const ratio = total ? Number(correct) / total : 0
-        const score = Math.round(ratio * 100)
+        const {
+            competencyId,
+            correct,
+            incorrect,
+            evidence,
+            contextId,
+            sceneId,
+            environmentId,
+            characterId,
+            review,
+        } = parsed.data
 
-        const existing = await prisma.competencyMastery.findFirst({
-            where: { userId: user.id, competencyId },
+        const result = await recordDemonstrationEvidence({
+            userId: user.id,
+            competencyId,
+            correct,
+            incorrect,
+            evidence: evidence as any,
+            contextId,
+            sceneId,
+            environmentId,
+            characterId,
+            review,
         })
 
-        // Normalize evidence
-        const ev = (evidence && typeof evidence === 'object') ? evidence as any : {}
-        const hasStructuredEvidence = evidence && typeof evidence === 'object'
-
-        // Phase 3: Map frontend evidence to DB dimensions
-        const comp = hasStructuredEvidence ? (ev.comprehension ?? null) : score
-        const prod = hasStructuredEvidence ? (ev.production ?? ev.application ?? null) : score
-        const retr = hasStructuredEvidence ? (ev.retrieval ?? null) : null
-        const inter = hasStructuredEvidence ? (ev.interaction ?? null) : null
-        const trans = hasStructuredEvidence ? (ev.transfer ?? null) : null
-        const repairUsed = hasStructuredEvidence ? (ev.repairUsed === true) : false
-
-        // Best-evidence blending (never demote)
-        const best = (prev: number | null | undefined, next: number | null): number | null => {
-            if (next === null || next === undefined) return prev ?? null
-            return Math.max(prev ?? 0, next)
-        }
-
-        const newComp = best(existing?.comprehensionScore, comp)
-        const newProd = best(existing?.applicationScore, prod)
-        const newRetr = best(existing?.retrievalScore, retr)
-        const newInter = best(existing?.interactionScore, inter)
-        const newTrans = best(existing?.transferScore, trans)
-
-        // Phase 4: Track context diversity
-        // contexts is stored as JSON array in the database (add to schema if needed)
-        let contexts: string[] = (existing?.contexts as string[]) ?? []
-        if (contextId && !contexts.includes(contextId)) {
-            contexts = [...contexts, contextId]
-        }
-
-        // Phase 4: Track repair usage
-        const repairsCompleted = (existing?.repairsCompleted ?? 0) + (repairUsed ? 1 : 0)
-
-        // Phase 4: Strict Mastery Ladder Promotion
-        const now = Date.now()
-        const delayed = !!existing?.lastAssessedAt && now - new Date(existing.lastAssessedAt).getTime() >= 24 * 3600 * 1000
-        
-        let level = existing?.level ?? 'NOT_STARTED'
-        
-        // RETAINED requires TRANSFERRED + delayed retrieval >= 70
-        if (level === 'TRANSFERRED' && delayed && (newRetr ?? 0) >= 70) {
-            level = 'RETAINED'
-        }
-        // TRANSFERRED requires:
-        // - Comprehension ≥ 70
-        // - Production ≥ 65
-        // - Transfer ≥ 60
-        // - At least 2 different contexts
-        // - At least 1 successful repair
-        else if (
-            level === 'CONTROLLED' &&
-            (newComp ?? 0) >= 70 &&
-            (newProd ?? 0) >= 65 &&
-            (newTrans ?? 0) >= 60 &&
-            contexts.length >= 2 &&
-            repairsCompleted >= 1
-        ) {
-            level = 'TRANSFERRED'
-        }
-        // CONTROLLED requires basic competence (comprehension >= 60, production >= 50)
-        else if (
-            (level === 'NOT_STARTED' || level === 'EXPOSED' || level === 'DEVELOPING') &&
-            (newComp ?? 0) >= 60 && (newProd ?? 0) >= 50
-        ) {
-            level = 'CONTROLLED'
-        }
-        // Otherwise, if engaged, at least DEVELOPING
-        else if (level === 'NOT_STARTED' || level === 'EXPOSED') {
-            level = 'DEVELOPING'
-        }
-
-        const data: any = {
-            level,
-            lastAssessedAt: new Date(),
-            nextReviewAt: nextReviewDate(level, review === true),
-            comprehensionScore: newComp,
-            applicationScore: newProd,
-            retrievalScore: newRetr,
-            interactionScore: newInter,
-            transferScore: newTrans,
-            contexts,
-            repairsCompleted,
-        }
-
-        // Calculate overall score from available dimensions
-        const dims = [newComp, newProd, newRetr, newInter, newTrans].filter((x): x is number => x !== null && x !== undefined)
-        data.overallScore = dims.length ? Math.round(dims.reduce((a, b) => a + b, 0) / dims.length) : 0
-
-        if (existing) {
-            await prisma.competencyMastery.update({ where: { id: existing.id }, data })
-        } else {
-            await prisma.competencyMastery.create({ data: { userId: user.id, competencyId, ...data } })
-        }
-
-        res.json({ ok: true, level, contexts: contexts.length, repairs: repairsCompleted })
+        res.json({ ok: true, ...result })
     } catch (error) { next(error) }
-})
+}
+
+router.post('/api/v1/learner/demonstrate', handleDemonstrate)
+router.post('/api/v1/evidence', handleDemonstrate)
 
 /**
  * GET /api/v1/learner/recent-accuracy

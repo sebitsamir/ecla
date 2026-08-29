@@ -22,6 +22,7 @@ import { prisma } from '../lib/prisma'
 import { getOrSyncUserFast } from '../lib/auth'
 import { groq } from '../lib/groq'
 import { AppError } from '../lib/errors'
+import { applyMissionEvidence } from '../lib/evidenceService'
 
 const router = Router()
 
@@ -182,34 +183,11 @@ router.post('/api/v1/missions/:competencyId/evaluate', async (req: Request, res:
             },
         })
 
-        // ── Update learner model: transfer evidence ──
-        const existing = await prisma.competencyMastery.findUnique({
-            where: { userId_competencyId: { userId: user.id, competencyId: req.params.competencyId as string } },
-        })
-        const blend = (old: number | null | undefined, s: number) =>
-            old == null ? s : Math.round(old * 0.6 + s * 0.4)
-
-        await prisma.competencyMastery.upsert({
-            where: { userId_competencyId: { userId: user.id, competencyId: req.params.competencyId as string } },
-            update: {
-                transferScore: blend(existing?.transferScore, passed ? 85 : 40),
-                interactionScore: blend(existing?.interactionScore, passed ? 75 : 45),
-                transferCount: passed ? { increment: 1 } : undefined,
-                level: passed ? 'TRANSFERRED' : existing?.level ?? 'DEVELOPING',
-                lastAssessedAt: new Date(),
-                nextReviewAt: new Date(Date.now() + 2 * 24 * 3600 * 1000),
-            },
-            create: {
-                userId: user.id,
-                competencyId: req.params.competencyId as string,
-                level: passed ? 'TRANSFERRED' : 'DEVELOPING',
-                transferScore: passed ? 85 : 40,
-                interactionScore: passed ? 75 : 45,
-                transferCount: passed ? 1 : 0,
-                exposureCount: 1,
-                lastAssessedAt: new Date(),
-                nextReviewAt: new Date(Date.now() + 2 * 24 * 3600 * 1000),
-            },
+        await applyMissionEvidence({
+            userId: user.id,
+            competencyId: req.params.competencyId as string,
+            passed,
+            missionId: mission.id,
         })
 
         res.json({ passed, score, repairUsed, feedback, judgeError })

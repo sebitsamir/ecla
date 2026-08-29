@@ -1,36 +1,19 @@
 /**
- * Dashboard Route — ECLA schema adapter
- * 
- * Same response contract the dashboard page already consumes:
- *   dailyXp, weeklyXp, totalXp, streakDays, preferredMode, nextLesson,
- *   comboStreak, glowTier, glowNext, activeDays, unlockedCosmetics,
- *   equippedCosmetic, newUnlocks, reviewRequired, accuracy
- * 
- * Source mapping (old → new):
- * - userProgress        → UserExperienceProgress (combo streak, lessonsDone)
- * - conceptMastery      → CompetencyMastery (mastered count, next lesson)
- * - concept/variant     → Competency + LearningExperience flavor text
- * - streakLog           → StreakLog (unchanged)
- * 
- * nextLesson rule: first AVAILABLE (prereqs finished) and NOT FINISHED
- * competency — identical to course map, so the two never disagree.
+ * Dashboard Route — legacy contract backed by real learner data.
+ * Prefer GET /api/v1/learner/home for new clients.
  */
-
 import { Router, Request, Response, NextFunction } from 'express'
 import { prisma } from '../lib/prisma'
 import { getOrSyncUserFast } from '../lib/auth'
+import { buildLearnerHome } from '../lib/learnerHome'
 
 const router = Router()
-
-// §6.4 — TRANSFERRED/RETAINED = demonstrated; CONTROLLED = progression only
-const FINISHED_LEVELS = ['TRANSFERRED', 'RETAINED'] as any[]
-const PROGRESSED_LEVELS = ['CONTROLLED', 'TRANSFERRED', 'RETAINED'] as any[]
 
 router.get('/api/v1/dashboard', async (req: Request, res: Response, next: NextFunction) => {
     try {
         const user = await getOrSyncUserFast(req)
+        const home = await buildLearnerHome(user)
 
-        // ── Daily / weekly XP (StreakLog unchanged) ──
         const today = new Date().toISOString().split('T')[0]
         const todayLog = await prisma.streakLog.findUnique({
             where: { userId_date: { userId: user.id, date: today } },
@@ -44,7 +27,6 @@ router.get('/api/v1/dashboard', async (req: Request, res: Response, next: NextFu
         })
         const weeklyXp = weeklyLogs.reduce((sum, log) => sum + log.xpEarned, 0)
 
-        // ── Combo streak: consecutive recent experiences with score > 0 ──
         const recent = await prisma.userExperienceProgress.findMany({
             where: { userId: user.id },
             orderBy: { lastAttemptAt: 'desc' },
@@ -56,7 +38,6 @@ router.get('/api/v1/dashboard', async (req: Request, res: Response, next: NextFu
             comboStreak += p.score
         }
 
-        // ── Active days + glow tier ──
         const thirtyDaysAgo = new Date()
         thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30)
         const activeDays = await prisma.streakLog.count({
@@ -70,10 +51,7 @@ router.get('/api/v1/dashboard', async (req: Request, res: Response, next: NextFu
         else if (activeDays >= 7) { glowTier = 'Warm'; glowNext = 14 - activeDays }
         else { glowTier = 'Dim'; glowNext = 7 - activeDays }
 
-        // ── Cosmetic unlock conditions (new evidence sources) ──
-        const masteredCount = await prisma.competencyMastery.count({
-            where: { userId: user.id, level: { in: FINISHED_LEVELS } },
-        })
+        const masteredCount = home.summary.demonstrated ?? 0
         const lessonsDone = await prisma.userExperienceProgress.count({
             where: { userId: user.id, status: 'completed' },
         })
@@ -94,88 +72,30 @@ router.get('/api/v1/dashboard', async (req: Request, res: Response, next: NextFu
             await prisma.user.update({ where: { id: user.id }, data: { unlockedCosmetics } })
         }
 
-        // ── Next lesson: first available + unfinished competency ──
-        const course = await prisma.course.findFirst({
-            where: { isPublished: true },
-            include: {
-                units: {
-                    orderBy: { orderIndex: 'asc' },
-                    include: {
-                        competencies: {
-                            orderBy: { orderIndex: 'asc' },
-                            include: {
-                                mastery: { where: { userId: user.id } },
-                                experiences: {
-                                    orderBy: { orderIndex: 'asc' },
-                                    select: { id: true, progress: { where: { userId: user.id }, select: { status: true } } },
-                                },
-                                prerequisitesAsCompetency: {
-                                    select: {
-                                        prerequisite: {
-                                            select: {
-                                                id: true,
-                                                mastery: { where: { userId: user.id }, select: { level: true } },
-                                                experiences: { select: { id: true, progress: { where: { userId: user.id }, select: { status: true } } } },
-                                            },
-                                        },
-                                    },
-                                },
-                            },
-                        },
-                    },
-                },
-            },
+        const next = home.summary.nextAction
+        const nextLesson = next && next.kind === 'lesson' ? {
+            conceptId: next.competencyId,
+            conceptName: next.title,
+            canDo: next.canDo,
+            xpReward: 20,
+            mode: next.mode,
+            variant: {},
+        } : null
+
+        const accuracyRows = await prisma.competencyMastery.findMany({
+            where: { userId: user.id, comprehensionScore: { not: null } },
+            orderBy: { lastAssessedAt: 'desc' },
+            take: 5,
+            select: { comprehensionScore: true },
         })
+        const accuracyScores = accuracyRows
+            .map(r => r.comprehensionScore)
+            .filter((x): x is number => typeof x === 'number')
+        const accuracy = accuracyScores.length
+            ? Math.round(accuracyScores.reduce((a, b) => a + b, 0) / accuracyScores.length)
+            : null
 
-        let nextLesson: any = null
-        if (course) {
-            const finishedOf = (c: any): boolean => {
-                const m = c.mastery?.[0]
-                if (m && FINISHED_LEVELS.includes(m.level)) return true
-                const exps = c.experiences ?? []
-                if (exps.length === 0) return false
-                return exps.every((e: any) => e.progress?.[0]?.status === 'completed')
-            }
-
-            const finishedMap = new Map<string, boolean>()
-            for (const u of course.units) for (const c of u.competencies) finishedMap.set(c.id, finishedOf(c))
-
-            let nextConcept: any = null
-            outer: for (const u of course.units) {
-                for (const c of u.competencies) {
-                    const available = (c.prerequisitesAsCompetency ?? []).every((p: any) => finishedMap.get(p.prerequisite.id))
-                    if (available && !finishedMap.get(c.id)) { nextConcept = c; break outer }
-                }
-            }
-
-            if (nextConcept) {
-                // Flavor text per mode from the matching experience's first teach block
-                const [exps, realization] = await Promise.all([
-                    prisma.learningExperience.findMany({
-                        where: { competencyId: nextConcept.id },
-                        orderBy: { orderIndex: 'asc' },
-                    }),
-                    prisma.languageRealization.findFirst({ where: { competencyId: nextConcept.id } }),
-                ])
-                const flavorOf = (type: string) => {
-                    const e = exps.find(x => x.type === type)
-                    return ((e?.content as any)?.teach?.[0]?.text) ?? null
-                }
-
-                nextLesson = {
-                    conceptId: nextConcept.id,
-                    conceptName: nextConcept.title,
-                    canDo: nextConcept.canDo,
-                    xpReward: nextConcept.xpReward,
-                    mode: user.preferredMode,
-                    variant: {
-                        storyBeat: flavorOf('STORY'),
-                        culturalRef: flavorOf('IMMERSION'),
-                        formalPhrase: flavorOf('PROFESSIONAL'),
-                    },
-                }
-            }
-        }
+        const reviewRequired = (home.summary.dueReviews?.length ?? 0) > 0
 
         res.json({
             dailyXp,
@@ -185,8 +105,8 @@ router.get('/api/v1/dashboard', async (req: Request, res: Response, next: NextFu
             streakDays: user.streakDays,
             preferredMode: user.preferredMode,
             nextLesson,
-            reviewRequired: false,
-            accuracy: 100,
+            reviewRequired,
+            accuracy,
             comboStreak,
             glowTier,
             glowNext,

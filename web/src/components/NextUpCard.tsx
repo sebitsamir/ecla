@@ -1,5 +1,7 @@
 'use client'
 
+import { API_URL } from '@/lib/apiClient'
+
 /**
  * Next Up Card — Adaptive Engine UI
  *
@@ -19,7 +21,6 @@ import {
     Lightbulb, MessageCircle, Sparkles,
 } from 'lucide-react'
 
-const API_URL = process.env.NEXT_PUBLIC_API_URL ?? 'http://localhost:4000'
 
 type Recommendation = {
     competencyId: string

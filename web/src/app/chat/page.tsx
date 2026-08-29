@@ -1,5 +1,7 @@
 'use client'
 
+import { API_URL } from '@/lib/apiClient'
+
 /**
  * /chat — AI tutor conversational interface (premium pass).
  * Text-based chat with voice mode toggle, dictation, bilingual display,
@@ -13,7 +15,6 @@ import AppShell from '@/components/layout/AppShell'
 import VoiceCall, { type CallLine } from '@/components/VoiceCall'
 import { speakSpanish, cancelSpeech } from '@/lib/speech'
 
-const API_URL = process.env.NEXT_PUBLIC_API_URL ?? 'http://localhost:4000'
 
 type Msg = { role: 'user' | 'assistant'; content: string }
 

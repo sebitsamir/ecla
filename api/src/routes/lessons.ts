@@ -20,8 +20,9 @@ import { prisma } from '../lib/prisma'
 import { getOrSyncUserFast, requireAuth } from '../lib/auth'
 import { AppError } from '../lib/errors'
 import { lessonCompleteSchema, gradeRequestSchema } from '../lib/schemas'
-import { nextReviewDate } from './adaptive'
 import { functionalJudge } from '../lib/functionalJudge'
+import { dimensionFieldForType, recordExperienceCompletion } from '../lib/evidenceService'
+import { computeExperienceXp } from '../lib/xpRewards'
 
 const router = Router()
 
@@ -29,27 +30,6 @@ const router = Router()
 
 const TYPE_ICON: Record<string, string> = {
     STORY: 'book-open', DRILL: 'puzzle', IMMERSION: 'ear', PROFESSIONAL: 'lightbulb', MISSION: 'message-circle',
-}
-
-/**
- * Experience type → mastery dimension it produces evidence for (§7.5).
- * Modes as adaptive engine: each delivery mode trains one dimension.
- */
-const DIMENSION_BY_TYPE: Record<string, string> = {
-    STORY: 'comprehensionScore',
-    DRILL: 'retrievalScore',
-    IMMERSION: 'interactionScore',
-    PROFESSIONAL: 'applicationScore',
-    MISSION: 'transferScore',
-}
-
-/**
- * Blend a new evidence score into the running dimension score.
- * First evidence = the score itself; afterwards a 60/40 moving average
- * so dimensions move with sustained performance, not single attempts.
- */
-function blend(old: number | null | undefined, score: number): number {
-    return old == null ? score : Math.round(old * 0.6 + score * 0.4)
 }
 
 router.get('/api/v1/lessons/:conceptId', async (req: Request, res: Response, next: NextFunction) => {
@@ -192,7 +172,8 @@ router.post('/api/v1/lessons/complete', async (req: Request, res: Response, next
 
         const parsed = lessonCompleteSchema.safeParse(req.body)
         if (!parsed.success) throw new AppError('Invalid completion data', 400)
-        const { conceptId, subLessonId, correctCount, incorrectCount, xpEarned, review } = parsed.data
+        const { conceptId, subLessonId, correctCount, incorrectCount, review } = parsed.data
+        const xpEarned = await computeExperienceXp(subLessonId, conceptId)
 
         // 1) Experience progress
         if (subLessonId) {
@@ -214,84 +195,26 @@ router.post('/api/v1/lessons/complete', async (req: Request, res: Response, next
             })
         }
 
-        // 2) Which dimension does this experience produce evidence for?
+        // 2) Dimensional evidence — engagement only, never promotes to TRANSFERRED
         const experience = subLessonId
             ? await prisma.learningExperience.findUnique({ where: { id: subLessonId }, select: { type: true } })
             : null
         const totalAttempts = correctCount + incorrectCount
         const dimensionScore = totalAttempts > 0 ? Math.round((correctCount / totalAttempts) * 100) : null
-        const dimensionField = experience ? DIMENSION_BY_TYPE[experience.type] ?? null : null
+        const dimensionField = experience ? dimensionFieldForType(experience.type) : null
 
-        // 3) Recompute level from completion evidence
-        const exps = await prisma.learningExperience.findMany({
-            where: { competencyId: conceptId }, select: { id: true, type: true },
-        })
-        const prog = await prisma.userExperienceProgress.findMany({
-            where: { userId: user.id, experienceId: { in: exps.map(e => e.id) } },
-        })
-        const completedSet = new Set(prog.filter(p => p.status === 'completed').map(p => p.experienceId))
-        if (subLessonId) completedSet.add(subLessonId)
-
-        const allDone = exps.length > 0 && exps.every(e => completedSet.has(e.id))
-        const missionDone = exps.some(e => e.type === 'MISSION' && completedSet.has(e.id))
-        const level = allDone ? (missionDone ? 'TRANSFERRED' : 'CONTROLLED') : 'DEVELOPING'
-
-        // 4) Existing mastery (for blending the dimension score)
-        const existing = await prisma.competencyMastery.findUnique({
-            where: { userId_competencyId: { userId: user.id, competencyId: conceptId } },
+        await recordExperienceCompletion({
+            userId: user.id,
+            competencyId: conceptId,
+            subLessonId,
+            correctCount,
+            incorrectCount,
+            review,
+            dimensionField,
+            dimensionScore,
         })
 
-        const updateData: any = {
-            successCount: { increment: correctCount },
-            failureCount: { increment: incorrectCount },
-            exposureCount: { increment: 1 },
-            transferCount: missionDone && allDone ? { increment: 1 } : undefined,
-            level,
-            lastAssessedAt: new Date(),
-            nextReviewAt: nextReviewDate(level, review === true),
-        }
-        // Dimensional evidence: blend new score into the matching dimension
-        if (dimensionField && dimensionScore !== null) {
-            updateData[dimensionField] = blend((existing as any)?.[dimensionField], dimensionScore)
-        }
-
-        const createData: any = {
-            userId: user.id, competencyId: conceptId, level,
-            exposureCount: 1, successCount: correctCount, failureCount: incorrectCount,
-            lastAssessedAt: new Date(),
-            nextReviewAt: nextReviewDate(level, review === true),
-        }
-        if (dimensionField && dimensionScore !== null) {
-            createData[dimensionField] = dimensionScore
-        }
-
-        await prisma.competencyMastery.upsert({
-            where: { userId_competencyId: { userId: user.id, competencyId: conceptId } },
-            update: updateData,
-            create: createData,
-        })
-
-        // 5) overallScore = mean of all non-null dimensions (learner profile)
-        const mastery = await prisma.competencyMastery.findUnique({
-            where: { userId_competencyId: { userId: user.id, competencyId: conceptId } },
-        })
-        if (mastery) {
-            const scores = [
-                mastery.comprehensionScore,
-                mastery.retrievalScore,
-                mastery.interactionScore,
-                mastery.applicationScore,
-                mastery.transferScore,
-            ].filter((s): s is number => s !== null)
-            if (scores.length > 0) {
-                await prisma.competencyMastery.update({
-                    where: { id: mastery.id },
-                    data: { overallScore: Math.round(scores.reduce((sum, s) => sum + s, 0) / scores.length) },
-                })
-            }
-        }
-
-        // 6) XP + streak
+        // 3) XP + streak (server-defined reward)
         const today = new Date().toISOString().split('T')[0]
         await prisma.$transaction([
             prisma.user.update({
