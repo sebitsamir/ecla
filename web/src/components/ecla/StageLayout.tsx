@@ -1,17 +1,13 @@
 'use client'
 
 /**
- * StageLayout — stage-specific visual language (Phase S3.3 + S3.4 + metadata consolidation).
+ * StageLayout — stage-specific visual language (Phase S3.3 + S3.4 + Phase 3 + Phase 5).
  *
- * Each of the 9 stages has a distinct layout driven by STAGE_META:
- *   Terminal (RETAIN)       : summary screen, no interaction
- *   Immersive (ENCOUNTER, TRANSFER) : full-bleed backdrop, scene is the hero
- *   Produce (PRODUCE)       : giant centered mic, recording pulse
- *   Interactive (others)    : focused task variants
+ * Phase 5 fix: EVERY SceneLog receives `onListen={engine.listenTap}` so a tap
+ * on the speaker consumes listen beats (hear → advance). `replayLast` was
+ * replay-only and stranded the learner on the first listen beat.
  *
- * Phase S3.4: ONE shared backdrop config carries character presence,
- * feedback reaction, and speaking-state into every SceneBackdrop call.
- *
+ * onComplete passes structured evidence as the 3rd argument.
  * No string literals for stage matching — all logic flows through metadata.
  */
 import { useEffect, useState } from 'react'
@@ -28,7 +24,8 @@ export default function StageLayout({
 }: {
     engine: SceneEngine
     scene: any
-    onComplete: (correct: number, incorrect: number) => void
+    // Accept structured evidence as the 3rd argument
+    onComplete: (correct: number, incorrect: number, evidence?: any) => void
 }) {
     const stage = engine.stage
     const meta = stageMeta(stage)
@@ -122,8 +119,13 @@ export default function StageLayout({
                         </ul>
                     </div>
 
+                    {/* Phase 3: Pass evidence as the 3rd argument */}
                     <button
-                        onClick={() => onComplete(engine.counts.current.correct, engine.counts.current.incorrect)}
+                        onClick={() => onComplete(
+                            engine.counts.current.correct,
+                            engine.counts.current.incorrect,
+                            engine.getEvidence()
+                        )}
                         className="mt-8 w-full rounded-xl bg-glow py-4 text-sm font-bold text-night-900 shadow-[0_0_30px_rgba(255,200,0,0.25)] transition-all hover:bg-glow/90 active:scale-[0.98]"
                     >
                         Continue your journey →
@@ -132,6 +134,7 @@ export default function StageLayout({
             </div>
         )
     }
+
     // ── Immersive stages: ENCOUNTER (scene is the hero) and TRANSFER (new context) ──
     if (isImmersive(stage)) {
         const isEncounter = stage === 'ENCOUNTER'
@@ -155,7 +158,8 @@ export default function StageLayout({
                 </div>
                 <div className={`mx-auto max-w-2xl px-4 py-6 ${isEncounter ? '-mt-8 relative z-10' : ''}`}>
                     <div className={isEncounter ? 'rounded-2xl border border-white/10 bg-[#13131B]/95 p-5 shadow-2xl backdrop-blur' : ''}>
-                        <SceneLog lines={engine.lines} onListen={engine.replayLast} />
+                        {/* Phase 5 fix: listenTap consumes listen beats */}
+                        <SceneLog lines={engine.lines} onListen={engine.listenTap} />
                         {meta?.interactive && (
                             <div className="mt-4">
                                 <InteractionDock engine={engine} />
@@ -174,7 +178,7 @@ export default function StageLayout({
                 <SceneBackdrop {...bd} />
                 <div className="mx-auto max-w-2xl px-4 py-6">
                     <div className="space-y-4">
-                        <SceneLog lines={engine.lines} onListen={engine.replayLast} />
+                        <SceneLog lines={engine.lines} onListen={engine.listenTap} />
                     </div>
                     {/* Emphasized production zone */}
                     <div className="mt-8 flex flex-col items-center rounded-2xl border border-violet-500/30 bg-violet-600/5 p-8">
@@ -193,7 +197,8 @@ export default function StageLayout({
         <div className="animate-fade-in">
             <SceneBackdrop {...bd} />
             <div className="mx-auto max-w-2xl px-4 py-6">
-                <SceneLog lines={engine.lines} onListen={engine.replayLast} />
+                {/* Phase 5 fix: listenTap consumes listen beats */}
+                <SceneLog lines={engine.lines} onListen={engine.listenTap} />
                 {meta?.interactive && (
                     <div className="mt-4">
                         <InteractionDock engine={engine} />

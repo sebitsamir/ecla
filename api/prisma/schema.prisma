@@ -288,6 +288,8 @@ model CompetencyMastery {
   successCount   Int          @default(0)
   failureCount   Int          @default(0)
   transferCount  Int          @default(0)
+  contexts       Json?   
+  repairsCompleted Int        @default(0)
   
   comprehensionScore Float?   
   retrievalScore     Float?  

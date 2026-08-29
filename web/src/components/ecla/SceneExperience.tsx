@@ -1,9 +1,10 @@
 'use client'
 
 /**
- * SceneExperience — three-zone organism with mobile drawers (Phase S3.3 + S3.5 + S3.7 + Adaptive).
+ * SceneExperience — three-zone organism with mobile drawers (Phase S3.3 + S3.5 + S3.7 + Adaptive + Phase 3).
  * Phase S3.7: mobile toggles are ONE centered pill with bottom clearance.
  * Adaptive: support level tuned by recent accuracy (this competency or learner average).
+ * Phase 3: onComplete now receives structured evidence as the 3rd argument.
  */
 import { useState, useEffect } from 'react'
 import { ListOrdered, SlidersHorizontal, X } from 'lucide-react'
@@ -23,7 +24,8 @@ export default function SceneExperience({ scene, tools, mastery, getToken, onCom
     tools?: ToolsData
     mastery?: MasteryData | null
     getToken: () => Promise<string | null>
-    onComplete: (correct: number, incorrect: number) => Promise<void> | void
+    // Phase 3: Accept structured evidence as the 3rd argument
+    onComplete: (correct: number, incorrect: number, evidence?: any) => void
 }) {
     const [railOpen, setRailOpen] = useState(false)
     const [toolsOpen, setToolsOpen] = useState(false)

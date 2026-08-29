@@ -14,10 +14,13 @@
 import { Router, Request, Response, NextFunction } from 'express'
 import { prisma } from '../lib/prisma'
 import { getOrSyncUserFast } from '../lib/auth'
+import { MasteryLevel } from '@prisma/client'
 
 const router = Router()
 
-const FINISHED = ['CONTROLLED', 'TRANSFERRED', 'RETAINED']
+const FINISHED: MasteryLevel[] = ['TRANSFERRED', 'RETAINED']
+const PROGRESSED: MasteryLevel[] = ['CONTROLLED', 'TRANSFERRED', 'RETAINED']
+
 const MODE_BY_DIM: Record<string, string> = {
     comprehension: 'STORY',      // meaning & context
     recall: 'DRILL',             // retrieval & automaticity
@@ -34,7 +37,7 @@ export const bandOf = (v: number | null): string | null =>
 export async function finishedSetFor(userId: string): Promise<Set<string>> {
     const rows = await prisma.competencyMastery.findMany({
         where: { userId, level: { in: FINISHED } },
-        select: { competencyId: true },
+        include: { competency: true },
     })
     return new Set(rows.map(r => r.competencyId))
 }

@@ -2,12 +2,15 @@
 
 /**
  * ECLA Learn Page — Pure Scene-driven language experiences.
- * No legacy code. No fallback card players.
  * 
  * Rules:
  * 1. If a competency has an authored scene, it plays.
  * 2. If it's a mastered competency without a scene, it plays a Street Encounter (spaced retrieval).
  * 3. If neither, it gracefully redirects to the Course map.
+ * 
+ * Phase 3 Integration:
+ * - Receives structured evidence from SceneExperience via onComplete(correct, incorrect, evidence)
+ * - Forwards it to POST /api/v1/learner/demonstrate
  */
 
 import { useEffect, useRef, useState, Suspense } from 'react'
@@ -61,7 +64,6 @@ function LearnPlayer() {
 
     // 2. Determine the scene (Strictly Scene-Driven)
     const sceneModeOk = !modeParam || modeParam === 'STORY'
-    // Curriculum payload MUST reach the compiler — scenes are data-driven.
     const baseScene = sceneModeOk && lesson?.code
         ? sceneFor(lesson.code, lesson)
         : undefined
@@ -73,7 +75,6 @@ function LearnPlayer() {
 
     const learned = ['CONTROLLED', 'TRANSFERRED', 'RETAINED'].includes(lesson?.mastery?.level ?? '')
 
-    // Personalize: inject learner's name into the scene beats
     const learnerName = getLearnerName()
     const scene = baseScene
         ? { ...baseScene, beats: applyLearnerName(baseScene.beats, learnerName) }
@@ -87,11 +88,10 @@ function LearnPlayer() {
         recordedSceneRef.current = scene.id
         const chars = Array.from(new Set(
             scene.beats
-                .filter(b => b.kind === 'say' || b.kind === 'listen' || b.kind === 'unexpected')
-                .map(b => (b as any).character as string)
+                .filter((b: any) => b.kind === 'say' || b.kind === 'listen' || b.kind === 'unexpected')
+                .map((b: any) => b.character as string)
         ))
         chars.forEach(c => {
-            // Only record if it's a learner-given name (not an NPC)
             if (learnerName && c === 'you') {
                 recordEncounter(learnerName)
             }
@@ -109,9 +109,12 @@ function LearnPlayer() {
     }, [loading, lesson, scene, router])
 
     // 5. Scene completion handler
-    const completeScene = async (correct: number, incorrect: number) => {
-        const exp = (lesson.subLessons ?? []).find((s: any) => s.type === 'STORY')
+    // Phase 3: Accepts structured evidence as the 3rd argument from SceneExperience
+    const completeScene = async (correct: number, incorrect: number, sceneEvidence?: any) => {
         const token = await getToken()
+
+        // 1. Record legacy completion (for XP/SubLesson progress)
+        const exp = (lesson.subLessons ?? []).find((s: any) => s.type === 'STORY')
         await fetch(`${API_URL}/api/v1/lessons/complete`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
@@ -124,12 +127,20 @@ function LearnPlayer() {
                 xpEarned: exp?.xpReward ?? lesson.xpReward ?? 20,
             }),
         })
-        // Scene finished = evidence ladder complete → promote mastery.
+
+        // 2. Record Mastery Evidence (Constitutional alignment - Phase 3)
         await fetch(`${API_URL}/api/v1/learner/demonstrate`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
-            body: JSON.stringify({ competencyId: lesson.conceptId, correct, incorrect }),
+            body: JSON.stringify({ 
+                competencyId: lesson.conceptId, 
+                correct, 
+                incorrect,
+                evidence: sceneEvidence ?? null,
+                contextId: scene?.id ?? lesson.conceptId
+            }),
         })
+
         window.dispatchEvent(new Event('ecla:progress-updated'))
         setEvidence({ correct, incorrect })
         setFinished(true)
@@ -201,7 +212,13 @@ function LearnPlayer() {
                 </div>
             </header>
             <div className="relative z-0 mx-auto max-w-[1400px] px-4 py-6">
-                <SceneExperience scene={scene} tools={lesson.tools} mastery={lesson.mastery} getToken={getToken} onComplete={completeScene} />
+                <SceneExperience 
+                    scene={scene} 
+                    tools={lesson.tools} 
+                    mastery={lesson.mastery} 
+                    getToken={getToken} 
+                    onComplete={completeScene} 
+                />
             </div>
         </main>
     )

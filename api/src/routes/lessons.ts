@@ -118,14 +118,29 @@ function normalizeExercise(ex: any): any | null {
 router.get('/api/v1/lessons/:conceptId', async (req: Request, res: Response, next: NextFunction) => {
     try {
         const user = await getOrSyncUserFast(req)
+        const param = String(req.params.conceptId)
 
-        const comp = await prisma.competency.findUnique({
-            where: { id: req.params.conceptId as string },
-            include: {
-                experiences: { orderBy: { orderIndex: 'asc' } },
-                vocabulary: { include: { vocabulary: true } },   // feeds ToolsPanel
-            },
-        })
+        // Try UUID lookup first, fall back to code lookup
+        const includes = {
+            experiences: { orderBy: { orderIndex: 'asc' as const } },
+            vocabulary: { include: { vocabulary: true } },
+        }
+        
+        let comp = await prisma.competency
+            .findFirst({ 
+                where: { OR: [{ id: param }, { code: param }] }, 
+                include: includes 
+            })
+            .catch(() => null)
+        
+        if (!comp) {
+            // Fallback: try code-only lookup (in case Postgres rejected non-UUID)
+            comp = await prisma.competency.findFirst({ 
+                where: { code: param }, 
+                include: includes 
+            })
+        }
+        
         if (!comp) throw new AppError('Lesson not found', 404)
 
         const realization = await prisma.languageRealization.findFirst({ where: { competencyId: comp.id } })
@@ -148,7 +163,8 @@ router.get('/api/v1/lessons/:conceptId', async (req: Request, res: Response, nex
                 icon: TYPE_ICON[e.type] ?? 'book-open',
                 type: e.type,
                 xpReward: perPartXp,
-                journey: content.subLessons ?? [],               // engine payload for later phases
+                content,                                        
+                journey: content.subLessons ?? [],
                 teach: normalizeTeach(content.teach),
                 exercises: (content.exercises ?? []).map(normalizeExercise),
                 realLife: content.realLife ?? null,
@@ -156,13 +172,13 @@ router.get('/api/v1/lessons/:conceptId', async (req: Request, res: Response, nex
         })
 
         const flavorOf = (type: string) => {
-            const e = comp.experiences.find(x => x.type === type)
+            const e = comp!.experiences.find(x => x.type === type)
             return ((e?.content as any)?.teach?.[0]?.text) ?? null
         }
 
         res.json({
             lesson: {
-                code: comp.code,                                 // ← scene lookup key
+                code: comp.code,
                 conceptId: comp.id,
                 conceptName: comp.title,
                 canDo: comp.canDo,

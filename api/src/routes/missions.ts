@@ -184,13 +184,13 @@ router.post('/api/v1/missions/:competencyId/evaluate', async (req: Request, res:
 
         // ── Update learner model: transfer evidence ──
         const existing = await prisma.competencyMastery.findUnique({
-            where: { userId_competencyId: { userId: user.id, competencyId: req.params.competencyId } },
+            where: { userId_competencyId: { userId: user.id, competencyId: req.params.competencyId as string } },
         })
         const blend = (old: number | null | undefined, s: number) =>
             old == null ? s : Math.round(old * 0.6 + s * 0.4)
 
         await prisma.competencyMastery.upsert({
-            where: { userId_competencyId: { userId: user.id, competencyId: req.params.competencyId } },
+            where: { userId_competencyId: { userId: user.id, competencyId: req.params.competencyId as string } },
             update: {
                 transferScore: blend(existing?.transferScore, passed ? 85 : 40),
                 interactionScore: blend(existing?.interactionScore, passed ? 75 : 45),

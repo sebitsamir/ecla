@@ -2,12 +2,8 @@
 
 /**
  * WeekEvidence — this week's activity as a quiet pulse (Phase D).
- * Boundary note: the summary API's WeekStats naming has drifted between
- * phases, so this component normalizes at runtime instead of re-declaring
- * a fragile mirror type. Whatever the API sends, the card stays premium.
- *
- * Fix: stat tiles render the probed `stats` array directly
- * (old stats.scenes/wins/xp references were dead after the refactor).
+ * Boundary note: normalizes at runtime; stat tiles render the probed
+ * `stats` array directly (old stats.scenes/wins/xp refs were dead).
  */
 import { Activity } from 'lucide-react'
 
@@ -16,7 +12,6 @@ export default function WeekEvidence({ week }: { week?: any }) {
     const w = (week ?? {}) as Record<string, unknown>
     const DOW = ['M', 'T', 'W', 'T', 'F', 'S', 'S']
 
-    // First array value = the days strip, whatever it's called.
     const daysArr = Object.values(w).find(v => Array.isArray(v)) as unknown[] | undefined
     const days = (daysArr ?? []).map((d, i) => {
         if (typeof d === 'number') return { label: DOW[i], count: d }
@@ -25,8 +20,6 @@ export default function WeekEvidence({ week }: { week?: any }) {
         return { label: (o.label as string) ?? DOW[i], count: typeof n === 'number' ? n : 0 }
     })
 
-    // First three positive numbers = stat tiles, labeled by their key.
-    // Real API shape today: { demonstrated, conversations, repairs }.
     const stats = Object.entries(w)
         .filter(([, v]) => typeof v === 'number' && (v as number) > 0)
         .slice(0, 3)
