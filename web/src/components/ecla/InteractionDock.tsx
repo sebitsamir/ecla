@@ -60,18 +60,12 @@ export default function InteractionDock({ engine, emphasize = false }: {
         )
     }
 
-    // ── Listen stage ──
+    // ── Listen stage: auto-play handled by scheduler; speaker replays only ──
     if (beat.kind === 'listen') {
         return (
-            <button
-                onClick={() => engine.listenTap(beat.es)}
-                className="group w-full rounded-xl border border-white/10 bg-[#1A1A24] px-4 py-4 text-sm text-cream/80 transition-all duration-200 hover:border-glow/40 hover:bg-white/5 active:scale-[0.98]"
-            >
-                <span className="flex items-center justify-center gap-2">
-                    <span className="text-glow text-xs font-bold uppercase tracking-wider">Tap to hear</span>
-                    <span>{beat.es}</span>
-                </span>
-            </button>
+            <p className="text-center text-xs text-cream/45">
+                Tap the speaker icon to hear again
+            </p>
         )
     }
 

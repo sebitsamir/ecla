@@ -36,7 +36,7 @@ export default function CharacterBubble({ character, text, mine = false, gloss, 
             return
         }
         setPlaying(true)
-        // Engine-owned flow: listenTap plays the audio AND consumes the beat
+        // Engine-owned flow: speaker button replays audio only
         if (onListen) onListen(label)
         else say(label)
         setTimeout(() => setPlaying(false), Math.max(2000, label.length * 120))
