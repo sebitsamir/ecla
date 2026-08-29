@@ -5,11 +5,13 @@ import path from 'path'
 import { groq } from '../lib/groq'
 import { getOrSyncUserFast } from '../lib/auth'
 import { assessIntelligibility } from '../lib/pronunciationAssess'
+import { voiceRateLimit } from '../lib/rateLimit'
 
 const router = Router()
 
 router.post(
     '/api/v1/voice/transcribe',
+    voiceRateLimit,
     raw({ type: ['audio/*', 'application/octet-stream'], limit: '15mb' }),
     async (req: Request, res: Response, next: NextFunction) => {
         try {
