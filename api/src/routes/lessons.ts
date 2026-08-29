@@ -21,6 +21,7 @@ import { getOrSyncUserFast, requireAuth } from '../lib/auth'
 import { groq } from '../lib/groq'
 import { AppError } from '../lib/errors'
 import { lessonCompleteSchema } from '../lib/schemas'
+import { nextReviewDate } from './adaptive'
 
 const router = Router()
 
@@ -273,7 +274,7 @@ router.post('/api/v1/lessons/complete', async (req: Request, res: Response, next
 
         const parsed = lessonCompleteSchema.safeParse(req.body)
         if (!parsed.success) throw new AppError('Invalid completion data', 400)
-        const { conceptId, subLessonId, correctCount, incorrectCount, xpEarned } = parsed.data
+        const { conceptId, subLessonId, correctCount, incorrectCount, xpEarned, review } = parsed.data
 
         // 1) Experience progress
         if (subLessonId) {
@@ -329,7 +330,7 @@ router.post('/api/v1/lessons/complete', async (req: Request, res: Response, next
             transferCount: missionDone && allDone ? { increment: 1 } : undefined,
             level,
             lastAssessedAt: new Date(),
-            nextReviewAt: new Date(Date.now() + 2 * 24 * 3600 * 1000), // §6.5: Day 1 → Day 2
+            nextReviewAt: nextReviewDate(level, review === true),
         }
         // Dimensional evidence: blend new score into the matching dimension
         if (dimensionField && dimensionScore !== null) {
@@ -340,7 +341,7 @@ router.post('/api/v1/lessons/complete', async (req: Request, res: Response, next
             userId: user.id, competencyId: conceptId, level,
             exposureCount: 1, successCount: correctCount, failureCount: incorrectCount,
             lastAssessedAt: new Date(),
-            nextReviewAt: new Date(Date.now() + 2 * 24 * 3600 * 1000),
+            nextReviewAt: nextReviewDate(level, review === true),
         }
         if (dimensionField && dimensionScore !== null) {
             createData[dimensionField] = dimensionScore

@@ -6,7 +6,7 @@ const API_URL = process.env.NEXT_PUBLIC_API_URL ?? 'http://localhost:4000'
 
 export type DimensionBand = { key: string; avg: number | null; band: string | null }
 export type NextAction = {
-    kind: 'lesson' | 'gateway'
+    kind: 'lesson' | 'gateway' | 'review'
     competencyId?: string; code?: string
     title: string; canDo: string; mode?: string; href: string; reason: string
 }

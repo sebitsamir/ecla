@@ -1,13 +1,14 @@
 'use client'
 
 /**
- * NextActionCard — the dominant "what now" surface (Phase D premium pass).
- * Adaptive WHY line included; CTA drops straight into the scene.
+ * NextActionCard — the dominant "what now" surface.
+ * Uses adaptive href (includes mode + review) — never hardcodes STORY-only links.
  */
 import Link from 'next/link'
 import { ArrowRight, Lightbulb } from 'lucide-react'
 
 export type NextAction = {
+    kind?: string
     code?: string
     competencyCode?: string
     title?: string
@@ -15,17 +16,25 @@ export type NextAction = {
     description?: string
     canDo?: string
     reason?: string
+    href?: string
+    mode?: string
 }
 
 export default function NextActionCard({ action }: { action: NextAction }) {
     const code = action?.code ?? action?.competencyCode
     const title = action?.title ?? action?.label ?? 'Keep going'
     const description = action?.description ?? action?.canDo
+    const href = action?.href ?? (code ? `/learn/${code}` : '/course')
+    const cta = action?.kind === 'review'
+        ? 'Enter the scene'
+        : action?.kind === 'gateway'
+            ? 'Open the gateway'
+            : 'Enter the scene'
 
     return (
         <section className="flex h-full flex-col rounded-2xl border border-glow/25 bg-[#13131B] p-5 sm:p-6">
             <p className="text-[11px] font-semibold uppercase tracking-widest text-glow">
-                Your next mission
+                {action?.kind === 'review' ? 'Due today' : 'Your next step'}
             </p>
             <h2 className="font-display mt-2 text-xl font-bold leading-tight text-cream sm:text-2xl">
                 {title}
@@ -41,10 +50,10 @@ export default function NextActionCard({ action }: { action: NextAction }) {
             )}
             <div className="mt-auto pt-5">
                 <Link
-                    href={code ? `/learn/${code}` : '/course'}
+                    href={href}
                     className="inline-flex w-full items-center justify-center gap-2 rounded-xl bg-glow py-3.5 text-sm font-bold text-night-900 shadow-[0_0_24px_rgba(255,200,0,0.2)] transition-all hover:bg-glow/90 active:scale-[0.98] sm:w-auto sm:px-6"
                 >
-                    Enter the scene <ArrowRight className="h-4 w-4" />
+                    {cta} <ArrowRight className="h-4 w-4" />
                 </Link>
             </div>
         </section>

@@ -10,6 +10,7 @@
  */
 import { Router, Request, Response, NextFunction } from 'express'
 import { getOrSyncUserFast } from '../lib/auth'
+import { prisma } from '../lib/prisma'
 import { GATEWAY_CONFIGS, type GatewayScenarioId, type GatewayTurn } from '../types/gateway'
 
 const router = Router()
@@ -41,10 +42,6 @@ CRITICAL RULES:
 router.post('/api/v1/gateway/turn', async (req: Request, res: Response, next: NextFunction) => {
     try {
         await getOrSyncUserFast(req) // Auth check
-        
-        if (!GROQ_API_KEY) {
-            throw new Error('GROQ_API_KEY is missing. Add it to api/.env for Gateway simulations.')
-        }
 
         const { scenarioId, history, learnerText } = req.body as {
             scenarioId: GatewayScenarioId
@@ -57,16 +54,28 @@ router.post('/api/v1/gateway/turn', async (req: Request, res: Response, next: Ne
             return res.status(400).json({ error: 'Invalid scenario ID' })
         }
 
+        // Opening turn — no AI needed
+        if (history.length === 0) {
+            return res.json({ text: config.openingLine, role: 'ai' })
+        }
+
+        // Graceful fallback when Groq is unavailable (dev / missing key)
+        if (!GROQ_API_KEY) {
+            const fallbacks = [
+                'Entiendo. ¿Algo más?',
+                'Vale, perfecto.',
+                '¿Perdón? ¿Puedes repetir?',
+                'Claro, sin problema.',
+            ]
+            const text = learnerText?.trim()
+                ? fallbacks[Math.floor(Math.random() * fallbacks.length)]
+                : config.openingLine
+            return res.json({ text, role: 'ai' })
+        }
         // Build the message array for Groq
         const messages: any[] = [
             { role: 'system', content: buildSystemPrompt(config) }
         ]
-
-        // Add the opening line if this is the very first turn
-        if (history.length === 0) {
-            messages.push({ role: 'assistant', content: config.openingLine })
-            return res.json({ text: config.openingLine, role: 'ai' })
-        }
 
         // Map the existing history
         for (const turn of history) {
@@ -109,6 +118,70 @@ router.post('/api/v1/gateway/turn', async (req: Request, res: Response, next: Ne
 
         res.json({ text: aiText, role: 'ai' })
 
+    } catch (error) {
+        next(error)
+    }
+})
+
+/**
+ * POST /api/v1/gateway/complete — persist graduation evidence (Phase 15).
+ * Multi-dimensional summary; marks learner as Pre-A1 ready when evidence supports it.
+ */
+router.post('/api/v1/gateway/complete', async (req: Request, res: Response, next: NextFunction) => {
+    try {
+        const user = await getOrSyncUserFast(req)
+        const { evidence } = (req.body ?? {}) as { evidence?: Array<{ scenario: string; communicated?: boolean; repaired?: boolean }> }
+
+        const items = Array.isArray(evidence) ? evidence : []
+        const communicated = items.filter(e => e.communicated).length
+        const repaired = items.filter(e => e.repaired).length
+        const total = items.length || 1
+        const ratio = communicated / total
+
+        const result = {
+            preA1Ready: ratio >= 0.67 && communicated >= 4,
+            communicated,
+            repaired,
+            total,
+            dimensions: {
+                communication: ratio >= 0.8 ? 'Strong' : ratio >= 0.5 ? 'Developing' : 'Needs practice',
+                repair: repaired >= 1 ? 'Strong' : 'Developing',
+                transfer: communicated >= 5 ? 'Strong' : 'Developing',
+            },
+        }
+
+        // Mark gateway unit competencies as demonstrated where applicable
+        const gatewayUnit = await prisma.course.findFirst({
+            where: { isPublished: true },
+            include: {
+                units: {
+                    where: { title: { contains: 'Gateway', mode: 'insensitive' } },
+                    include: { competencies: true },
+                },
+            },
+        })
+        const gatewayComps = gatewayUnit?.units?.[0]?.competencies ?? []
+        for (const comp of gatewayComps) {
+            await prisma.competencyMastery.upsert({
+                where: { userId_competencyId: { userId: user.id, competencyId: comp.id } },
+                update: {
+                    level: result.preA1Ready ? 'TRANSFERRED' : 'CONTROLLED',
+                    lastAssessedAt: new Date(),
+                    transferScore: Math.round(ratio * 100),
+                    interactionScore: Math.round(ratio * 100),
+                },
+                create: {
+                    userId: user.id,
+                    competencyId: comp.id,
+                    level: result.preA1Ready ? 'TRANSFERRED' : 'CONTROLLED',
+                    lastAssessedAt: new Date(),
+                    transferScore: Math.round(ratio * 100),
+                    interactionScore: Math.round(ratio * 100),
+                },
+            })
+        }
+
+        res.json({ ok: true, graduation: result })
     } catch (error) {
         next(error)
     }

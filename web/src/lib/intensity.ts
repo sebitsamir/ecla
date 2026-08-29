@@ -5,10 +5,11 @@
 export type IntensityLevel = 'full' | 'high' | 'minimal'
 
 export const MODE_INTENSITY: Record<string, IntensityLevel> = {
-    STORY: 'full',        // max Ecla presence, playful copy, animations
-    DRILL: 'high',        // Ecla present but efficient
-    IMMERSION: 'high',    // Ecla present, culture-flavored
-    PROFESSIONAL: 'minimal', // Ecla mostly absent, clean stats only
+    STORY: 'full',
+    DRILL: 'high',
+    IMMERSION: 'high',
+    PROFESSIONAL: 'minimal',
+    MISSION: 'minimal',
 }
 
 export function getIntensity(mode: string): IntensityLevel {

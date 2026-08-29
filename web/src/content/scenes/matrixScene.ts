@@ -14,9 +14,8 @@ import { directionFor, type UnitDirection } from './unitDirections'
 
 const cap = (s: string) => (s ? s[0].toUpperCase() + s.slice(1) : s)
 
-export function matrixSceneFor(code: string, lesson: any): SceneSpec | undefined {
-    // No engine payload → no matrix scene (streetEncounter/redirect still apply).
-    if (!extractEngine(lesson)) return undefined
+export function matrixSceneFor(code: string, lesson: any, mode?: string): SceneSpec | undefined {
+    if (!extractEngine(lesson, mode ?? 'STORY')) return undefined
 
     const dir = directionFor(code)
     const canDo = String(lesson?.canDo ?? code)
@@ -34,7 +33,7 @@ export function matrixSceneFor(code: string, lesson: any): SceneSpec | undefined
         retain: `Later today, the same person needs it again — after delay.`,
     } as unknown as SceneBlueprint
 
-    return compileScene(bp, lesson)
+    return compileScene(bp, lesson, mode)
 }
 
 /**
