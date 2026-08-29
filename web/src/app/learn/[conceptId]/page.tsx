@@ -1,39 +1,46 @@
 'use client'
 
 import { useEffect, useMemo, useRef, useState, Suspense } from 'react'
-import { useParams, useRouter } from 'next/navigation'
+import { useParams, useRouter, useSearchParams } from 'next/navigation'
 import { useAuth, useUser } from '@clerk/nextjs'
-import { Check, ArrowRight, ArrowLeft } from 'lucide-react'
+import { ArrowLeft } from 'lucide-react'
 import SceneExperience from '@/components/ecla/SceneExperience'
+import MissionRunner from '@/components/MissionRunner'
+import ModeAmbience from '@/components/ModeAmbience'
 import { sceneFor, applyLearnerName, personalizeScene } from '@/content/scenes'
 import {
     fetchMemory, getLearnerName, recordCharacterEncounter,
     seedNameFromProfile, type LearnerMemory,
 } from '@/lib/memory'
 import { streetEncounter } from '@/content/scenes/streetEncounter'
+import { MODE_LABELS, MODE_PURPOSE, normalizeMode } from '@/lib/modeStages'
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL ?? 'http://localhost:4000'
 
 function LearnPlayer() {
     const params = useParams()
     const router = useRouter()
+    const searchParams = useSearchParams()
     const { getToken } = useAuth()
     const { user } = useUser()
+
+    const mode = normalizeMode(searchParams.get('mode'))
+    const isReview = searchParams.get('review') === '1'
 
     const [lesson, setLesson] = useState<any>(null)
     const [loading, setLoading] = useState(true)
     const [memory, setMemory] = useState<LearnerMemory | null>(null)
-    const [finished, setFinished] = useState(false)
-    const [evidence, setEvidence] = useState<{ correct: number; incorrect: number } | null>(null)
+    const [completing, setCompleting] = useState(false)
     const recordedSceneRef = useRef<string | null>(null)
 
     useEffect(() => {
         (async () => {
             try {
                 const token = await getToken()
-                const res = await fetch(`${API_URL}/api/v1/lessons/${params.conceptId}`, {
-                    headers: { Authorization: `Bearer ${token}` },
-                })
+                const res = await fetch(
+                    `${API_URL}/api/v1/lessons/${params.conceptId}?mode=${mode}`,
+                    { headers: { Authorization: `Bearer ${token}` } },
+                )
                 const data = await res.json()
                 setLesson(data.lesson)
             } catch (e) {
@@ -42,17 +49,20 @@ function LearnPlayer() {
                 setLoading(false)
             }
         })()
-    }, [getToken, params.conceptId])
+    }, [getToken, params.conceptId, mode])
 
-    useEffect(() => {
-        seedNameFromProfile(user?.firstName ?? null)
-    }, [user])
+    useEffect(() => { seedNameFromProfile(user?.firstName ?? null) }, [user])
+    useEffect(() => { (async () => setMemory(await fetchMemory(getToken)))() }, [getToken])
 
-    useEffect(() => {
-        (async () => setMemory(await fetchMemory(getToken)))()
-    }, [getToken])
+    const activeExp = useMemo(
+        () => (lesson?.subLessons ?? []).find((s: any) => s.type === mode)
+            ?? (lesson?.subLessons ?? []).find((s: any) => s.type === 'STORY'),
+        [lesson, mode],
+    )
 
-    const baseScene = lesson?.code ? sceneFor(lesson.code, lesson) : undefined
+    const baseScene = !isReview && mode !== 'MISSION' && lesson?.code
+        ? sceneFor(lesson.code, lesson, mode)
+        : undefined
 
     const storyExp = (lesson?.subLessons ?? []).find((s: any) => s.type === 'STORY')
     const retrievalTarget = (storyExp?.exercises ?? [])
@@ -63,14 +73,19 @@ function LearnPlayer() {
     const learnerName = memory?.name ?? getLearnerName()
 
     const scene = useMemo(() => {
+        if (mode === 'MISSION') return undefined
         let s = baseScene
             ? { ...baseScene, beats: applyLearnerName(baseScene.beats, learnerName) }
-            : (learned && retrievalTarget.length > 0)
-                ? streetEncounter({ name: learnerName, canDo: lesson?.canDo ?? '', expected: retrievalTarget })
+            : (isReview || learned) && retrievalTarget.length > 0
+                ? streetEncounter({
+                    name: learnerName,
+                    canDo: lesson?.canDo ?? '',
+                    expected: retrievalTarget,
+                })
                 : undefined
         if (s) s = personalizeScene(s, memory)
         return s
-    }, [baseScene, learnerName, learned, retrievalTarget, lesson?.canDo, memory])
+    }, [baseScene, learnerName, isReview, learned, retrievalTarget, lesson?.canDo, memory, mode])
 
     useEffect(() => {
         if (!scene || recordedSceneRef.current === scene.id) return
@@ -85,49 +100,54 @@ function LearnPlayer() {
     }, [scene, getToken, learnerName])
 
     useEffect(() => {
-        if (!loading && !lesson) {
-            router.push('/course')
-        } else if (!loading && lesson && !scene) {
+        if (!loading && !lesson) router.push('/course')
+        else if (!loading && lesson && mode !== 'MISSION' && !scene) {
             console.warn('[ecla] Redirecting: no scene for', JSON.stringify(lesson?.code))
             router.push('/course')
         }
-    }, [loading, lesson, scene, router])
+    }, [loading, lesson, scene, router, mode])
 
     const completeScene = async (correct: number, incorrect: number, sceneEvidence?: any) => {
-        const token = await getToken()
+        if (completing) return
+        setCompleting(true)
+        try {
+            const token = await getToken()
+            await fetch(`${API_URL}/api/v1/lessons/complete`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+                body: JSON.stringify({
+                    conceptId: lesson.conceptId,
+                    subLessonId: activeExp?.id,
+                    mode,
+                    correctCount: correct,
+                    incorrectCount: incorrect,
+                    xpEarned: activeExp?.xpReward ?? lesson.xpReward ?? 20,
+                    review: isReview,
+                }),
+            })
 
-        const exp = (lesson.subLessons ?? []).find((s: any) => s.type === 'STORY')
-        await fetch(`${API_URL}/api/v1/lessons/complete`, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
-            body: JSON.stringify({
-                conceptId: lesson.conceptId,
-                subLessonId: exp?.id,
-                mode: 'STORY',
-                correctCount: correct,
-                incorrectCount: incorrect,
-                xpEarned: exp?.xpReward ?? lesson.xpReward ?? 20,
-            }),
-        })
+            await fetch(`${API_URL}/api/v1/learner/demonstrate`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+                body: JSON.stringify({
+                    competencyId: lesson.conceptId,
+                    correct,
+                    incorrect,
+                    evidence: sceneEvidence ?? null,
+                    contextId: scene?.id ?? lesson.conceptId,
+                    review: isReview,
+                }),
+            })
 
-        await fetch(`${API_URL}/api/v1/learner/demonstrate`, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
-            body: JSON.stringify({
-                competencyId: lesson.conceptId,
-                correct,
-                incorrect,
-                evidence: sceneEvidence ?? null,
-                contextId: scene?.id ?? lesson.conceptId,
-            }),
-        })
-
-        window.dispatchEvent(new Event('ecla:progress-updated'))
-        setEvidence({ correct, incorrect })
-        setFinished(true)
+            window.dispatchEvent(new Event('ecla:progress-updated'))
+            router.push(isReview ? '/dashboard' : '/course')
+        } catch (e) {
+            console.error('Completion failed:', e)
+            setCompleting(false)
+        }
     }
 
-    if (loading || !lesson || !scene) {
+    if (loading || !lesson) {
         return (
             <main className="min-h-screen flex flex-col items-center justify-center bg-[#0B0B10]">
                 <div className="h-8 w-8 animate-spin rounded-full border-2 border-glow border-t-transparent mb-4" />
@@ -136,69 +156,58 @@ function LearnPlayer() {
         )
     }
 
-    if (finished && evidence) {
+    if (mode === 'MISSION') {
         return (
-            <main className="min-h-screen bg-[#0B0B10] flex items-center justify-center p-6 animate-fade-in">
-                <div className="max-w-lg w-full text-center space-y-8">
-                    <div>
-                        <h1 className="font-display text-3xl font-bold text-cream mb-2">You did it.</h1>
-                        <p className="text-cream/60">{lesson.canDo}</p>
+            <main className="min-h-screen font-body bg-[#0B0B10] relative">
+                <ModeAmbience mode="MISSION" />
+                <header className="sticky top-0 z-40 border-b border-white/5 bg-[#0B0B10]/95 backdrop-blur">
+                    <div className="mx-auto max-w-[1400px] px-4 h-14 flex items-center gap-3">
+                        <button onClick={() => router.push('/course')} className="inline-flex items-center gap-1.5 text-sm text-cream/60 hover:text-cream">
+                            <ArrowLeft className="h-4 w-4" /><span>Exit</span>
+                        </button>
+                        <p className="text-sm font-semibold text-cream/80 truncate">{lesson.canDo}</p>
+                        <p className="ml-auto text-[11px] uppercase tracking-widest text-violet-300">Mission</p>
                     </div>
-
-                    <div className="rounded-2xl border border-white/10 bg-[#13131B] p-6 text-left">
-                        <p className="text-xs font-bold uppercase tracking-wider text-cream/40 mb-4">
-                            Communication achieved
-                        </p>
-                        <ul className="space-y-3">
-                            {(scene.outcomes ?? []).map((outcome: string, i: number) => (
-                                <li key={i} className="flex items-start gap-3">
-                                    <Check className="h-5 w-5 text-leaf flex-shrink-0 mt-0.5" />
-                                    <span className="text-sm text-cream/90">{outcome}</span>
-                                </li>
-                            ))}
-                        </ul>
-                    </div>
-
-                    <div className="rounded-2xl border border-glow/30 bg-glow/5 p-6">
-                        <p className="text-xs font-bold uppercase tracking-wider text-glow mb-2">
-                            Evidence
-                        </p>
-                        <p className="text-sm text-cream/80">
-                            {evidence.correct} successful communications
-                            {evidence.incorrect > 0 && `, ${evidence.incorrect} moments of repair`}
-                        </p>
-                    </div>
-
-                    <button
-                        onClick={() => router.push('/course')}
-                        className="w-full py-4 rounded-xl bg-glow text-night-900 font-bold text-base inline-flex items-center justify-center gap-2 hover:bg-glow/90 transition-colors"
-                    >
-                        Continue your journey <ArrowRight className="h-5 w-5" />
-                    </button>
-                </div>
+                </header>
+                <MissionRunner
+                    competencyId={lesson.conceptId}
+                    onClose={() => router.push('/course')}
+                />
             </main>
         )
     }
 
+    if (!scene) return null
+
     const tools = {
         ...lesson.tools,
-        scenePurpose: scene.purpose?.stakes,
+        scenePurpose: isReview
+            ? 'Someone you know wants to hear it again — no hints.'
+            : (scene.purpose?.stakes ?? activeExp?.content?.modePurpose),
         scenePatterns: scene.targetLanguage?.patterns,
     }
 
     return (
-        <main className="min-h-screen font-body bg-[#0B0B10]">
+        <main className="min-h-screen font-body bg-[#0B0B10] relative">
+            <ModeAmbience mode={mode} />
             <header className="sticky top-0 z-40 border-b border-white/5 bg-[#0B0B10]/95 backdrop-blur">
                 <div className="mx-auto max-w-[1400px] px-4 h-14 flex items-center gap-3">
                     <button
-                        onClick={() => router.push('/course')}
+                        onClick={() => router.push(isReview ? '/dashboard' : '/course')}
                         className="inline-flex items-center gap-1.5 text-sm text-cream/60 hover:text-cream transition-colors"
                     >
                         <ArrowLeft className="h-4 w-4" />
                         <span>Exit</span>
                     </button>
-                    <p className="text-sm font-semibold text-cream/80 truncate">{scene.title}</p>
-                    <p className="ml-auto text-[11px] uppercase tracking-widest text-cream/40">Spanish · Pre-A1</p>
+                    <div className="min-w-0 flex-1">
+                        <p className="text-sm font-semibold text-cream/80 truncate">
+                            {isReview ? 'A familiar face' : scene.title}
+                        </p>
+                        <p className="text-[10px] text-cream/40 truncate">{MODE_PURPOSE[mode]}</p>
+                    </div>
+                    <p className="ml-auto text-[11px] uppercase tracking-widest text-cream/40">
+                        {MODE_LABELS[mode]} · Pre-A1
+                    </p>
                 </div>
             </header>
             <div className="relative z-0 mx-auto max-w-[1400px] px-4 py-6">
@@ -210,6 +219,11 @@ function LearnPlayer() {
                     onComplete={completeScene}
                 />
             </div>
+            {completing && (
+                <div className="fixed inset-0 z-50 flex items-center justify-center bg-[#0B0B10]/80 backdrop-blur-sm">
+                    <p className="text-sm text-cream/60">Saving your evidence…</p>
+                </div>
+            )}
         </main>
     )
 }

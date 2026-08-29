@@ -18,6 +18,7 @@ import { getLearnerName } from '@/lib/memory'
 import { applyLearnerName } from './personalize'
 import { extractEngine, type StagePayload } from '@/lib/lessonPayload'
 import { buildSceneSpecSections } from '@/lib/sceneSpec'
+import { filterEngineForMode, normalizeMode } from '@/lib/modeStages'
 
 const norm = (s: string) => s.toLowerCase().replace(/[¡!.,¿?]/g, '').trim()
 const str = (v: unknown): string | null => (typeof v === 'string' && v.trim() ? v.trim() : null)
@@ -27,9 +28,11 @@ const strs = (v: unknown): string[] =>
         : []
 
 /** Language truth comes ONLY from the curriculum payload. */
-export function targetFromLesson(lesson: any): Target {
-    const story = (lesson?.subLessons ?? []).find((s: any) => s.type === 'STORY')
-    const lt = story?.content?.languageTargets ?? {}
+export function targetFromLesson(lesson: any, mode: string = 'STORY'): Target {
+    const exps = lesson?.subLessons ?? []
+    const exp = exps.find((s: any) => s.type === mode) ?? exps.find((s: any) => s.type === 'STORY')
+    const story = exp ?? exps[0]
+    const lt = story?.content?.languageTargets ?? story?.languageTargets ?? {}
     const toolsWords = (lesson?.tools?.vocabulary ?? []).map((v: any) => ({
         word: String(v.word ?? ''), translation: v.translation ? String(v.translation) : undefined,
     }))
@@ -173,8 +176,9 @@ function beatsForStage(bp: SceneBlueprint, ctx: Ctx, st: StagePayload, t: Target
     }
 }
 
-export function compileScene(bp: SceneBlueprint, lesson: any): SceneSpec {
-    const t = targetFromLesson(lesson)
+export function compileScene(bp: SceneBlueprint, lesson: any, mode?: string): SceneSpec {
+    const activeMode = normalizeMode(mode)
+    const t = targetFromLesson(lesson, activeMode)
     if (process.env.NODE_ENV !== 'production' && !t.words.length && !t.examples.length) {
         console.warn(`[ecla] compileScene(${bp.id}): EMPTY curriculum payload — page must pass lesson to sceneFor().`)
     }
@@ -188,7 +192,10 @@ export function compileScene(bp: SceneBlueprint, lesson: any): SceneSpec {
 
     const gen = ARCHETYPES[bp.archetype]
     const archetypeBeats = gen ? gen(ctx) : []
-    const engine = extractEngine(lesson)
+    let engine = extractEngine(lesson, activeMode)
+    if (engine && activeMode !== 'STORY') {
+        engine = filterEngineForMode(engine, activeMode)
+    }
 
     let beats: SceneBeat[]
     if (engine) {

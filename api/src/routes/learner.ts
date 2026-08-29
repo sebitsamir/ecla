@@ -10,7 +10,7 @@
 import { Router, Request, Response, NextFunction } from 'express'
 import { prisma } from '../lib/prisma'
 import { getOrSyncUserFast } from '../lib/auth'
-import { computeNextAction, dueReviewsFor } from './adaptive'
+import { computeNextAction, dueReviewsFor, nextReviewDate } from './adaptive'
 import { MasteryLevel } from '@prisma/client'
 
 const router = Router()
@@ -179,7 +179,7 @@ router.get('/api/v1/learner/summary', async (req: Request, res: Response, next: 
 router.post('/api/v1/learner/demonstrate', async (req: Request, res: Response, next: NextFunction) => {
     try {
         const user = await getOrSyncUserFast(req)
-        const { competencyId, correct = 0, incorrect = 0, evidence, contextId } = req.body ?? {}
+        const { competencyId, correct = 0, incorrect = 0, evidence, contextId, review } = req.body ?? {}
         if (!competencyId) return res.status(400).json({ error: 'competencyId required' })
 
         const total = Number(correct) + Number(incorrect)
@@ -265,7 +265,7 @@ router.post('/api/v1/learner/demonstrate', async (req: Request, res: Response, n
         const data: any = {
             level,
             lastAssessedAt: new Date(),
-            nextReviewAt: new Date(now + (level === 'RETAINED' ? 7 : level === 'TRANSFERRED' ? 3 : 1) * 86400000),
+            nextReviewAt: nextReviewDate(level, review === true),
             comprehensionScore: newComp,
             applicationScore: newProd,
             retrievalScore: newRetr,
@@ -320,44 +320,37 @@ router.get('/api/v1/learner/upcoming-reviews', async (req: Request, res: Respons
     try {
         const user = await getOrSyncUserFast(req)
         const now = Date.now()
+        const due = await dueReviewsFor(user.id, 5)
 
-        const INTERVAL_MS: Record<string, number> = {
-            CONTROLLED: 1 * 86400000,
-            TRANSFERRED: 3 * 86400000,
-            RETAINED: 7 * 86400000,
-        }
+        const reviews = due.map(r => ({
+            code: r.code,
+            title: r.canDo ?? r.title,
+            level: 'REVIEW',
+            dueInHours: 0,
+        }))
 
-        const rows = await prisma.competencyMastery.findMany({
+        // Also surface items due within 24h (not yet overdue)
+        const soon = await prisma.competencyMastery.findMany({
             where: {
                 userId: user.id,
                 level: { in: ['CONTROLLED', 'TRANSFERRED', 'RETAINED'] },
-                lastAssessedAt: { not: null },
+                nextReviewAt: { gt: new Date(), lte: new Date(now + 24 * 3600 * 1000) },
             },
-            select: { competencyId: true, level: true, lastAssessedAt: true },
+            include: { competency: { select: { code: true, canDo: true, title: true } } },
+            orderBy: { nextReviewAt: 'asc' },
+            take: 3,
         })
-        const comps = await prisma.competency.findMany({
-            where: { id: { in: rows.map(r => r.competencyId) } },
-            select: { id: true, code: true, canDo: true },
-        })
-        const byId = new Map(comps.map(c => [c.id, c]))
-
-        const reviews = rows
-            .map(r => {
-                const c = byId.get(r.competencyId)
-                if (!c || !r.lastAssessedAt) return null
-                const dueAt = new Date(r.lastAssessedAt).getTime() + (INTERVAL_MS[r.level] ?? 86400000)
-                return {
-                    code: c.code,
-                    title: c.canDo,
-                    level: r.level,
-                    dueInHours: Math.round((dueAt - now) / 3600000),
-                }
+        for (const r of soon) {
+            if (reviews.some(x => x.code === r.competency.code)) continue
+            reviews.push({
+                code: r.competency.code,
+                title: r.competency.canDo ?? r.competency.title,
+                level: r.level,
+                dueInHours: Math.max(1, Math.round((new Date(r.nextReviewAt!).getTime() - now) / 3600000)),
             })
-            .filter((r): r is NonNullable<typeof r> => r !== null && r.dueInHours <= 24)
-            .sort((a, b) => a.dueInHours - b.dueInHours)
-            .slice(0, 3)
+        }
 
-        res.json({ ok: true, reviews })
+        res.json({ ok: true, reviews: reviews.slice(0, 3) })
     } catch (error) { next(error) }
 })
 

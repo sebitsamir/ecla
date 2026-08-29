@@ -13,7 +13,7 @@
 import { useEffect, useState } from 'react'
 import Link from 'next/link'
 import { ArrowRight, Clock } from 'lucide-react'
-import { UNIT1 } from '@/lib/blueprint'
+import { directionFor } from '@/content/scenes/unitDirections'
 import { CAST } from '@/content/cast'
 import type { CharacterId } from '@/lib/sceneTypes'
 
@@ -21,12 +21,7 @@ const API_URL = process.env.NEXT_PUBLIC_API_URL ?? 'http://localhost:4000'
 
 type Review = { code: string; title: string; level: string; dueInHours: number }
 
-/** Which person owns each competency's world (blueprint cast, Unit 1 for now). */
-const charFor = (code: string): CharacterId => {
-    const key = code.trim()
-    const bp = UNIT1.find(b => b.competency.trim() === key)
-    return (bp?.characters[0] as CharacterId) ?? 'sofia'
-}
+const charFor = (code: string): CharacterId => directionFor(code).cast[0] ?? 'sofia'
 
 const dueLabel = (h: number) => (h <= 0 ? 'due now' : h <= 24 ? 'tomorrow' : `in ${Math.round(h / 24)}d`)
 
@@ -81,7 +76,7 @@ export default function RetentionCard({ getToken }: {
                                 {dueLabel(rv.dueInHours)}
                             </span>
                             <Link
-                                href={`/learn/${rv.code}`}
+                                href={`/learn/${rv.code}?review=1`}
                                 aria-label={`Review: ${rv.title}`}
                                 className="flex h-8 w-8 flex-shrink-0 items-center justify-center rounded-full bg-white/5 text-cream/60 transition-all hover:bg-glow hover:text-night-900 active:scale-95"
                             >

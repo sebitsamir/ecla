@@ -21,14 +21,14 @@ if (process.env.NODE_ENV !== 'production') {
     else console.info('[ecla] Scene registry ready:', [...BLUEPRINTS.keys()].join(', '))
 }
 
-export const sceneFor = (code?: string | null, lesson?: any): SceneSpec | undefined => {
+export const sceneFor = (code?: string | null, lesson?: any, mode?: string): SceneSpec | undefined => {
     if (!code) return undefined
     const key = String(code).trim()
 
     const bp = BLUEPRINTS.get(key)
-    if (bp) return compileScene(bp, lesson)
+    if (bp) return compileScene(bp, lesson, mode)
 
-    return matrixSceneFor(key, lesson)
+    return matrixSceneFor(key, lesson, mode)
 }
 
 export { applyLearnerName, personalizeScene } from './personalize'

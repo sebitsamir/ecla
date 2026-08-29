@@ -50,7 +50,22 @@ export async function dueReviewsFor(userId: string, limit = 3) {
         orderBy: { nextReviewAt: 'asc' },
         take: limit,
     })
-    return rows.map(r => ({ id: r.competency.id, code: r.competency.code, title: r.competency.title, canDo: r.competency.canDo }))
+    return rows.map(r => ({
+        id: r.competency.id,
+        code: r.competency.code,
+        title: r.competency.title,
+        canDo: r.competency.canDo,
+        competencyId: r.competency.id,
+    }))
+}
+
+/** Spaced-retention schedule (days) — aligned with seed assessment contract. */
+export const RETENTION_DAYS = [1, 2, 4, 7, 14, 30]
+
+export function nextReviewDate(level: string, reviewSuccess = false): Date {
+    const idx = level === 'RETAINED' ? 5 : level === 'TRANSFERRED' ? 4 : level === 'CONTROLLED' ? 2 : 1
+    const days = RETENTION_DAYS[reviewSuccess ? Math.min(idx + 1, RETENTION_DAYS.length - 1) : idx]
+    return new Date(Date.now() + days * 86400000)
 }
 
 /** Dimension averages + next-best-action with a reason. */
@@ -96,6 +111,25 @@ export async function computeNextAction(userId: string) {
     const weakest = [...dimensions]
         .filter((d): d is { key: string; avg: number; band: string } => d.avg != null)
         .sort((a, b) => a.avg - b.avg)[0]
+
+    // ── Phase 14: due reviews take priority over new content ──
+    const due = await dueReviewsFor(userId, 1)
+    if (due.length > 0) {
+        const rv = due[0]
+        return {
+            dimensions,
+            next: {
+                kind: 'review',
+                competencyId: rv.id,
+                code: rv.code,
+                title: rv.title,
+                canDo: rv.canDo,
+                mode: 'STORY',
+                href: `/learn/${rv.code}?review=1`,
+                reason: 'Someone wants to see you again — a quick hello keeps it alive.',
+            },
+        }
+    }
 
     // ── First available, undemonstrated competency in curriculum order ──
     let target: { comp: any } | null = null

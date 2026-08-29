@@ -10,10 +10,11 @@ export const onboardingSchema = z.object({
 export const lessonCompleteSchema = z.object({
     conceptId: z.string(),
     subLessonId: z.string().optional(),
-    mode: z.enum(['STORY', 'DRILL', 'IMMERSION', 'PROFESSIONAL']),
+    mode: z.enum(['STORY', 'DRILL', 'IMMERSION', 'PROFESSIONAL', 'MISSION']).default('STORY'),
     correctCount: z.number().int().min(0),
     incorrectCount: z.number().int().min(0),
     xpEarned: z.number().int().min(0).max(100),
+    review: z.boolean().optional(),
 })
 
 export const modeSchema = z.object({

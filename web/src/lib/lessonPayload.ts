@@ -44,13 +44,16 @@ export type EnginePayload = {
     languageTargets: Record<string, unknown>
     subLessons: StagePayload[]
     assessment?: any
+    modePurpose?: string
 }
 
-/** Pull the engine payload out of a lesson payload, shape-defensively. */
-export function extractEngine(lesson: any): EnginePayload | null {
+/** Pull the engine payload for a given experience mode, shape-defensively. */
+export function extractEngine(lesson: any, mode: string = 'STORY'): EnginePayload | null {
     const exps = Array.isArray(lesson?.subLessons) ? lesson.subLessons : []
+    const preferred = exps.find((e: any) => e?.type === mode)
     const story = exps.find((e: any) => e?.type === 'STORY') ?? exps[0]
-    const content = story?.content ?? story
+    const exp = preferred ?? story
+    const content = exp?.content ?? exp
     const rawStages: any[] = Array.isArray(content?.subLessons) ? content.subLessons : []
     if (!rawStages.length) return null
 
@@ -87,6 +90,7 @@ export function extractEngine(lesson: any): EnginePayload | null {
     return {
         languageTargets: (content?.languageTargets ?? {}) as Record<string, unknown>,
         subLessons,
-        assessment: content?.assessment ?? story?.assessment ?? undefined,
+        assessment: content?.assessment ?? exp?.assessment ?? undefined,
+        modePurpose: content?.modePurpose ?? undefined,
     }
 }

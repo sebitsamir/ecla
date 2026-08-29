@@ -41,6 +41,13 @@ export default function ModeAmbience({ mode }: { mode: string }) {
                     <div className="absolute inset-0" style={{ backgroundImage: 'linear-gradient(rgba(127,166,255,0.05) 1px, transparent 1px), linear-gradient(90deg, rgba(127,166,255,0.05) 1px, transparent 1px)', backgroundSize: '48px 48px' }} />
                 </div>
             )
+        case 'MISSION':
+            return (
+                <div className="pointer-events-none fixed inset-0 z-0 overflow-hidden" aria-hidden="true">
+                    <div className="absolute inset-0 bg-gradient-to-b from-violet-950/40 via-transparent to-[#0B0B10]" />
+                    <div className="absolute left-1/2 top-1/3 h-64 w-64 -translate-x-1/2 rounded-full bg-violet-600/10 blur-[100px]" />
+                </div>
+            )
         default:
             return null
     }
