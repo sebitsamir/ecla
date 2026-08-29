@@ -354,4 +354,12 @@ router.get('/api/v1/learner/upcoming-reviews', async (req: Request, res: Respons
     } catch (error) { next(error) }
 })
 
+router.get('/api/v1/learner/chat-context', async (req: Request, res: Response, next: NextFunction) => {
+    try {
+        const user = await getOrSyncUserFast(req)
+        const { buildLearnerChatContext } = await import('../lib/learnerContext')
+        res.json({ context: await buildLearnerChatContext(user.id) })
+    } catch (error) { next(error) }
+})
+
 export default router

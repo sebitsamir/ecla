@@ -9,7 +9,7 @@ import { useEffect, useState } from 'react'
 import { useAuth } from '@clerk/nextjs'
 import AppShell from '@/components/layout/AppShell'
 import StageCard, { type CourseUnit } from '@/components/ecla/course/StageCard'
-import CompetencyGraph from '@/components/ecla/course/CompetencyGraph'
+import CompetencyDetail, { type CompetencyEvidence } from '@/components/ecla/course/CompetencyDetail'
 import AbilityProfile from '@/components/ecla/dashboard/AbilityProfile'
 import NextActionCard from '@/components/ecla/dashboard/NextActionCard'
 import { fetchSummary, type LearnerSummary } from '@/lib/summary'
@@ -24,6 +24,7 @@ export default function CoursePage() {
     const [summary, setSummary] = useState<LearnerSummary | null>(null)
     const [loading, setLoading] = useState(true)
     const [tick, setTick] = useState(0)
+    const [selected, setSelected] = useState<CompetencyEvidence | null>(null)
 
     useEffect(() => {
         const fn = () => setTick(t => t + 1)
@@ -65,16 +66,7 @@ export default function CoursePage() {
     const hereId = course?.units.find(u => (u.counts?.developing ?? 0) > 0)?.id
         ?? course?.units.find(u => (u.counts?.upcoming ?? 0) > 0)?.id
 
-    const graphNodes = (course?.units ?? []).flatMap(u =>
-        (u.competencies ?? []).map(c => ({
-            id: String(c.id),
-            code: c.code,
-            title: c.code,
-            status: c.status,
-            href: `/learn/${c.id}`,
-            prerequisites: (c as { prerequisites?: string[] }).prerequisites ?? [],
-        })),
-    )
+    const graphNodes = (course?.units ?? []).flatMap(u => u.competencies ?? [])
 
     return (
         <AppShell>
@@ -106,7 +98,20 @@ export default function CoursePage() {
 
                         <ol className="space-y-3 sm:space-y-4">
                             {course.units.map((u, i) => (
-                                <StageCard key={u.id} unit={u} index={i} defaultOpen={u.id === hereId} />
+                                <StageCard
+                                    key={u.id}
+                                    unit={u}
+                                    index={i}
+                                    defaultOpen={u.id === hereId}
+                                    onSelect={cp => setSelected({
+                                        id: cp.id,
+                                        code: cp.code,
+                                        canDo: cp.canDo,
+                                        status: cp.status,
+                                        patterns: cp.patterns,
+                                        evidence: cp.evidence ?? undefined,
+                                    })}
+                                />
                             ))}
                         </ol>
                     </div>
@@ -114,7 +119,14 @@ export default function CoursePage() {
                     {/* ── Intelligence rail ── */}
                     <div className="min-w-0 space-y-5 xl:sticky xl:top-20 xl:self-start">
                         {summary && <NextActionCard action={summary.nextAction} />}
-                        <CompetencyGraph nodes={graphNodes} />
+                        <CompetencyDetail competency={selected ?? (graphNodes[0] ? {
+                            id: graphNodes[0].id,
+                            code: graphNodes[0].code,
+                            canDo: graphNodes[0].canDo,
+                            status: graphNodes[0].status,
+                            patterns: graphNodes[0].patterns,
+                            evidence: graphNodes[0].evidence ?? undefined,
+                        } : null)} />
                         {summary && <AbilityProfile dimensions={summary.dimensions} />}
                     </div>
                 </div>

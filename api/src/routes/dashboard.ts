@@ -22,8 +22,9 @@ import { getOrSyncUserFast } from '../lib/auth'
 
 const router = Router()
 
-// §6.4 — levels that count as finished
-const FINISHED_LEVELS = ['CONTROLLED', 'TRANSFERRED', 'RETAINED'] as any[]
+// §6.4 — TRANSFERRED/RETAINED = demonstrated; CONTROLLED = progression only
+const FINISHED_LEVELS = ['TRANSFERRED', 'RETAINED'] as any[]
+const PROGRESSED_LEVELS = ['CONTROLLED', 'TRANSFERRED', 'RETAINED'] as any[]
 
 router.get('/api/v1/dashboard', async (req: Request, res: Response, next: NextFunction) => {
     try {

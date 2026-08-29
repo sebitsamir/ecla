@@ -2,7 +2,7 @@
  * Course Map — the journey data (Phase 11.2).
  *
  * Returns published courses → units → competencies with HONEST statuses:
- *   mastered   → mastery level CONTROLLED/TRANSFERRED/RETAINED
+ *   mastered   → mastery level TRANSFERRED/RETAINED (true demonstration)
  *   developing → some evidence, not yet demonstrated
  *   upcoming   → prerequisites met, not started
  *   locked     → prerequisites not met (the graph, made visible)
@@ -14,7 +14,9 @@ import { getOrSyncUserFast } from '../lib/auth'
 
 const router = Router()
 
-const FINISHED = ['CONTROLLED', 'TRANSFERRED', 'RETAINED']
+// Phase 2: only TRANSFERRED/RETAINED count as demonstrated mastery
+const FINISHED = ['TRANSFERRED', 'RETAINED']
+const PROGRESSED = ['CONTROLLED', 'TRANSFERRED', 'RETAINED']
 const LEVEL_RANK: Record<string, number> = { PRE_A1: 0, A1: 1, A2: 2, B1: 3, B2: 4, C1: 5, C2: 6 }
 
 router.get('/api/v1/course/map', async (req: Request, res: Response, next: NextFunction) => {
@@ -33,6 +35,10 @@ router.get('/api/v1/course/map', async (req: Request, res: Response, next: NextF
                                 mastery: { where: { userId: user.id } },
                                 experiences: {
                                     select: { id: true, progress: { where: { userId: user.id }, select: { status: true } } },
+                                },
+                                realizations: {
+                                    select: { patterns: true },
+                                    take: 1,
                                 },
                                 prerequisitesAsCompetency: {
                                     select: {
@@ -57,7 +63,7 @@ router.get('/api/v1/course/map', async (req: Request, res: Response, next: NextF
                     const m = (comp as any).mastery?.[0]
                     const done = ((comp as any).experiences ?? []).filter((e: any) => e.progress?.[0]?.status === 'completed').length
                     if (m && (FINISHED as string[]).includes(m.level)) finished.add(comp.id)
-                    else if ((m && ['EXPOSED', 'DEVELOPING'].includes(m.level)) || done > 0) developing.add(comp.id)
+                    else if ((m && (PROGRESSED as string[]).includes(m.level)) || (m && ['EXPOSED', 'DEVELOPING'].includes(m.level)) || done > 0) developing.add(comp.id)
                 }
             }
         }
@@ -70,14 +76,27 @@ router.get('/api/v1/course/map', async (req: Request, res: Response, next: NextF
                 const comps = (unit as any).competencies.map((comp: any) => {
                     const prereqsMet = (comp.prerequisitesAsCompetency as { prerequisiteId: string }[])
                         .every(p => finished.has(p.prerequisiteId))
+                    const m = comp.mastery?.[0]
                     const status = finished.has(comp.id) ? 'mastered'
                         : developing.has(comp.id) ? 'developing'
                             : prereqsMet ? 'upcoming' : 'locked'
+                    const patterns = Array.isArray(comp.realizations?.[0]?.patterns)
+                        ? (comp.realizations[0].patterns as string[])
+                        : []
                     return {
                         id: comp.id, code: comp.code, title: comp.title, canDo: comp.canDo,
                         status, href: `/learn/${comp.id}`,
                         prerequisites: (comp.prerequisitesAsCompetency as { prerequisite: { code: string } }[])
                             .map(p => p.prerequisite.code),
+                        patterns,
+                        evidence: m ? {
+                            comprehension: m.comprehensionScore,
+                            retrieval: m.retrievalScore,
+                            interaction: m.interactionScore,
+                            application: m.applicationScore,
+                            transfer: m.transferScore,
+                            retention: m.retentionScore,
+                        } : null,
                     }
                 })
                 return {

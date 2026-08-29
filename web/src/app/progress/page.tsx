@@ -11,6 +11,7 @@ import { ArrowRight, TrendingUp } from 'lucide-react'
 import { useAuth } from '@clerk/nextjs'
 import AppShell from '@/components/layout/AppShell'
 import ProvenRing from '@/components/ecla/dashboard/ProvenRing'
+import LanguageProfileRadar from '@/components/ecla/LanguageProfileRadar'
 import AbilityProfile from '@/components/ecla/dashboard/AbilityProfile'
 import WeekEvidence from '@/components/ecla/dashboard/WeekEvidence'
 import { fetchSummary, type LearnerSummary } from '@/lib/summary'
@@ -157,7 +158,11 @@ export default function ProgressPage() {
 
                             {/* Row 2: bands + per-competency evidence */}
                             <div className="grid gap-4 md:gap-6 xl:grid-cols-[360px_minmax(0,1fr)]">
-                                <div className="min-w-0">
+                                <div className="min-w-0 space-y-4">
+                                    <LanguageProfileRadar
+                                        dimensions={summary?.dimensions ?? []}
+                                        focus={snap.weakestDimension}
+                                    />
                                     <AbilityProfile dimensions={summary?.dimensions ?? []} />
                                 </div>
                                 <section className="min-w-0">

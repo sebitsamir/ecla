@@ -1,239 +1,119 @@
 'use client'
 
 /**
- * /review — Spaced repetition flashcard system (premium pass).
- * SM-2 algorithm: Again (0), Hard (3), Good (4), Easy (5).
- * Features: instant-tap grading, sequential save queue, keyboard shortcuts,
- * session stats. Zero noise — just the card and the grades.
+ * /review — Phase 29: scene-based spaced retrieval.
+ * "People and situations are returning" — not flashcard #327.
  */
-import { useEffect, useRef, useState } from 'react'
-import { useRouter } from 'next/navigation'
+import { useEffect, useState } from 'react'
+import Link from 'next/link'
 import { useAuth } from '@clerk/nextjs'
-import { ArrowLeft, RotateCcw } from 'lucide-react'
+import { ArrowRight, MapPin } from 'lucide-react'
 import AppShell from '@/components/layout/AppShell'
+import { directionFor } from '@/content/scenes/unitDirections'
+import { CAST } from '@/content/cast'
+import type { CharacterId } from '@/lib/sceneTypes'
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL ?? 'http://localhost:4000'
 
-type Card = { id: string; word: string; translation: string; progress: any }
+type ReviewItem = {
+    id: string
+    code: string
+    title: string
+    canDo: string
+    competencyId?: string
+}
+
+const charFor = (code: string): CharacterId => directionFor(code).cast[0] ?? 'sofia'
 
 export default function ReviewPage() {
-    const router = useRouter()
     const { getToken } = useAuth()
-
-    const [queue, setQueue] = useState<Card[]>([])
+    const [due, setDue] = useState<ReviewItem[]>([])
     const [loading, setLoading] = useState(true)
-    const [flipped, setFlipped] = useState(false)
-    const [stats, setStats] = useState({ reviewed: 0, good: 0, agains: 0 })
-
-    const tokenRef = useRef<string | null>(null)
-    const saveChain = useRef<Promise<void>>(Promise.resolve())
-    const lastPointer = useRef(0)
-
-    useEffect(() => { fetchDue() }, [getToken])
-
-    async function fetchDue() {
-        try {
-            if (!tokenRef.current) tokenRef.current = await getToken()
-            const res = await fetch(`${API_URL}/api/v1/flashcards/due`, {
-                headers: { Authorization: `Bearer ${tokenRef.current}` }
-            })
-            const data = await res.json()
-            setQueue(data.cards || [])
-        } catch (e) { console.error(e) } finally { setLoading(false) }
-    }
-
-    const card = queue[0]
-    const finished = !loading && !card
-
-    const enqueueSave = (vocabId: string, quality: number) => {
-        saveChain.current = saveChain.current.then(async () => {
-            try {
-                if (!tokenRef.current) tokenRef.current = await getToken()
-                const res = await fetch(`${API_URL}/api/v1/flashcards/review`, {
-                    method: 'POST',
-                    headers: {
-                        'Content-Type': 'application/json',
-                        Authorization: `Bearer ${tokenRef.current}`
-                    },
-                    body: JSON.stringify({ vocabId, quality }),
-                })
-                if (res.status === 401) {
-                    tokenRef.current = await getToken()
-                    await fetch(`${API_URL}/api/v1/flashcards/review`, {
-                        method: 'POST',
-                        headers: {
-                            'Content-Type': 'application/json',
-                            Authorization: `Bearer ${tokenRef.current}`
-                        },
-                        body: JSON.stringify({ vocabId, quality }),
-                    })
-                }
-            } catch (e) { console.error('review save failed', e) }
-        })
-    }
-
-    const grade = (quality: number) => {
-        if (!card) return
-        const current = card
-        setQueue(q => {
-            const rest = q.slice(1)
-            return quality === 0 ? [...rest, current] : rest
-        })
-        setStats(s => ({
-            reviewed: s.reviewed + 1,
-            good: s.good + (quality >= 3 ? 1 : 0),
-            agains: s.agains + (quality === 0 ? 1 : 0),
-        }))
-        setFlipped(false)
-        enqueueSave(current.id, quality)
-    }
-
-    const flip = () => setFlipped(true)
-
-    const instant = (fn: () => void) => ({
-        onPointerDown: (e: React.PointerEvent) => {
-            if (e.pointerType === 'mouse' && e.button !== 0) return
-            lastPointer.current = Date.now()
-            fn()
-        },
-        onClick: () => {
-            if (Date.now() - lastPointer.current > 400) fn()
-        },
-    })
+    const [error, setError] = useState<string | null>(null)
 
     useEffect(() => {
-        const onKey = (e: KeyboardEvent) => {
-            if (loading || finished) return
-            if (!flipped && (e.key === ' ' || e.key === 'Enter')) {
-                e.preventDefault()
-                flip()
-            } else if (flipped && ['1', '2', '3', '4'].includes(e.key)) {
-                grade([0, 3, 4, 5][Number(e.key) - 1])
+        (async () => {
+            try {
+                const token = await getToken()
+                const res = await fetch(`${API_URL}/api/v1/adaptive/review`, {
+                    headers: { Authorization: `Bearer ${token}` },
+                })
+                if (!res.ok) throw new Error('Could not load reviews')
+                const data = await res.json()
+                setDue(data.due ?? [])
+            } catch {
+                setError('Could not load your review queue. Try refreshing.')
+            } finally {
+                setLoading(false)
             }
-        }
-        window.addEventListener('keydown', onKey)
-        return () => window.removeEventListener('keydown', onKey)
-    }, [flipped, loading, finished, queue])
+        })()
+    }, [getToken])
 
     return (
         <AppShell>
-            <div className="mx-auto max-w-md px-3 sm:px-4 py-6 sm:py-10">
+            <div className="mx-auto max-w-lg space-y-6 py-4 sm:py-8">
+                <header>
+                    <p className="text-[11px] font-semibold uppercase tracking-widest text-glow">Spaced retrieval</p>
+                    <h1 className="font-display mt-1 text-2xl font-bold text-cream sm:text-3xl">People remember you</h1>
+                    <p className="mt-2 text-sm text-cream/50">
+                        Step back into a familiar situation — retrieve the language naturally.
+                    </p>
+                </header>
+
                 {loading ? (
-                    <div className="space-y-4 animate-pulse">
-                        <div className="h-48 sm:h-64 rounded-2xl bg-white/5" />
-                        <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
-                            {[0, 1, 2, 3].map(i => <div key={i} className="h-16 sm:h-20 rounded-xl bg-white/5" />)}
-                        </div>
+                    <div className="space-y-3">
+                        {[0, 1, 2].map(i => (
+                            <div key={i} className="h-28 animate-pulse rounded-2xl bg-white/5" />
+                        ))}
                     </div>
-                ) : finished ? (
-                    <div className="text-center py-8 sm:py-16">
-                        {stats.reviewed === 0 ? (
-                            <>
-                                <h2 className="font-display text-xl sm:text-2xl font-bold text-cream mb-2">All caught up!</h2>
-                                <p className="text-cream/60 text-sm sm:text-base mb-6 sm:mb-8">No cards due right now.</p>
-                                <button
-                                    onClick={() => router.push('/course')}
-                                    className="w-full py-3 sm:py-3.5 rounded-xl bg-glow font-bold text-night-900 hover:bg-glow/90 active:scale-[0.98] transition-all text-sm sm:text-base"
-                                >
-                                    Back to the Path
-                                </button>
-                            </>
-                        ) : (
-                            <>
-                                <h2 className="font-display text-xl sm:text-2xl font-bold text-cream mb-2">Session complete!</h2>
-                                <p className="text-cream/60 text-sm sm:text-base mb-6 sm:mb-8">
-                                    {stats.reviewed} reviews · {stats.good} stuck well · {stats.agains} to relearn
-                                </p>
-                                <div className="flex gap-2 sm:gap-3">
-                                    <button
-                                        onClick={() => {
-                                            setStats({ reviewed: 0, good: 0, agains: 0 })
-                                            setFlipped(false)
-                                            setLoading(true)
-                                            fetchDue()
-                                        }}
-                                        className="flex-1 py-3 sm:py-3.5 rounded-xl border border-white/10 bg-[#13131B] font-semibold text-cream hover:bg-white/5 active:scale-[0.98] transition-all flex items-center justify-center gap-2 text-sm sm:text-base"
-                                    >
-                                        <RotateCcw className="w-3.5 h-3.5 sm:w-4 sm:h-4" />
-                                        Again
-                                    </button>
-                                    <button
-                                        onClick={() => router.push('/dashboard')}
-                                        className="flex-1 py-3 sm:py-3.5 rounded-xl bg-glow font-bold text-night-900 hover:bg-glow/90 active:scale-[0.98] transition-all text-sm sm:text-base"
-                                    >
-                                        Done
-                                    </button>
-                                </div>
-                            </>
-                        )}
-                    </div>
-                ) : (
-                    <>
-                        <button
-                            key={card.id}
-                            {...(!flipped ? instant(flip) : {})}
-                            className={`w-full rounded-2xl border p-6 sm:p-8 md:p-10 text-center transition-all ${
-                                flipped
-                                    ? 'border-violet-500/40 bg-[#13131B]'
-                                    : 'border-white/10 bg-[#13131B] hover:border-white/20 active:bg-[#171722]'
-                            }`}
+                ) : error ? (
+                    <p className="rounded-2xl border border-coral/30 bg-coral/5 p-4 text-sm text-coral">{error}</p>
+                ) : due.length === 0 ? (
+                    <section className="rounded-2xl border border-white/10 bg-[#13131B] p-8 text-center">
+                        <p className="text-sm text-cream/60">All caught up. Nothing due right now.</p>
+                        <Link
+                            href="/dashboard"
+                            className="mt-5 inline-flex items-center gap-2 rounded-xl bg-glow px-5 py-3 text-sm font-bold text-night-900"
                         >
-                            <p className="text-[10px] sm:text-xs font-bold uppercase tracking-wider text-cream/40 mb-3 sm:mb-4">
-                                {flipped ? 'Translation' : 'Tap to reveal'}
-                            </p>
-                            {flipped ? (
-                                <div>
-                                    <p className="font-display text-2xl sm:text-3xl md:text-4xl font-bold text-cream mb-2">{card.translation}</p>
-                                    <p className="text-cream/50 text-xs sm:text-sm">{card.word}</p>
-                                </div>
-                            ) : (
-                                <p className="font-display text-2xl sm:text-3xl md:text-4xl font-bold text-cream">{card.word}</p>
-                            )}
-                        </button>
-
-                        {flipped ? (
-                            <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 mt-4 sm:mt-6">
-                                <button
-                                    {...instant(() => grade(0))}
-                                    className="py-3 sm:py-3.5 rounded-xl border border-coral/30 bg-coral/5 text-coral font-bold text-xs sm:text-sm hover:bg-coral/10 active:scale-[0.98] transition-all"
-                                >
-                                    Again
-                                    <span className="block text-[10px] opacity-60 font-semibold mt-0.5">1</span>
-                                </button>
-                                <button
-                                    {...instant(() => grade(3))}
-                                    className="py-3 sm:py-3.5 rounded-xl border border-glow/30 bg-glow/5 text-glow font-bold text-xs sm:text-sm hover:bg-glow/10 active:scale-[0.98] transition-all"
-                                >
-                                    Hard
-                                    <span className="block text-[10px] opacity-60 font-semibold mt-0.5">2</span>
-                                </button>
-                                <button
-                                    {...instant(() => grade(4))}
-                                    className="py-3 sm:py-3.5 rounded-xl border border-leaf/30 bg-leaf/5 text-leaf font-bold text-xs sm:text-sm hover:bg-leaf/10 active:scale-[0.98] transition-all"
-                                >
-                                    Good
-                                    <span className="block text-[10px] opacity-60 font-semibold mt-0.5">3</span>
-                                </button>
-                                <button
-                                    {...instant(() => grade(5))}
-                                    className="py-3 sm:py-3.5 rounded-xl border border-violet-500/30 bg-violet-600/5 text-violet-300 font-bold text-xs sm:text-sm hover:bg-violet-600/10 active:scale-[0.98] transition-all"
-                                >
-                                    Easy
-                                    <span className="block text-[10px] opacity-60 font-semibold mt-0.5">4</span>
-                                </button>
-                            </div>
-                        ) : (
-                            <p className="text-center text-xs text-cream/40 mt-4 sm:mt-6">
-                                Think of the answer, then tap the card (or press Space)
-                            </p>
-                        )}
-
-                        <div className="mt-6 sm:mt-8 text-center">
-                            <p className="text-[11px] font-semibold uppercase tracking-widest text-cream/40">
-                                {queue.length} left
-                            </p>
-                        </div>
-                    </>
+                            Back to dashboard <ArrowRight className="h-4 w-4" />
+                        </Link>
+                    </section>
+                ) : (
+                    <ul className="space-y-4">
+                        {due.map(rv => {
+                            const ch = charFor(rv.code)
+                            const name = CAST[ch]?.name ?? 'Sofía'
+                            const dir = directionFor(rv.code)
+                            const place = dir.sceneNoun ?? dir.environment
+                            return (
+                                <li key={rv.id ?? rv.code}>
+                                    <Link
+                                        href={`/learn/${rv.code}?review=1`}
+                                        className="block rounded-2xl border border-white/10 bg-[#13131B] p-5 transition-colors hover:border-glow/40"
+                                    >
+                                        <div className="flex items-start gap-4">
+                                            <div className="min-w-0 flex-1">
+                                                <p className="font-display text-lg font-bold text-cream">{name}</p>
+                                                <p className="mt-1 flex items-center gap-1.5 text-xs text-cream/45">
+                                                    <MapPin className="h-3 w-3" aria-hidden />
+                                                    {place}
+                                                </p>
+                                                <p className="mt-3 text-sm leading-relaxed text-cream/70">
+                                                    &ldquo;Hey, remember when you {rv.canDo?.toLowerCase() ?? 'practiced this'}?&rdquo;
+                                                </p>
+                                            </div>
+                                            <span className="flex h-10 w-10 flex-shrink-0 items-center justify-center rounded-full bg-glow text-night-900">
+                                                <ArrowRight className="h-5 w-5" aria-hidden />
+                                            </span>
+                                        </div>
+                                        <p className="mt-4 text-center text-xs font-semibold uppercase tracking-widest text-glow">
+                                            Enter scene
+                                        </p>
+                                    </Link>
+                                </li>
+                            )
+                        })}
+                    </ul>
                 )}
             </div>
         </AppShell>
