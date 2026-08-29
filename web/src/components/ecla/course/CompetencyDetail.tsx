@@ -54,7 +54,7 @@ export default function CompetencyDetail({ competency }: { competency: Competenc
     const mastered = competency.status === 'mastered'
     const ev = competency.evidence ?? {}
     const sceneTitle = sceneTitleFor(competency.code, competency.title ?? competency.canDo)
-    const href = competency.href ?? `/learn/${competency.id}`
+    const href = competency.href ?? `/learn/${competency.id}?mode=STORY`
 
     return (
         <section className="rounded-2xl border border-white/10 bg-[#13131B] p-5 sm:p-6">
