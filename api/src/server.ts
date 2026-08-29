@@ -24,7 +24,10 @@ import contentRoutes from './routes/content'
 
 const app = express()
 
-const allowedOrigin = process.env.FRONTEND_URL || 'http://localhost:3000'
+const allowedOrigin =
+    process.env.FRONTEND_URL ||
+    process.env.NEXT_PUBLIC_APP_URL ||
+    'http://localhost:3000'
 
 app.use(cors({
     origin: allowedOrigin,

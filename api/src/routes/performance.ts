@@ -95,7 +95,7 @@ router.get('/api/v1/world/environments', async (_req: Request, res: Response) =>
 })
 
 router.get('/api/v1/world/environment/:id', async (req: Request, res: Response) => {
-    const env = environmentFor(req.params.id)
+    const env = environmentFor(String(req.params.id))
     if (!env) return res.status(404).json({ error: 'Environment not found' })
     res.json({ environment: env })
 })
