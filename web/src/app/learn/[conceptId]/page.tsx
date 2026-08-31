@@ -6,6 +6,7 @@ import { useUser } from '@clerk/nextjs'
 import { ArrowLeft } from 'lucide-react'
 import SceneExperience from '@/components/ecla/SceneExperience'
 import MissionRunner from '@/components/MissionRunner'
+import GoldenJourney from '@/components/golden/GoldenJourney'
 import ModeAmbience from '@/components/ModeAmbience'
 import { sceneFor, applyLearnerName, personalizeScene } from '@/content/scenes'
 import {
@@ -83,7 +84,7 @@ function LearnPlayer() {
         [lesson, mode],
     )
 
-    const baseScene = mode !== 'MISSION' && lesson?.code
+    const baseScene = mode !== 'MISSION' && lesson?.code !== 'PA1.SOC.GRT.01' && lesson?.code
         ? sceneFor(lesson.code, lesson, mode)
         : undefined
 
@@ -93,7 +94,7 @@ function LearnPlayer() {
     const learnerName = memory?.name ?? getLearnerName()
 
     const scene = (() => {
-        if (mode === 'MISSION' || !lesson?.code) return undefined
+        if (mode === 'MISSION' || lesson?.code === 'PA1.SOC.GRT.01' || !lesson?.code) return undefined
 
         const fullScene = baseScene
             ? { ...baseScene, beats: applyLearnerName(baseScene.beats, learnerName) }
@@ -166,6 +167,8 @@ function LearnPlayer() {
     }
 
     if (!lesson) return null
+
+    if (lesson?.code === 'PA1.SOC.GRT.01') return <GoldenJourney getToken={getToken} onExit={() => router.push('/course')} />
 
     if (mode === 'MISSION') {
         return (
