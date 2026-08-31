@@ -126,15 +126,15 @@ export function useSceneEngine({ scene, support = 'medium', getToken, onStage }:
     const npcRef = useRef<CharacterId>('sofia')
     const challengedRef = useRef(false)
     const pendingNpcRef = useRef<CharacterId | null>(null)
-    const counts = useRef({ correct: 0, incorrect: 0 })
+    const [counts, setCounts] = useState({ correct: 0, incorrect: 0 })
     // Phase 3: Dimensional evidence tracker
     const evidence = useRef<EvidenceTracker>(initialEvidence())
 
     // Refs mirror state so the scheduler sees fresh data without re-running.
     const beatsRef = useRef(beats)
-    beatsRef.current = beats
+    useEffect(() => { beatsRef.current = beats }, [beats])
     const linesRef = useRef(lines)
-    linesRef.current = lines
+    useEffect(() => { linesRef.current = lines }, [lines])
 
     const { say, stop } = useTTS()
     const grade = useGrader(getToken)
@@ -145,15 +145,7 @@ export function useSceneEngine({ scene, support = 'medium', getToken, onStage }:
     const beat = beats[idx] as SceneBeat | undefined
     const stage: StageName | undefined = beat?.stage
 
-    // Reset when a different scene is mounted.
-    useEffect(() => {
-        setBeats(scene.beats); setIdx(0); setLines([]); setSetting(scene.setting)
-        setFinished(false); setAttempts(0); setHintLevel(0); setRepairOpen(false); setFeedback(null)
-        pendingNpcRef.current = null
-        counts.current = { correct: 0, incorrect: 0 }
-        evidence.current = initialEvidence() // Phase 3 reset
-        // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, [scene.id])
+    // The owner keys the player by scene ID to reset the complete session.
 
     /** Brief green/amber flash (Phase 2). */
     const flash = useCallback((kind: 'correct' | 'incorrect') => {
@@ -207,7 +199,7 @@ export function useSceneEngine({ scene, support = 'medium', getToken, onStage }:
 
         // 1) Repair phrases always win — the NPC complies naturally.
         if (isRepairPhrase(text)) {
-            counts.current.correct++
+            setCounts(value => ({ ...value, correct: value.correct + 1 }))
             recordAttempt(b.stage, true)
             evidence.current.repairUsed = true
             flash('correct')
@@ -230,7 +222,7 @@ export function useSceneEngine({ scene, support = 'medium', getToken, onStage }:
         })
 
         if (res.ok) {
-            counts.current.correct++
+            setCounts(value => ({ ...value, correct: value.correct + 1 }))
             recordAttempt(b.stage, true) // Phase 3: success
             flash('correct')
 
@@ -282,7 +274,7 @@ export function useSceneEngine({ scene, support = 'medium', getToken, onStage }:
         }
 
         // 3) Failure = data. The person reacts; the learner chooses the repair.
-        counts.current.incorrect++
+        setCounts(value => ({ ...value, incorrect: value.incorrect + 1 }))
         recordAttempt(b.stage, false) // Phase 3: failure
         flash('incorrect')
         const n = attempts + 1
@@ -306,7 +298,7 @@ export function useSceneEngine({ scene, support = 'medium', getToken, onStage }:
             }
         }
     }
-    speechRef.current = handleSpeech
+    useEffect(() => { speechRef.current = handleSpeech })
 
     /** RepairDock choices. */
     const repairChoice = useCallback((action: RepairAction) => {
@@ -356,13 +348,13 @@ export function useSceneEngine({ scene, support = 'medium', getToken, onStage }:
         if (!b || (b.kind !== 'choice' && b.kind !== 'read')) return
         push({ who: 'you', text: option.label, mine: true })
         if (option.correct) {
-            counts.current.correct++
+            setCounts(value => ({ ...value, correct: value.correct + 1 }))
             recordAttempt(b.stage, true)
             flash('correct')
             if (b.kind === 'choice' && b.coach) push({ who: 'narrator', text: b.coach })
             setTimeout(advance, PACE_MS + 100)
         } else {
-            counts.current.incorrect++
+            setCounts(value => ({ ...value, incorrect: value.incorrect + 1 }))
             recordAttempt(b.stage, false)
             flash('incorrect')
             push({ who: 'narrator', text: 'That didn\u2019t fit the moment — try again.' })

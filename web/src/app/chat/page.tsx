@@ -8,9 +8,10 @@ import { API_URL } from '@/lib/apiClient'
  * suggestion chips, auto-scrolling, typing indicator.
  */
 import { useEffect, useRef, useState, Suspense, KeyboardEvent } from 'react'
-import { useRouter, useSearchParams } from 'next/navigation'
+import { useStoredPreference } from '@/hooks/useStoredPreference'
+import { useSearchParams } from 'next/navigation'
 import { useAuth } from '@clerk/nextjs'
-import { ArrowLeft, ArrowUp, Mic, Volume2, VolumeX, AudioLines } from 'lucide-react'
+import { ArrowUp, Mic, Volume2, VolumeX, AudioLines } from 'lucide-react'
 import AppShell from '@/components/layout/AppShell'
 import VoiceCall, { type CallLine } from '@/components/VoiceCall'
 import { speakSpanish, cancelSpeech } from '@/lib/speech'
@@ -30,15 +31,16 @@ function splitReply(content: string): { spanish: string; english?: string } {
 }
 
 function ChatPageContent() {
-    const router = useRouter()
+
     const searchParams = useSearchParams()
     const { getToken } = useAuth()
 
     const [messages, setMessages] = useState<Msg[]>([])
-    const [input, setInput] = useState('')
+    const [input, setInput] = useState(searchParams.get('seed') ?? '')
     const [thinking, setThinking] = useState(false)
     const [chatContext, setChatContext] = useState<{ currentCompetency?: { canDo: string }; weakDimensions?: string[] } | null>(null)
-    const [voiceMode, setVoiceMode] = useState(false)
+    const [voicePreference, setVoicePreference] = useStoredPreference('ecla-voice-mode', 'off')
+    const voiceMode = voicePreference === 'on'
     const [recording, setRecording] = useState(false)
     const [speaking, setSpeaking] = useState(false)
     const [showCall, setShowCall] = useState(false)
@@ -50,9 +52,6 @@ function ChatPageContent() {
     const chunksRef = useRef<Blob[]>([])
 
     useEffect(() => {
-        setVoiceMode(localStorage.getItem('ecla-voice-mode') === 'on')
-        const seed = searchParams.get('seed')
-        if (seed) setInput(seed)
         ;(async () => {
             try {
                 const token = await getToken()
@@ -119,11 +118,7 @@ function ChatPageContent() {
     const toggleVoiceMode = () => {
         cancelSpeech()
         setSpeaking(false)
-        setVoiceMode(v => {
-            const newVal = !v
-            localStorage.setItem('ecla-voice-mode', newVal ? 'on' : 'off')
-            return newVal
-        })
+        setVoicePreference(voiceMode ? 'off' : 'on')
     }
 
     const handleCallEnd = (callLines: CallLine[]) => {

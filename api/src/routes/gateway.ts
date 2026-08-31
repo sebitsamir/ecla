@@ -1,3 +1,4 @@
+import { rejectUnverifiedAssessment } from '../lib/assessmentFreeze'
 /**
  * ECLA Gateway Backend — Unpredictable AI Partners (Phase 10).
  *
@@ -10,9 +11,9 @@
  */
 import { Router, Request, Response, NextFunction } from 'express'
 import { getOrSyncUserFast } from '../lib/auth'
-import { prisma } from '../lib/prisma'
-import { scoreGatewayGraduation } from '../lib/gatewayScoring'
-import { applyGatewayEvidence } from '../lib/evidenceService'
+
+
+
 import { GATEWAY_CONFIGS, type GatewayScenarioId, type GatewayTurn } from '../types/gateway'
 
 const router = Router()
@@ -128,46 +129,6 @@ router.post('/api/v1/gateway/turn', async (req: Request, res: Response, next: Ne
 /**
  * POST /api/v1/gateway/complete — Phase 16 multi-dimensional graduation.
  */
-router.post('/api/v1/gateway/complete', async (req: Request, res: Response, next: NextFunction) => {
-    try {
-        const user = await getOrSyncUserFast(req)
-        const { evidence } = (req.body ?? {}) as {
-            evidence?: Array<{ scenario: string; transcript?: GatewayTurn[]; communicated?: boolean; repaired?: boolean }>
-        }
-
-        const items = Array.isArray(evidence) ? evidence : []
-        const graduation = scoreGatewayGraduation(items)
-
-        const gatewayUnit = await prisma.course.findFirst({
-            where: { isPublished: true },
-            include: {
-                units: {
-                    where: { title: { contains: 'Gateway', mode: 'insensitive' } },
-                    include: { competencies: true },
-                },
-            },
-        })
-        const gatewayComps = gatewayUnit?.units?.[0]?.competencies ?? []
-        const scorePct = Math.round((graduation.communicated / Math.max(graduation.total, 1)) * 100)
-        const comprehension = graduation.dimensions.comprehension === 'Strong' ? 80 : 60
-        const production = graduation.dimensions.production === 'Strong' ? 80 : 60
-
-        for (const comp of gatewayComps) {
-            await applyGatewayEvidence({
-                userId: user.id,
-                competencyId: comp.id,
-                comprehension,
-                production,
-                transfer: scorePct,
-                interaction: scorePct,
-                gatewayContextKey: `gateway:${comp.code}`,
-            })
-        }
-
-        res.json({ ok: true, graduation })
-    } catch (error) {
-        next(error)
-    }
-})
+router.post('/api/v1/gateway/complete', rejectUnverifiedAssessment)
 
 export default router

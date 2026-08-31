@@ -25,7 +25,7 @@ export function useEquippedGlow(): GlowPalette {
                 if (!cancelled && data.equippedCosmetic && COSMETICS[data.equippedCosmetic as CosmeticId]) {
                     setGlow(COSMETICS[data.equippedCosmetic as CosmeticId].colors)
                 }
-            } catch (e) { /* keep default gold */ }
+            } catch { /* keep default gold */ }
         }
         load()
         return () => { cancelled = true }

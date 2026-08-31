@@ -80,18 +80,18 @@ export default function FeedbackButton() {
                         <form onSubmit={handleSubmit} className="p-5 space-y-5">
                             {/* Feedback Type Selector */}
                             <div className="grid grid-cols-3 gap-2">
-                                {[
+                                {([
                                     { id: 'bug', label: 'Bug', icon: Bug },
                                     { id: 'feature', label: 'Feature', icon: Lightbulb },
                                     { id: 'general', label: 'General', icon: Smile }
-                                ].map((t) => {
+                                ] as const).map((t) => {
                                     const Icon = t.icon
                                     const isActive = type === t.id
                                     return (
                                         <button
                                             key={t.id}
                                             type="button"
-                                            onClick={() => setType(t.id as any)}
+                                            onClick={() => setType(t.id)}
                                             className={`flex flex-col items-center gap-1.5 p-3 rounded-xl border transition-all ${isActive
                                                 ? 'border-glow/50 bg-glow/10 text-glow'
                                                 : 'border-white/10 bg-night-900/50 text-cream/50 hover:border-white/25 hover:text-cream/70'

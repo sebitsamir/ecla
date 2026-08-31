@@ -10,7 +10,7 @@
  */
 import { useEffect, useState } from 'react'
 import { Check } from 'lucide-react'
-import type { CharacterId } from '@/lib/sceneTypes'
+import type { CharacterId, SceneSpec } from '@/lib/sceneTypes'
 import { isTerminal, isImmersive, stageMeta } from '@/lib/sceneTypes'
 import type { SceneEngine } from '@/hooks/useSceneEngine'
 import SceneBackdrop from './SceneBackdrop'
@@ -21,18 +21,24 @@ export default function StageLayout({
     engine, scene, onComplete,
 }: {
     engine: SceneEngine
-    scene: any
+    scene: SceneSpec
     // Accept structured evidence as the 3rd argument
-    onComplete: (correct: number, incorrect: number, evidence?: any) => void
+    onComplete: (correct: number, incorrect: number, evidence?: ReturnType<SceneEngine['getEvidence']>) => void
 }) {
     const stage = engine.stage
     const meta = stageMeta(stage)
     const [showNewContext, setShowNewContext] = useState(false)
 
+    const [previousStage, setPreviousStage] = useState(stage)
+    if (stage !== previousStage) {
+        setPreviousStage(stage)
+        setShowNewContext(stage === 'TRANSFER')
+    }
+
     // Flash "New Context" badge when entering TRANSFER
     useEffect(() => {
         if (stage === 'TRANSFER') {
-            setShowNewContext(true)
+
             const t = setTimeout(() => setShowNewContext(false), 2400)
             return () => clearTimeout(t)
         }
@@ -59,8 +65,8 @@ export default function StageLayout({
 
     // ── Terminal stages: RETAIN (celebration + outcomes + evidence) ──
     if (isTerminal(stage)) {
-        const total = engine.counts.current.correct + engine.counts.current.incorrect
-        const ratio = total > 0 ? engine.counts.current.correct / total : 0
+        const total = engine.counts.correct + engine.counts.incorrect
+        const ratio = total > 0 ? engine.counts.correct / total : 0
         const score = Math.round(ratio * 100)
         const outcomes = scene.outcomes ?? []
 
@@ -84,7 +90,7 @@ export default function StageLayout({
                     {/* Evidence summary — the dimension scores */}
                     <div className="mb-6 rounded-2xl border border-white/10 bg-[#13131B] p-6">
                         <p className="mb-4 text-xs font-bold uppercase tracking-wider text-cream/50">
-                            Your evidence
+                            Practice results — not a verified assessment
                         </p>
                         <div className="mb-5 flex items-end justify-center gap-2">
                             <span className="font-display text-5xl font-bold text-cream">
@@ -93,7 +99,7 @@ export default function StageLayout({
                             <span className="mb-1 text-xl text-cream/40">%</span>
                         </div>
                         <p className="text-center text-xs text-cream/50">
-                            {engine.counts.current.correct} successful · {engine.counts.current.incorrect} attempts to improve
+                            {engine.counts.correct} successful · {engine.counts.incorrect} attempts to improve
                         </p>
                         {/* Score bar */}
                         <div className="mt-4 h-1.5 w-full overflow-hidden rounded-full bg-white/5">
@@ -107,7 +113,7 @@ export default function StageLayout({
                     {/* Outcomes — what they can now do */}
                     <div className="rounded-2xl border border-glow/30 bg-glow/5 p-6">
                         <p className="mb-3 text-xs font-bold uppercase tracking-wider text-glow">
-                            You can now
+                            You practiced
                         </p>
                         <ul className="space-y-2.5">
                             {outcomes.map((o: string, i: number) => (
@@ -147,8 +153,8 @@ export default function StageLayout({
                     {/* Phase 3: Pass evidence as the 3rd argument */}
                     <button
                         onClick={() => onComplete(
-                            engine.counts.current.correct,
-                            engine.counts.current.incorrect,
+                            engine.counts.correct,
+                            engine.counts.incorrect,
                             engine.getEvidence()
                         )}
                         className="mt-8 w-full rounded-xl bg-glow py-4 text-sm font-bold text-night-900 shadow-[0_0_30px_rgba(255,200,0,0.25)] transition-all hover:bg-glow/90 active:scale-[0.98]"

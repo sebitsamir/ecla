@@ -17,7 +17,7 @@ import { useEffect, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { useAuth } from '@clerk/nextjs'
 import {
-    Target, TrendingDown, ArrowRight, BookOpen, Puzzle, Ear,
+    type LucideIcon, Target, TrendingDown, ArrowRight, BookOpen, Puzzle, Ear,
     Lightbulb, MessageCircle, Sparkles,
 } from 'lucide-react'
 
@@ -34,7 +34,7 @@ type Recommendation = {
     priority: number
 }
 
-const MODE_CONFIG: Record<string, { icon: any; color: string; label: string }> = {
+const MODE_CONFIG: Record<string, { icon: LucideIcon; color: string; label: string }> = {
     STORY: { icon: BookOpen, color: 'text-blue-400', label: 'Story' },
     DRILL: { icon: Puzzle, color: 'text-orange-400', label: 'Drill' },
     IMMERSION: { icon: Ear, color: 'text-emerald-400', label: 'Immersion' },
@@ -100,7 +100,7 @@ export default function NextUpCard() {
             <div className="mb-4">
                 <p className="text-xs text-cream/50 mb-1">{recommendation.competencyCode}</p>
                 <p className="font-bold text-cream text-sm mb-1">{recommendation.competencyTitle}</p>
-                <p className="text-xs text-cream/70 italic">"{recommendation.canDo}"</p>
+                <p className="text-xs text-cream/70 italic">&quot;{recommendation.canDo}&quot;</p>
             </div>
 
             <div className="flex items-center gap-2 mb-4">

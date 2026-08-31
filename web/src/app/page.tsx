@@ -11,7 +11,7 @@ import { useRouter } from 'next/navigation'
 import { useAuth, SignInButton, SignUpButton } from '@clerk/nextjs'
 import {
     ArrowRight, BookOpen, CheckCircle2, Flame, GraduationCap,
-    Heart, Mic, Music, Shield, Sparkles, Zap, MessageCircle,
+    Heart, Music, Shield, Sparkles, Zap, MessageCircle,
 } from 'lucide-react'
 import Link from 'next/link'
 
@@ -307,7 +307,7 @@ export default function LandingPage() {
                                 <span className="text-violet-300">always ready.</span>
                             </h2>
                             <p className="text-cream/60 text-base sm:text-lg leading-relaxed mb-6 sm:mb-8">
-                                Ecla isn't just a mascot — she's your companion. Type or speak in Spanish, get instant feedback, and practice real conversations without the pressure of a human tutor.
+                                Ecla isn&apos;t just a mascot — she&apos;s your companion. Type or speak in Spanish, get instant feedback, and practice real conversations without the pressure of a human tutor.
                             </p>
                             
                             <ul className="space-y-3 sm:space-y-4 text-left max-w-md mx-auto lg:mx-0">

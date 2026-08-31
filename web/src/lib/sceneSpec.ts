@@ -1,3 +1,5 @@
+import { record, strings } from './jsonBoundary'
+import type { LessonPayload } from '@/lib/lessonPayload'
 /**
  * sceneSpec — Phase 6 spec builder.
  *
@@ -41,7 +43,7 @@ const TIME: Record<string, string> = {
 export type SceneSpecSections = Pick<SceneSpec,
     'world' | 'characters' | 'purpose' | 'targetLanguage' | 'support' | 'challenge' | 'evidenceRequirements'>
 
-export function buildSceneSpecSections(bp: SceneBlueprint, lesson: any): SceneSpecSections {
+export function buildSceneSpecSections(bp: SceneBlueprint, lesson: LessonPayload): SceneSpecSections {
     const engine = extractEngine(lesson)
     const stages = engine?.subLessons ?? []
     const act = (stage: string, type: string) =>
@@ -71,7 +73,7 @@ export function buildSceneSpecSections(bp: SceneBlueprint, lesson: any): SceneSp
 
     // ── PURPOSE ─
     const canDo = String(lesson?.canDo ?? bp.title ?? '')
-    const scenario = String((act('ENCOUNTER', 'context')?.input as any)?.scenario ?? '')
+    const scenario = String(record(act('ENCOUNTER', 'context')?.input).scenario ?? '')
     const purpose: ScenePurpose = {
         canDo,
         goal: canDo,
@@ -79,21 +81,21 @@ export function buildSceneSpecSections(bp: SceneBlueprint, lesson: any): SceneSp
     }
 
     // ── TARGET LANGUAGE ──
-    const lt = (engine?.languageTargets ?? {}) as any
+    const lt = engine?.languageTargets
     const toolsVocab = Array.isArray(lesson?.tools?.vocabulary) ? lesson.tools.vocabulary : []
     const targetLanguage: SceneTargetLanguage = {
         functions: [canDo],
-        patterns: Array.isArray(lt.patterns) ? lt.patterns.slice(0, 6) : [],
+        patterns: Array.isArray(lt?.patterns) ? lt?.patterns.slice(0, 6) : [],
         vocabulary: toolsVocab.length
-            ? toolsVocab.map((v: any) => ({
+            ? toolsVocab.map((v) => ({
                 word: String(v.word ?? ''),
                 translation: v.translation ? String(v.translation) : undefined,
             }))
-            : (Array.isArray(lt.vocabulary)
-                ? lt.vocabulary.slice(0, 8).map((w: string) => ({ word: String(w) }))
+            : (Array.isArray(lt?.vocabulary)
+                ? lt?.vocabulary.slice(0, 8).map((w: string) => ({ word: String(w) }))
                 : []),
-        pronunciation: typeof lt.pronunciation === 'string' ? lt.pronunciation : undefined,
-        culture: typeof lt.culture === 'string' ? lt.culture : undefined,
+        pronunciation: typeof lt?.pronunciation === 'string' ? lt?.pronunciation : undefined,
+        culture: typeof lt?.culture === 'string' ? lt?.culture : undefined,
     }
 
     // ── SUPPORT (the engine's per-stage ladder, from the DB) ──
@@ -104,7 +106,7 @@ export function buildSceneSpecSections(bp: SceneBlueprint, lesson: any): SceneSp
         initial: ladder[0] ?? 'medium',
         ladder: ladder.length ? ladder : ['maximum', 'high', 'medium', 'low', 'minimal'],
         translation:
-            String((act('ENCOUNTER', 'context')?.input as any)?.translationPolicy ?? 'hidden_by_default') === 'on_request'
+            String(record(act('ENCOUNTER', 'context')?.input).translationPolicy ?? 'hidden_by_default') === 'on_request'
                 ? 'on_request' : 'hidden_by_default',
         hintSource: 'pattern',
         retryPolicy: 'model_after_three',
@@ -116,17 +118,17 @@ export function buildSceneSpecSections(bp: SceneBlueprint, lesson: any): SceneSp
     const roleplay = act('INTERACT', 'role_play')
     const challenge: SceneChallengeSpec = {
         misunderstanding: 'They may not catch it the first time — asking again is part of the skill.',
-        variation: String((sim?.input as any)?.context ?? roleplay?.purpose ?? 'same ability, new situation'),
-        unexpected: String((unexp?.input as any)?.change ?? 'one detail changes; adapt or repair'),
+        variation: String(record(sim?.input).context ?? roleplay?.purpose ?? 'same ability, new situation'),
+        unexpected: String(record(unexp?.input).change ?? 'one detail changes; adapt or repair'),
     }
 
     // ── EVIDENCE (the assessment contract, from the DB) ──
-    const assessment = (engine?.assessment ?? {}) as any
-    const mastery = (assessment.mastery ?? {}) as any
-    const fnDims: string[] = Array.isArray(assessment?.function?.dimensions) ? assessment.function.dimensions : []
+    const assessment = record(engine?.assessment)
+    const mastery = record(assessment.mastery)
+    const fnDims: string[] = strings(record(assessment.function).dimensions)
     const evidenceRequirements: SceneEvidenceRequirements = {
         minimumEvidence: Array.isArray(mastery.minimumEvidence)
-            ? mastery.minimumEvidence
+            ? strings(mastery.minimumEvidence)
             : ['controlled', 'guided', 'spontaneous', 'transfer', 'delayed'],
         interactionRequired: mastery.interactionRequired === true || fnDims.includes('interaction'),
         repairRequired: mastery.repairRequired === true || fnDims.includes('repair'),

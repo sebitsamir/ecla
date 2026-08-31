@@ -10,7 +10,7 @@ import { API_URL } from '@/lib/apiClient'
  */
 import { useState, useEffect } from 'react'
 import { ListOrdered, SlidersHorizontal, X } from 'lucide-react'
-import { useSceneEngine } from '@/hooks/useSceneEngine'
+import { useSceneEngine, type SceneEngine } from '@/hooks/useSceneEngine'
 import { useSceneAudio } from '@/hooks/useSceneAudio'
 import JourneyRail from './JourneyRail'
 import StageLayout from './StageLayout'
@@ -26,7 +26,7 @@ export default function SceneExperience({ scene, tools, mastery, getToken, onCom
     mastery?: MasteryData | null
     getToken: () => Promise<string | null>
     // Phase 3: Accept structured evidence as the 3rd argument
-    onComplete: (correct: number, incorrect: number, evidence?: any) => void
+    onComplete: (correct: number, incorrect: number, evidence?: ReturnType<SceneEngine['getEvidence']>) => void
 }) {
     const [railOpen, setRailOpen] = useState(false)
     const [toolsOpen, setToolsOpen] = useState(false)

@@ -16,6 +16,7 @@ import { streetEncounter } from '@/content/scenes/streetEncounter'
 import { MODE_LABELS, MODE_PURPOSE, normalizeMode } from '@/lib/modeStages'
 import { retrievalTargetsFromLesson } from '@/lib/retrievalTargets'
 import { API_URL } from '@/lib/apiClient'
+import type { LessonPayload } from '@/lib/lessonPayload'
 import { useAuthReady } from '@/hooks/useAuthReady'
 
 function LearnPlayer() {
@@ -28,11 +29,11 @@ function LearnPlayer() {
     const mode = normalizeMode(searchParams.get('mode'))
     const isReview = searchParams.get('review') === '1'
 
-    const [lesson, setLesson] = useState<any>(null)
+    const [lesson, setLesson] = useState<LessonPayload | null>(null)
     const [loading, setLoading] = useState(true)
     const [loadError, setLoadError] = useState<string | null>(null)
     const [memory, setMemory] = useState<LearnerMemory | null>(null)
-    const [completing, setCompleting] = useState(false)
+
     const recordedSceneRef = useRef<string | null>(null)
 
     useEffect(() => {
@@ -77,8 +78,8 @@ function LearnPlayer() {
     useEffect(() => { (async () => setMemory(await fetchMemory(getToken)))() }, [getToken])
 
     const activeExp = useMemo(
-        () => (lesson?.subLessons ?? []).find((s: any) => s.type === mode)
-            ?? (lesson?.subLessons ?? []).find((s: any) => s.type === 'STORY'),
+        () => (lesson?.subLessons ?? []).find((s) => s.type === mode)
+            ?? (lesson?.subLessons ?? []).find((s) => s.type === 'STORY'),
         [lesson, mode],
     )
 
@@ -91,7 +92,7 @@ function LearnPlayer() {
     const learned = ['CONTROLLED', 'TRANSFERRED', 'RETAINED'].includes(lesson?.mastery?.level ?? '')
     const learnerName = memory?.name ?? getLearnerName()
 
-    const scene = useMemo(() => {
+    const scene = (() => {
         if (mode === 'MISSION' || !lesson?.code) return undefined
 
         const fullScene = baseScene
@@ -119,15 +120,15 @@ function LearnPlayer() {
         }
 
         return fullScene ? personalizeScene(fullScene, memory) : undefined
-    }, [baseScene, learnerName, isReview, learned, retrievalTarget, lesson?.canDo, lesson?.code, memory, mode])
+    })()
 
     useEffect(() => {
         if (!scene || recordedSceneRef.current === scene.id) return
         recordedSceneRef.current = scene.id
         const chars = Array.from(new Set(
             scene.beats
-                .filter((b: any) => b.kind === 'say' || b.kind === 'listen' || b.kind === 'unexpected')
-                .map((b: any) => b.character as string)
+                .filter(b => b.kind === 'say' || b.kind === 'listen' || b.kind === 'unexpected')
+                .map(b => b.character)
                 .filter((c: string) => c && c !== 'you'),
         ))
         chars.forEach(c => recordCharacterEncounter(getToken, c, learnerName))
@@ -137,48 +138,8 @@ function LearnPlayer() {
         if (!loading && !lesson && !loadError) router.push('/course')
     }, [loading, lesson, loadError, router])
 
-    const completeScene = async (correct: number, incorrect: number, sceneEvidence?: any) => {
-        if (completing) return
-        setCompleting(true)
-        try {
-            const token = await getToken()
-            await fetch(`${API_URL}/api/v1/lessons/complete`, {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
-                body: JSON.stringify({
-                    conceptId: lesson.conceptId,
-                    subLessonId: activeExp?.id,
-                    mode,
-                    correctCount: correct,
-                    incorrectCount: incorrect,
-                    review: isReview,
-                }),
-            })
-
-            await fetch(`${API_URL}/api/v1/learner/demonstrate`, {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
-                body: JSON.stringify({
-                    competencyId: lesson.conceptId,
-                    correct,
-                    incorrect,
-                    evidence: sceneEvidence ?? null,
-                    sceneId: scene?.id,
-                    environmentId: typeof scene?.environment === 'object'
-                        ? (scene.environment as { id?: string }).id
-                        : scene?.environment,
-                    contextId: scene?.id ?? lesson.conceptId,
-                    review: isReview,
-                }),
-            })
-
-            window.dispatchEvent(new Event('ecla:progress-updated'))
-            router.push(isReview ? '/dashboard' : '/course')
-        } catch (e) {
-            console.error('Completion failed:', e)
-            setCompleting(false)
-        }
-    }
+    // Local scenes remain practice-only during the integrity freeze.
+    const completeScene = () => router.push(isReview ? '/dashboard' : '/course')
 
     if (!isLoaded || loading) {
         return (
@@ -283,7 +244,9 @@ function LearnPlayer() {
                 </div>
             </header>
             <div className="relative z-0 mx-auto max-w-[1400px] px-4 py-6">
+                <p role="status" className="mb-4 text-sm text-cream/70">Practice only: verified assessment is being rebuilt. This scene does not award XP or prove mastery.</p>
                 <SceneExperience
+                    key={`${scene.id}:${mode}:${isReview}`}
                     scene={scene}
                     tools={tools}
                     mastery={lesson.mastery}
@@ -291,11 +254,7 @@ function LearnPlayer() {
                     onComplete={completeScene}
                 />
             </div>
-            {completing && (
-                <div className="fixed inset-0 z-50 flex items-center justify-center bg-[#0B0B10]/80 backdrop-blur-sm">
-                    <p className="text-sm text-cream/60">Saving your evidence…</p>
-                </div>
-            )}
+
         </main>
     )
 }

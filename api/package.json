@@ -8,6 +8,7 @@
     "dev": "tsx watch src/server.ts",
     "start": "tsx src/server.ts",
     "build": "prisma generate",
+    "typecheck": "tsc --noEmit",
     "prisma:migrate": "prisma migrate dev",
     "prisma:generate": "prisma generate",
     "prisma:studio": "prisma studio",

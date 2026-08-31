@@ -15,7 +15,7 @@ import { API_URL } from '@/lib/apiClient'
 
 import { useEffect, useRef, useState } from 'react'
 import { useAuth } from '@clerk/nextjs'
-import { Mic, Loader2, X, Target, MessageCircle, Keyboard, CheckCircle2, XCircle, RefreshCcw, AlertTriangle } from 'lucide-react'
+import { Mic, Loader2, X, Target, MessageCircle, Keyboard, CheckCircle2, XCircle, AlertTriangle } from 'lucide-react'
 import Firefly from '@/components/Firefly'
 import { useEquippedGlow } from '@/lib/useEquippedGlow'
 import { speakSpanish, cancelSpeech } from '@/lib/speech'
@@ -30,18 +30,19 @@ export default function MissionRunner({ competencyId, onClose }: { competencyId:
     const { getToken } = useAuth()
     const glowColors = useEquippedGlow()
 
-    const [mission, setMission] = useState<any>(null)
+    const [mission, setMission] = useState<{ title: string; scenario: string } | null>(null)
     const [missing, setMissing] = useState(false)
-    const [phase, setPhase] = useState<'intro' | 'ai' | 'learner' | 'processing' | 'evaluating' | 'result'>('intro')
+    const [conversationPhase, setPhase] = useState<'intro' | 'ai' | 'learner' | 'processing' | 'evaluating' | 'result'>('intro')
     const [history, setHistory] = useState<Turn[]>([])
-    const [heard, setHeard] = useState<string | null>(null)
+
     const [repairCount, setRepairCount] = useState(0)
-    const [result, setResult] = useState<any>(null)
+    const [result, setResult] = useState<{ passed: boolean | null; score: number | null; feedback: string; evalError?: boolean } | null>(null)
     const [typeMode, setTypeMode] = useState(false)
     const [typed, setTyped] = useState('')
 
     const learnerTurnRef = useRef<(text: string) => void>(() => {})
     const mic = useMic(getToken, text => learnerTurnRef.current(text))
+    const phase = mic.state === 'processing' ? 'processing' : conversationPhase
 
     useEffect(() => {
         async function load() {
@@ -89,12 +90,12 @@ export default function MissionRunner({ competencyId, onClose }: { competencyId:
         if (REPAIR_MARKERS.some(m => clean.toLowerCase().includes(m))) setRepairCount(c => c + 1)
         const next = [...history, { role: 'learner' as const, text: clean }]
         setHistory(next)
-        setHeard(null)
+
         setTyped('')
         aiSay(next)
     }
 
-    learnerTurnRef.current = learnerTurn
+    useEffect(() => { learnerTurnRef.current = learnerTurn })
 
     const startRecording = () => {
         cancelSpeech()
@@ -104,10 +105,7 @@ export default function MissionRunner({ competencyId, onClose }: { competencyId:
 
     const stopRecording = () => mic.stop()
 
-    useEffect(() => {
-        if (mic.state === 'processing') setPhase('processing')
-        else if (phase === 'processing' && mic.state === 'idle') setPhase('learner')
-    }, [mic.state, phase])
+
 
     /** End mission → FUNCTION evaluation */
     const finish = async () => {
@@ -151,10 +149,10 @@ export default function MissionRunner({ competencyId, onClose }: { competencyId:
                         <div className="rounded-2xl border border-purple-400/30 bg-night-800/80 p-6 text-center space-y-4">
                             <Firefly mood="proud" size={90} glow={glowColors} />
                             <h2 className="font-display text-xl font-bold text-cream">{mission.title}</h2>
-                            <p className="text-sm text-cream/70 italic">"{mission.scenario}"</p>
+                            <p className="text-sm text-cream/70 italic">&quot;{mission.scenario}&quot;</p>
                             <p className="text-xs text-cream/50">
                                 A Spanish speaker will talk to you. Respond with your voice.
-                                You can ask them to repeat — that's a skill, not a failure.
+                                You can ask them to repeat — that&apos;s a skill, not a failure.
                             </p>
                             <button onClick={start} className="w-full py-3.5 rounded-xl bg-purple-400 text-night-900 font-bold flex items-center justify-center gap-2">
                                 <Mic className="h-4 w-4" /> Start Mission
@@ -243,13 +241,13 @@ export default function MissionRunner({ competencyId, onClose }: { competencyId:
                                     : <XCircle className="h-12 w-12 text-coral mx-auto" />}
 
                             <h2 className="font-display text-xl font-bold text-cream">
-                                {result.evalError ? 'Attempt recorded' : result.passed ? 'Mission accomplished!' : 'Good attempt!'}
+                                {result.evalError ? 'Assessment unavailable' : result.passed ? 'Mission accomplished!' : 'Good attempt!'}
                             </h2>
 
                             {result.feedback ? <p className="text-sm text-cream/70">{result.feedback}</p> : null}
                             {result.evalError && (
                                 <p className="text-xs text-cream/50">
-                                    Evaluation was unavailable — your conversation was saved and will count as practice, not a fail.
+                                    No assessment was recorded. This conversation does not prove mastery or award XP.
                                 </p>
                             )}
 
@@ -270,7 +268,7 @@ export default function MissionRunner({ competencyId, onClose }: { competencyId:
 
                             {repairCount > 0 && (
                                 <p className="text-[11px] text-cream/50">
-                                    You repaired the conversation {repairCount}× — that's a real survival skill. 💪
+                                    You repaired the conversation {repairCount}× — that&apos;s a real survival skill. 💪
                                 </p>
                             )}
 

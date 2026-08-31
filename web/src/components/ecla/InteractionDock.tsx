@@ -166,7 +166,7 @@ export default function InteractionDock({ engine, emphasize = false }: {
                         onClick={engine.unsure}
                         className="text-[11px] font-bold text-cream/40 hover:text-cream transition-colors"
                     >
-                        I'm not sure
+                        I&apos;m not sure
                     </button>
                     {attempts > 0 && (
                         <span className="text-[11px] text-amber-400">

@@ -202,8 +202,8 @@ export default function VoiceCall({ onEnd }: { onEnd: (lines: CallLine[]) => voi
             historyRef.current.push({ role: 'assistant', content: full })
             streamDoneRef.current = true
             pumpQueue()
-        } catch (e: any) {
-            if (e?.name === 'AbortError') return
+        } catch (e: unknown) {
+            if (e instanceof Error && e.name === 'AbortError') return
             pushLine({ role: 'assistant', text: '(connection lost — just speak again)' })
             streamDoneRef.current = true
             pumpQueue()
@@ -228,8 +228,8 @@ export default function VoiceCall({ onEnd }: { onEnd: (lines: CallLine[]) => voi
                         if (!cancelled) handToUser()
                     }
                 })
-            } catch (e: any) {
-                setError(e?.message === 'unsupported'
+            } catch (e: unknown) {
+                setError(e instanceof Error && e.message === 'unsupported'
                     ? 'Voice mode needs Chrome or Edge on this device.'
                     : 'Microphone blocked — allow mic access to use voice mode.')
                 setPhase('error')

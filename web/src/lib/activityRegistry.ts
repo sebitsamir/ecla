@@ -1,3 +1,4 @@
+import { record } from './jsonBoundary'
 /**
  * activityRegistry — Phase 22: single map from DB activity types → SceneBeat[].
  * compileScene delegates here; archetypes fill gaps only when no beats emit.
@@ -21,19 +22,19 @@ function stageOf(st: StagePayload): StageName {
 const handlers: Record<string, Handler> = {
     context: (act, ctx, st) => {
         const scenario =
-            str((act.input as any)?.scenario) ?? str((act.input as any)?.targetLanguage) ?? st.objective
+            str(record(act.input).scenario) ?? str(record(act.input).targetLanguage) ?? st.objective
         return [{ kind: 'action', text: scenario, stage: stageOf(st) }]
     },
     listening: (act, ctx, st, t) => {
         const main = ctx.main
-        const utter = strs((act.input as any)?.utterances)
+        const utter = strs(record(act.input).utterances)
         const example = t.examples[0] ?? t.patterns[0] ?? ''
         const es = utter[0] ?? example
         return es ? [{ kind: 'listen', character: main, es, gloss: ctx.gloss(es), stage: stageOf(st) }] : []
     },
     comprehension: (act, ctx, st, t) => {
         const example = t.examples[0] ?? t.patterns[0] ?? ''
-        let options = strs((act.input as any)?.options)
+        let options = strs(record(act.input).options)
         const correct = str(act.expectedOutput) ?? options[0] ?? example
         if (correct && !options.includes(correct)) options = [correct, ...options]
         if (!correct || options.length < 2) return []
@@ -46,7 +47,7 @@ const handlers: Record<string, Handler> = {
     },
     noticing: (act, ctx, st) => {
         const main = ctx.main
-        const patterns = strs((act.input as any)?.patterns).slice(0, 2)
+        const patterns = strs(record(act.input).patterns).slice(0, 2)
         return patterns.map(p => ({
             kind: 'listen' as const,
             character: main,
@@ -58,9 +59,9 @@ const handlers: Record<string, Handler> = {
     pronunciation: (act, ctx, st, t) => {
         const main = ctx.main
         const example = t.examples[0] ?? t.patterns[0] ?? ''
-        const pes = str((act.input as any)?.target) ?? example
+        const pes = str(record(act.input).target) ?? example
         if (!pes) return []
-        const note = str((act.input as any)?.note)
+        const note = str(record(act.input).note)
         return [
             { kind: 'listen', character: main, es: pes, gloss: note ?? undefined, stage: stageOf(st) },
             {
@@ -76,7 +77,7 @@ const handlers: Record<string, Handler> = {
     },
     recognition: (act, ctx, st, t) => {
         const example = t.examples[0] ?? t.patterns[0] ?? ''
-        let options = strs((act.input as any)?.options)
+        let options = strs(record(act.input).options)
         const correct = str(act.expectedOutput) ?? example
         if (correct && !options.includes(correct)) options = [correct, ...options]
         if (!correct || options.length < 2) return []
@@ -89,8 +90,8 @@ const handlers: Record<string, Handler> = {
     },
     listening_discrimination: (act, ctx, st, t) => {
         const main = ctx.main
-        const target = str((act.input as any)?.target) ?? t.examples[0] ?? ''
-        const distractors = strs((act.input as any)?.distractors)
+        const target = str(record(act.input).target) ?? t.examples[0] ?? ''
+        const distractors = strs(record(act.input).distractors)
         const pool = [target, ...distractors].filter(Boolean)
         if (!target || pool.length < 2) return []
         return [
@@ -105,7 +106,7 @@ const handlers: Record<string, Handler> = {
     },
     recall: (act, ctx, st, t) => {
         const example = t.examples[0] ?? t.patterns[0] ?? ''
-        const accepted = strs((act.expectedOutput as any)?.accepted)
+        const accepted = strs(record(act.expectedOutput).accepted)
         const expected = accepted.length ? accepted : (t.examples.length ? t.examples.slice(0, 3) : [example])
         if (!expected[0]) return []
         return [{
@@ -118,7 +119,7 @@ const handlers: Record<string, Handler> = {
         }]
     },
     completion: (act, ctx, st, t) => {
-        const frame = str((act.input as any)?.sentenceFrame) ?? t.patterns[0] ?? ''
+        const frame = str(record(act.input).sentenceFrame) ?? t.patterns[0] ?? ''
         const answer = t.examples[0] ?? frame
         if (!answer) return []
         return [{
@@ -140,7 +141,7 @@ const handlers: Record<string, Handler> = {
             npcLine: example || undefined,
             expected,
             accept: expected,
-            hints: strs((act.input as any)?.support).slice(0, 2),
+            hints: strs(record(act.input).support).slice(0, 2),
             open: true,
             stage: stageOf(st),
         }]
@@ -151,7 +152,7 @@ const handlers: Record<string, Handler> = {
         if (!expected[0]) return []
         return [{
             kind: 'speak',
-            prompt: str(act.prompt) ?? str((act.input as any)?.scenario) ?? st.learnerAction,
+            prompt: str(act.prompt) ?? str(record(act.input).scenario) ?? st.learnerAction,
             expected,
             accept: expected,
             open: true,
@@ -161,7 +162,7 @@ const handlers: Record<string, Handler> = {
     guided_interaction: (act, ctx, st, t) => {
         const other = (ctx.other ?? ctx.main) as typeof ctx.main
         const example = t.examples[0] ?? t.patterns[0] ?? ''
-        const opening = str((act.input as any)?.opening) ?? example
+        const opening = str(record(act.input).opening) ?? example
         if (!opening) return []
         return [{
             kind: 'unexpected',
@@ -201,7 +202,7 @@ const handlers: Record<string, Handler> = {
     unexpected_interaction: (act, ctx, st, t) => {
         const other = (ctx.other ?? ctx.main) as typeof ctx.main
         const example = t.examples[0] ?? t.patterns[0] ?? ''
-        const line = example || str((act.input as any)?.change) || 'Un momento…'
+        const line = example || str(record(act.input).change) || 'Un momento…'
         return [{
             kind: 'unexpected',
             character: other,
@@ -218,8 +219,8 @@ const handlers: Record<string, Handler> = {
             kind: 'speak',
             prompt: str(act.prompt) ?? 'Say it in the new form.',
             expected: [answer],
-            accept: strs((act.input as any)?.accept).length ? strs((act.input as any)?.accept) : [answer],
-            hints: strs((act.input as any)?.frames).slice(0, 1),
+            accept: strs(record(act.input).accept).length ? strs(record(act.input).accept) : [answer],
+            hints: strs(record(act.input).frames).slice(0, 1),
             stage: stageOf(st),
         }]
     },
@@ -250,8 +251,8 @@ const handlers: Record<string, Handler> = {
         }]
     },
     reading_comprehension: (act, ctx, st, t) => {
-        const passage = str((act.input as any)?.passage) ?? t.examples[0] ?? t.patterns[0] ?? ''
-        let options = strs((act.input as any)?.options)
+        const passage = str(record(act.input).passage) ?? t.examples[0] ?? t.patterns[0] ?? ''
+        let options = strs(record(act.input).options)
         const correct = str(act.expectedOutput) ?? options[0] ?? ''
         if (!passage || !correct) return []
         if (!options.includes(correct)) options = [correct, ...options]
@@ -270,7 +271,7 @@ const handlers: Record<string, Handler> = {
         if (!expected[0]) return []
         return [{
             kind: 'write',
-            prompt: str(act.prompt) ?? str((act.input as any)?.scenario) ?? st.learnerAction,
+            prompt: str(act.prompt) ?? str(record(act.input).scenario) ?? st.learnerAction,
             expected,
             accept: expected,
             open: true,

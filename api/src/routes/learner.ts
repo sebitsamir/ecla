@@ -1,3 +1,4 @@
+import { rejectUnverifiedAssessment } from '../lib/assessmentFreeze'
 /**
  * Learner Route — ECLA learner model (Phase 2 & 3 Alignment).
  * 
@@ -12,9 +13,9 @@ import { prisma } from '../lib/prisma'
 import { getOrSyncUserFast } from '../lib/auth'
 import { dueReviewsFor } from './adaptive'
 import { buildLearnerHome } from '../lib/learnerHome'
-import { demonstrateSchema } from '../lib/schemas'
-import { AppError } from '../lib/errors'
-import { recordDemonstrationEvidence } from '../lib/evidenceService'
+
+
+
 
 const router = Router()
 
@@ -120,45 +121,10 @@ router.get('/api/v1/learner/summary', async (req: Request, res: Response, next: 
 /**
  * POST /api/v1/learner/demonstrate
  * POST /api/v1/evidence — canonical evidence endpoint (alias)
- * Strict mastery via masteryEngine — never trusts client scores alone.
+ * Retired: clients must not submit final scores or context identities.
  */
-async function handleDemonstrate(req: Request, res: Response, next: NextFunction) {
-    try {
-        const user = await getOrSyncUserFast(req)
-        const parsed = demonstrateSchema.safeParse(req.body ?? {})
-        if (!parsed.success) throw new AppError('Invalid evidence payload', 400)
-
-        const {
-            competencyId,
-            correct,
-            incorrect,
-            evidence,
-            contextId,
-            sceneId,
-            environmentId,
-            characterId,
-            review,
-        } = parsed.data
-
-        const result = await recordDemonstrationEvidence({
-            userId: user.id,
-            competencyId,
-            correct,
-            incorrect,
-            evidence: evidence as any,
-            contextId,
-            sceneId,
-            environmentId,
-            characterId,
-            review,
-        })
-
-        res.json({ ok: true, ...result })
-    } catch (error) { next(error) }
-}
-
-router.post('/api/v1/learner/demonstrate', handleDemonstrate)
-router.post('/api/v1/evidence', handleDemonstrate)
+router.post('/api/v1/learner/demonstrate', rejectUnverifiedAssessment)
+router.post('/api/v1/evidence', rejectUnverifiedAssessment)
 
 /**
  * GET /api/v1/learner/recent-accuracy

@@ -4,7 +4,7 @@
 import { extractEngine } from '@/lib/lessonPayload'
 
 /** Pull speakable targets from the 9-stage engine payload only. */
-export function retrievalTargetsFromLesson(lesson: any, mode = 'STORY'): string[] {
+export function retrievalTargetsFromLesson(lesson: unknown, mode = 'STORY'): string[] {
     const engine = extractEngine(lesson, mode)
     const lt = (engine?.languageTargets ?? {}) as Record<string, unknown>
     const examples = Array.isArray(lt.examples) ? lt.examples.map(String) : []
@@ -14,6 +14,6 @@ export function retrievalTargetsFromLesson(lesson: any, mode = 'STORY'): string[
     return [...new Set([...examples, ...chunks, ...patterns, ...vocab].filter(s => s.trim().length > 0))]
 }
 
-export function lessonHasEngine(lesson: any): boolean {
+export function lessonHasEngine(lesson: unknown): boolean {
     return !!extractEngine(lesson)
 }

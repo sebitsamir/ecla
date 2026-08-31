@@ -1,3 +1,4 @@
+import { rejectUnverifiedAssessment } from '../lib/assessmentFreeze'
 /**
  * Missions Route — ECLA AI Conversation Layer (Phase 6)
  *
@@ -22,7 +23,7 @@ import { prisma } from '../lib/prisma'
 import { getOrSyncUserFast } from '../lib/auth'
 import { groq } from '../lib/groq'
 import { AppError } from '../lib/errors'
-import { applyMissionEvidence } from '../lib/evidenceService'
+
 
 const router = Router()
 
@@ -96,102 +97,7 @@ router.post('/api/v1/missions/:competencyId/turn', async (req: Request, res: Res
     } catch (error) { next(error) }
 })
 
-/**
- * Evaluate the completed mission (FUNCTION-first, Art. 16/6.6).
- * Writes MissionAttempt + updates CompetencyMastery (transfer evidence).
- */
-router.post('/api/v1/missions/:competencyId/evaluate', async (req: Request, res: Response, next: NextFunction) => {
-    try {
-        const user = await getOrSyncUserFast(req)
-        const { transcript = [] } = req.body ?? {}
-
-        const mission = await prisma.mission.findFirst({ where: { competencyId: req.params.competencyId as string } })
-        if (!mission) throw new AppError('Mission not found', 404)
-
-        const learnerTurns = transcript.filter((t: any) => t.role === 'learner')
-        const repairUsed = learnerTurns.some((t: any) => detectRepair(t.text ?? ''))
-
-        // ── FUNCTION judge (with safe fallback) ──
-        let taskCompleted = false, meaningCommunicated = false, appropriate = false
-        let feedback = ''
-        let judgeError = false
-        try {
-            const completion = await groq.chat.completions.create({
-                model: 'openai/gpt-oss-20b',
-                temperature: 0,
-                max_tokens: 120,
-                reasoning_effort: 'low',
-                response_format: { type: 'json_object' } as any,
-                messages: [
-                    {
-                        role: 'system',
-                        content:
-                            `You are an assessment function for a Pre-A1 Spanish speaking mission.\n` +
-                            `Objective: ${mission.objective}\nScenario: ${mission.scenario}\n` +
-                            `Judge FUNCTION only: did the learner communicate meaning and accomplish the goal?\n` +
-                            `A beginner may make grammar mistakes and still succeed ("Me... from Juba." counts).\n` +
-                            `Return JSON only: {"task_completed":bool,"meaning_communicated":bool,"appropriate_responses":bool,"feedback":"one short encouraging sentence"}`,
-                    },
-                    {
-                        role: 'user',
-                        content: 'TRANSCRIPT:\n' + transcript.map((t: any) => `${t.role === 'ai' ? 'PARTNER' : 'LEARNER'}: ${t.text}`).join('\n'),
-                    },
-                ],
-            } as any)
-            const parsed = JSON.parse((completion.choices[0]?.message?.content ?? '{}').match(/\{[\s\S]*\}/)?.[0] ?? '{}')
-            taskCompleted = parsed.task_completed === true
-            meaningCommunicated = parsed.meaning_communicated === true
-            appropriate = parsed.appropriate_responses === true
-            feedback = String(parsed.feedback ?? '')
-        } catch {
-            judgeError = true
-        }
-
-        // Infra failure must NEVER fail the learner — treat a solid attempt as passed
-        if (judgeError) {
-            const solid = learnerTurns.length >= 3
-            taskCompleted = solid
-            meaningCommunicated = solid
-            appropriate = true
-            feedback = 'Recorded — automatic evaluation was unavailable this time.'
-        }
-
-        const passed = taskCompleted && meaningCommunicated
-        const score = Math.round(
-            (taskCompleted ? 50 : 0) + (meaningCommunicated ? 30 : 0) +
-            (appropriate ? 10 : 0) + (repairUsed ? 10 : 0)
-        )
-
-        // ── Write evidence ──
-        await prisma.missionAttempt.create({
-            data: {
-                missionId: mission.id,
-                userId: user.id,
-                score,
-                passed,
-                evidence: {
-                    learnerTurns: learnerTurns.length,
-                    aiTurns: transcript.length - learnerTurns.length,
-                    repairUsed,
-                    taskCompleted,
-                    meaningCommunicated,
-                    judgeError,
-                    transcript,
-                },
-                feedback,
-                completedAt: new Date(),
-            },
-        })
-
-        await applyMissionEvidence({
-            userId: user.id,
-            competencyId: req.params.competencyId as string,
-            passed,
-            missionId: mission.id,
-        })
-
-        res.json({ passed, score, repairUsed, feedback, judgeError })
-    } catch (error) { next(error) }
-})
+/** Retired: client-owned transcripts cannot prove mission completion. */
+router.post('/api/v1/missions/:competencyId/evaluate', rejectUnverifiedAssessment)
 
 export default router

@@ -24,16 +24,15 @@ export default function DashboardPage() {
   const { user } = useUser()
   const tick = useProgressTick()
   const [home, setHome] = useState<LearnerHome | null>(null)
-  const [error, setError] = useState<ApiError | null>(null)
-  const [loading, setLoading] = useState(true)
+  const [loadError, setError] = useState<ApiError | null>(null)
+  const [isLoading, setLoading] = useState(true)
+
+  const loading = isSignedIn && isLoading
+  const error = isLoaded && !isSignedIn ? new ApiError('unauthorized', 'Please sign in to continue.', 401) : loadError
 
   useEffect(() => {
     if (!isLoaded) return
-    if (!isSignedIn) {
-      setLoading(false)
-      setError(new ApiError('unauthorized', 'Please sign in to continue.', 401))
-      return
-    }
+    if (!isSignedIn) return
 
     let cancelled = false
     ;(async () => {
