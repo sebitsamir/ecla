@@ -1,12 +1,23 @@
 'use client'
 
-import { useRef, useState, useCallback } from 'react'
+import { useRef, useState, useCallback, useEffect } from 'react'
 import { isSpeechActive } from './speech'
 
 export type VoiceState = 'off' | 'waiting' | 'hearing' | 'processing'
 
-const SR_IMPL: any = typeof window !== 'undefined'
-    ? ((window as any).SpeechRecognition || (window as any).webkitSpeechRecognition)
+type Recognition = {
+    lang: string; continuous: boolean; interimResults: boolean; maxAlternatives: number
+    onresult: ((event: { results: ArrayLike<{ isFinal: boolean; 0: { transcript: string } }> }) => void) | null
+    onend: (() => void) | null
+    onerror: ((event: { error: string }) => void) | null
+    start(): void; stop(): void; abort(): void
+}
+type RecognitionWindow = Window & {
+    SpeechRecognition?: new () => Recognition
+    webkitSpeechRecognition?: new () => Recognition
+}
+const SR_IMPL = typeof window !== 'undefined'
+    ? ((window as RecognitionWindow).SpeechRecognition || (window as RecognitionWindow).webkitSpeechRecognition)
     : null
 
 export const voiceSupported = typeof SR_IMPL === 'function'
@@ -19,29 +30,29 @@ export function useHandsFreeVoice(onUtterance: (text: string) => void) {
     const [liveText, setLiveText] = useState('')
 
     const stateRef = useRef<VoiceState>('off')
-    const recRef = useRef<any>(null)
+    const recRef = useRef<Recognition | null>(null)
     const finalRef = useRef('')
     const interimRef = useRef('')
     const turnRef = useRef(false)
     const endedRef = useRef(true)
     const finalizeRef = useRef<ReturnType<typeof setTimeout> | null>(null)
     const cbRef = useRef(onUtterance)
-    cbRef.current = onUtterance
+    useEffect(() => { cbRef.current = onUtterance }, [onUtterance])
 
-    const setSt = (s: VoiceState) => { stateRef.current = s; setState(s) }
+    const setSt = useCallback((s: VoiceState) => { stateRef.current = s; setState(s) }, [])
 
-    function clearFinalize() {
+    const clearFinalize = useCallback(() => {
         if (finalizeRef.current) { clearTimeout(finalizeRef.current); finalizeRef.current = null }
-    }
+    }, [])
 
-    function emit(text: string) {
+    const emit = useCallback((text: string) => {
         turnRef.current = false
         setLiveText('')
         setSt('processing')
         cbRef.current(text)
-    }
+    }, [setSt])
 
-    function killRec() {
+    const killRec = useCallback(() => {
         clearFinalize()
         const rec = recRef.current
         recRef.current = null
@@ -51,9 +62,10 @@ export function useHandsFreeVoice(onUtterance: (text: string) => void) {
             rec.onerror = null
             try { rec.abort() } catch { /* already stopped */ }
         }
-    }
+    }, [clearFinalize])
 
-    function startRec() {
+    const startRec = useCallback(() => {
+        if (!SR_IMPL) return
         killRec()
         finalRef.current = ''
         interimRef.current = ''
@@ -67,7 +79,7 @@ export function useHandsFreeVoice(onUtterance: (text: string) => void) {
         // Chrome doesn't advance resultIndex reliably. Appending per event
         // caused the staircase repetition ("que que planes…"). Rebuilding the
         // whole transcript from scratch each event is duplication-proof.
-        rec.onresult = (e: any) => {
+        rec.onresult = e => {
             let final = ''
             let interim = ''
             for (let i = 0; i < e.results.length; i++) {
@@ -109,7 +121,7 @@ export function useHandsFreeVoice(onUtterance: (text: string) => void) {
             }
         }
 
-        rec.onerror = (e: any) => {
+        rec.onerror = e => {
             console.warn('[Voice] recognition:', e.error)
             if (e.error === 'not-allowed' || e.error === 'service-not-allowed') {
                 turnRef.current = false
@@ -119,7 +131,7 @@ export function useHandsFreeVoice(onUtterance: (text: string) => void) {
 
         recRef.current = rec
         try { rec.start() } catch { setSt('waiting') }
-    }
+    }, [killRec, clearFinalize, emit, setSt])
 
     const startCall = useCallback(async () => {
         if (!voiceSupported) throw new Error('unsupported')
@@ -128,15 +140,14 @@ export function useHandsFreeVoice(onUtterance: (text: string) => void) {
         probe.getTracks().forEach(t => t.stop())
     }, [])
 
-    const listen = useCallback(() => {
+    const listen = useCallback(function listenWhenSilent() {
         if (endedRef.current || !voiceSupported) return
-        if (isSpeechActive()) { setTimeout(() => listen(), 250); return } // never listen over Ecla
+        if (isSpeechActive()) { setTimeout(listenWhenSilent, 250); return }
         turnRef.current = true
         setLiveText('')
         setSt('waiting')
         startRec()
-        // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, [])
+    }, [startRec, setSt])
 
     const endCall = useCallback(() => {
         endedRef.current = true
@@ -144,7 +155,12 @@ export function useHandsFreeVoice(onUtterance: (text: string) => void) {
         killRec()
         setLiveText('')
         setSt('off')
-    }, [])
+    }, [killRec, setSt])
+
+    useEffect(() => () => {
+        endedRef.current = true
+        killRec()
+    }, [killRec])
 
     return { state, liveText, startCall, listen, endCall }
 }

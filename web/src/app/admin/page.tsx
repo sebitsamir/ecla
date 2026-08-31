@@ -21,7 +21,7 @@ export default function AdminPage() {
     const { getToken } = useAuth()
     const [units, setUnits] = useState<UnitRef[]>([])
     const [selected, setSelected] = useState<CompRef | null>(null)
-    const [detail, setDetail] = useState<any>(null)
+    const [detail, setDetail] = useState<{ experiences?: unknown[]; missions?: unknown[] } | null>(null)
     const [loading, setLoading] = useState(true)
     const [saving, setSaving] = useState(false)
     const [validating, setValidating] = useState(false)

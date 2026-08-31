@@ -1,3 +1,4 @@
+import { rejectUnverifiedAssessment } from '../lib/assessmentFreeze'
 /**
  * Lessons Route — ECLA schema adapter (Phase 2 + Phase 3 merged)
  *
@@ -19,10 +20,10 @@ import { Router, Request, Response, NextFunction } from 'express'
 import { prisma } from '../lib/prisma'
 import { getOrSyncUserFast, requireAuth } from '../lib/auth'
 import { AppError } from '../lib/errors'
-import { lessonCompleteSchema, gradeRequestSchema } from '../lib/schemas'
+import { gradeRequestSchema } from '../lib/schemas'
 import { functionalJudge } from '../lib/functionalJudge'
-import { dimensionFieldForType, recordExperienceCompletion } from '../lib/evidenceService'
-import { computeExperienceXp } from '../lib/xpRewards'
+
+
 
 const router = Router()
 
@@ -161,75 +162,7 @@ router.post('/api/v1/lessons/grade', async (req: Request, res: Response, next: N
     } catch (error) { next(error) }
 })
 
-/**
- * Complete one part (experience) of a competency.
- * Evidence-based: mastery counts + LEVEL per §6.4, DIMENSIONAL scores per §7.5,
- * retention review per §6.5, streak + XP.
- */
-router.post('/api/v1/lessons/complete', async (req: Request, res: Response, next: NextFunction) => {
-    try {
-        const user = await getOrSyncUserFast(req)
-
-        const parsed = lessonCompleteSchema.safeParse(req.body)
-        if (!parsed.success) throw new AppError('Invalid completion data', 400)
-        const { conceptId, subLessonId, correctCount, incorrectCount, review } = parsed.data
-        const xpEarned = await computeExperienceXp(subLessonId, conceptId)
-
-        // 1) Experience progress
-        if (subLessonId) {
-            await prisma.userExperienceProgress.upsert({
-                where: { userId_experienceId: { userId: user.id, experienceId: subLessonId } },
-                update: {
-                    status: 'completed',
-                    score: correctCount,
-                    attempts: { increment: 1 },
-                    xpEarned: { increment: xpEarned },
-                    completedAt: new Date(),
-                    lastAttemptAt: new Date(),
-                },
-                create: {
-                    userId: user.id, experienceId: subLessonId, status: 'completed',
-                    score: correctCount, attempts: 1, xpEarned,
-                    completedAt: new Date(), lastAttemptAt: new Date(),
-                },
-            })
-        }
-
-        // 2) Dimensional evidence — engagement only, never promotes to TRANSFERRED
-        const experience = subLessonId
-            ? await prisma.learningExperience.findUnique({ where: { id: subLessonId }, select: { type: true } })
-            : null
-        const totalAttempts = correctCount + incorrectCount
-        const dimensionScore = totalAttempts > 0 ? Math.round((correctCount / totalAttempts) * 100) : null
-        const dimensionField = experience ? dimensionFieldForType(experience.type) : null
-
-        await recordExperienceCompletion({
-            userId: user.id,
-            competencyId: conceptId,
-            subLessonId,
-            correctCount,
-            incorrectCount,
-            review,
-            dimensionField,
-            dimensionScore,
-        })
-
-        // 3) XP + streak (server-defined reward)
-        const today = new Date().toISOString().split('T')[0]
-        await prisma.$transaction([
-            prisma.user.update({
-                where: { id: user.id },
-                data: { xpTotal: { increment: xpEarned }, lastActiveAt: new Date() },
-            }),
-            prisma.streakLog.upsert({
-                where: { userId_date: { userId: user.id, date: today } },
-                update: { xpEarned: { increment: xpEarned }, lessonsDone: { increment: 1 } },
-                create: { userId: user.id, date: today, xpEarned, lessonsDone: 1 },
-            }),
-        ])
-
-        res.json({ success: true, xpEarned })
-    } catch (error) { next(error) }
-})
+/** Retired: legacy completions cannot safely award progress or XP. */
+router.post('/api/v1/lessons/complete', rejectUnverifiedAssessment)
 
 export default router

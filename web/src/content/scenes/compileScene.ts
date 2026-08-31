@@ -1,3 +1,4 @@
+import type { LessonPayload } from '@/lib/lessonPayload'
 /**
  * compileScene — curriculum→scene compiler (Phase 5: DB-driven).
  *
@@ -20,21 +21,18 @@ import { activityToBeats } from '@/lib/activityRegistry'
 const norm = (s: string) => s.toLowerCase().replace(/[¡!.,¿?]/g, '').trim()
 
 /** Language truth comes ONLY from the curriculum payload. */
-export function targetFromLesson(lesson: any, mode: string = 'STORY'): Target {
-    const exps = lesson?.subLessons ?? []
-    const exp = exps.find((s: any) => s.type === mode) ?? exps.find((s: any) => s.type === 'STORY')
-    const story = exp ?? exps[0]
-    const lt = story?.content?.languageTargets ?? story?.languageTargets ?? {}
-    const toolsWords = (lesson?.tools?.vocabulary ?? []).map((v: any) => ({
+export function targetFromLesson(lesson: LessonPayload, mode: string = 'STORY'): Target {
+    const lt = extractEngine(lesson, mode)?.languageTargets
+    const toolsWords = (lesson?.tools?.vocabulary ?? []).map((v) => ({
         word: String(v.word ?? ''), translation: v.translation ? String(v.translation) : undefined,
     }))
     return {
-        words: toolsWords.length ? toolsWords : (lt.vocabulary ?? []).map((x: string) => ({ word: x })),
-        patterns: lt.patterns ?? [],
-        examples: lt.examples ?? [],
-        grammar: lt.grammar ?? lesson?.tools?.grammar ?? undefined,
-        pronunciation: lt.pronunciation ?? lesson?.tools?.pronunciation ?? undefined,
-        culture: lt.culture ?? undefined,
+        words: toolsWords.length ? toolsWords : (lt?.vocabulary ?? []).map(word => ({ word })),
+        patterns: lt?.patterns ?? [],
+        examples: lt?.examples ?? [],
+        grammar: lt?.grammar ?? lesson?.tools?.grammar ?? undefined,
+        pronunciation: lt?.pronunciation ?? lesson?.tools?.pronunciation ?? undefined,
+        culture: lt?.culture,
     }
 }
 
@@ -59,13 +57,13 @@ function beatsForStage(bp: SceneBlueprint, ctx: Ctx, st: import('@/lib/lessonPay
     return built
 }
 
-export function compileScene(bp: SceneBlueprint, lesson: any, mode?: string): SceneSpec {
+export function compileScene(bp: SceneBlueprint, lesson: LessonPayload, mode?: string): SceneSpec {
     const activeMode = normalizeMode(mode)
     const t = targetFromLesson(lesson, activeMode)
     if (process.env.NODE_ENV !== 'production' && !t.words.length && !t.examples.length) {
         console.warn(`[ecla] compileScene(${bp.id}): EMPTY curriculum payload — page must pass lesson to sceneFor().`)
     }
-    const glossMap = new Map<string, string>((lesson?.tools?.vocabulary ?? []).map((v: any) => [norm(String(v.word)), String(v.translation)]))
+    const glossMap = new Map<string, string>((lesson?.tools?.vocabulary ?? []).map((v) => [norm(String(v.word)), String(v.translation)]))
     const ctx: Ctx = {
         bp, t,
         gloss: x => glossMap.get(norm(x)),
@@ -106,7 +104,7 @@ export function compileScene(bp: SceneBlueprint, lesson: any, mode?: string): Sc
     }
 
     beats = beats.filter(b => {
-        if ((b.kind === 'say' || b.kind === 'listen') && !(b as any).es?.trim()) return false
+        if ((b.kind === 'say' || b.kind === 'listen') && !b.es?.trim()) return false
         if (b.kind === 'choice' && !b.options.some(o => o.label?.trim())) return false
         if (b.kind === 'read' && !b.passage?.trim()) return false
         return true
@@ -142,7 +140,7 @@ export function compileScene(bp: SceneBlueprint, lesson: any, mode?: string): Sc
 }
 
 /** Art. 23 gate for scenes: structural + pedagogical checks before play. */
-export function validateBlueprint(bp: SceneBlueprint, lesson: any): string[] {
+export function validateBlueprint(bp: SceneBlueprint, lesson: LessonPayload): string[] {
     const errs: string[] = []
     const t = targetFromLesson(lesson)
     if (!t.words.length && !t.examples.length) errs.push(`${bp.id}: no language targets in curriculum payload`)

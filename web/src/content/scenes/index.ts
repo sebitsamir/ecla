@@ -1,3 +1,4 @@
+import type { LessonPayload } from '@/lib/lessonPayload'
 /**
  * Scene registry — curriculum-driven scenes (Phases 6–8).
  *
@@ -21,8 +22,8 @@ if (process.env.NODE_ENV !== 'production') {
     else console.info('[ecla] Scene registry ready:', [...BLUEPRINTS.keys()].join(', '))
 }
 
-export const sceneFor = (code?: string | null, lesson?: any, mode?: string): SceneSpec | undefined => {
-    if (!code) return undefined
+export const sceneFor = (code?: string | null, lesson?: LessonPayload, mode?: string): SceneSpec | undefined => {
+    if (!code || !lesson) return undefined
     const key = String(code).trim()
 
     const bp = BLUEPRINTS.get(key)

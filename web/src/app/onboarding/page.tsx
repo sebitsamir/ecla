@@ -236,7 +236,7 @@ export default function OnboardingPage() {
         return null
     }
 
-    const StepIndicator = () => (
+    const stepIndicator = (
         <div className="flex items-center justify-center gap-3 mb-10">
             {[1, 2, 3, 4, 5].map(dot => (
                 <div
@@ -257,7 +257,7 @@ export default function OnboardingPage() {
         <AppShell>
             <div className="relative z-10 flex min-h-[calc(100vh-3.5rem)] items-center justify-center p-4 sm:p-6">
                 <div className="w-full max-w-2xl">
-                    <StepIndicator />
+                    {stepIndicator}
                     <div className="rounded-2xl border border-white/10 bg-[#13131B] p-6 sm:p-8 md:p-10">
                         {step === 1 && (
                             <div className="space-y-6">
@@ -266,7 +266,7 @@ export default function OnboardingPage() {
                                         Why are you learning Spanish?
                                     </h1>
                                     <p className="text-cream/60">
-                                        We'll personalize your entire learning path around your goal.
+                                        We&apos;ll personalize your entire learning path around your goal.
                                     </p>
                                 </div>
                                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 sm:gap-4">
@@ -312,7 +312,7 @@ export default function OnboardingPage() {
                                     {motivation === 'CAREER' && preferredMode === 'PROFESSIONAL' && (
                                         <p className="text-sm text-glow mt-2 flex items-center gap-2">
                                             <Sparkles className="h-4 w-4" />
-                                            We've pre-selected Professional Mode based on your career goal.
+                                            We&apos;ve pre-selected Professional Mode based on your career goal.
                                         </p>
                                     )}
                                 </div>
@@ -355,10 +355,10 @@ export default function OnboardingPage() {
                             <div className="space-y-6">
                                 <div>
                                     <h1 className="font-display text-2xl md:text-3xl font-bold mb-2">
-                                        What's your current level?
+                                        What&apos;s your current level?
                                     </h1>
                                     <p className="text-cream/60">
-                                        We'll place you at the right starting point. Complete beginners skip the quiz.
+                                        We&apos;ll place you at the right starting point. Complete beginners skip the quiz.
                                     </p>
                                 </div>
                                 <div className="space-y-3">

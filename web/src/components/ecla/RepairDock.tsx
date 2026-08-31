@@ -16,7 +16,7 @@ export default function RepairDock({ onRepair, showExample = true }: {
 }) {
     return (
         <div className="rounded-xl border border-amber-500/30 bg-amber-500/10 p-4 space-y-3">
-            <p className="text-sm text-amber-200 font-semibold">They didn't understand. What can you do?</p>
+            <p className="text-sm text-amber-200 font-semibold">They didn&apos;t understand. What can you do?</p>
             <div className="grid sm:grid-cols-3 gap-2">
                 <button
                     onClick={() => onRepair('retry')}

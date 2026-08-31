@@ -9,7 +9,7 @@
  * - Functional user area: Clerk avatar + name + menu (email, sign out).
  * - Fuller nav: Home / My Learning / Gateway / Progress (all real routes).
  */
-import { useEffect, useState } from 'react'
+import { useState } from 'react'
 import Link from 'next/link'
 import { usePathname } from 'next/navigation'
 import { useClerk, useUser } from '@clerk/nextjs'
@@ -73,7 +73,12 @@ export default function AppShell({ children }: { children: ReactNode }) {
     const pathname = usePathname()
 
     // Close overlays on navigation.
-    useEffect(() => { setNavOpen(false); setMenuOpen(false) }, [pathname])
+    const [previousPath, setPreviousPath] = useState(pathname)
+    if (previousPath !== pathname) {
+        setPreviousPath(pathname)
+        setNavOpen(false)
+        setMenuOpen(false)
+    }
 
     const name = user?.firstName ?? user?.username ?? 'Learner'
     const image = user?.imageUrl

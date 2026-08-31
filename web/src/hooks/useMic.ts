@@ -26,7 +26,7 @@ export function useMic(
 
     // Release the microphone if the component unmounts mid-recording.
     useEffect(() => () => {
-        recRef.current?.state === 'recording' && recRef.current.stop()
+        if (recRef.current?.state === 'recording') recRef.current.stop()
         streamRef.current?.getTracks().forEach(t => t.stop())
     }, [])
 

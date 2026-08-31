@@ -18,7 +18,7 @@ import { useEffect, useState } from 'react'
 import { useAuth } from '@clerk/nextjs'
 import {
     Target, TrendingUp, TrendingDown, ChevronDown, ChevronRight,
-    CheckCircle2, Clock, Circle, Sparkles
+    CheckCircle2, Clock, Circle
 } from 'lucide-react'
 
 
@@ -254,7 +254,7 @@ export default function CanDoPanel() {
                                                 <p className="text-xs text-cream/50 mb-0.5">{comp.competencyCode}</p>
                                                 <p className="font-bold text-cream text-sm mb-1">{comp.competencyTitle}</p>
                                                 <p className="text-xs text-cream/70 italic">
-                                                    "I can {comp.canDo.toLowerCase()}"
+                                                    &quot;I can {comp.canDo.toLowerCase()}&quot;
                                                 </p>
                                                 {comp.overallScore !== null && (
                                                     <div className="mt-2 flex items-center gap-2">

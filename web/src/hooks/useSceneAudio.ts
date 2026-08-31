@@ -8,7 +8,8 @@
  *   (stage transition) using the Web Audio API. Zero external assets needed.
  * - Mute state is persisted in localStorage.
  */
-import { useEffect, useRef, useState, useCallback } from 'react'
+import { useEffect, useRef, useCallback } from 'react'
+import { useStoredPreference } from './useStoredPreference'
 import type { Environment, StageName } from '@/lib/sceneTypes'
 
 const AMBIENT_TRACKS: Partial<Record<Environment, string>> = {
@@ -18,30 +19,20 @@ const AMBIENT_TRACKS: Partial<Record<Environment, string>> = {
 }
 
 export function useSceneAudio(environment: Environment, stage: StageName | undefined, feedback: 'correct' | 'incorrect' | null) {
-    const [isMuted, setIsMuted] = useState(false)
+    const [mutePreference, setMutePreference] = useStoredPreference('ecla-audio-muted', 'true')
+    const isMuted = mutePreference === 'true'
     const audioCtxRef = useRef<AudioContext | null>(null)
     const ambientRef = useRef<HTMLAudioElement | null>(null)
     const prevStageRef = useRef<StageName | undefined>(undefined)
 
-    // Load mute preference
-    useEffect(() => {
-        const saved = localStorage.getItem('ecla-audio-muted')
-        setIsMuted(saved === 'true')
-    }, [])
-
     const toggleMute = useCallback(() => {
-        setIsMuted(prev => {
-            const next = !prev
-            localStorage.setItem('ecla-audio-muted', String(next))
-            if (ambientRef.current) ambientRef.current.muted = next
-            return next
-        })
-    }, [])
+        setMutePreference(String(!isMuted))
+    }, [isMuted, setMutePreference])
 
     // Initialize Audio Context on first user interaction (browser policy)
     const ensureAudioCtx = useCallback(() => {
         if (!audioCtxRef.current) {
-            audioCtxRef.current = new (window.AudioContext || (window as any).webkitAudioContext)()
+            audioCtxRef.current = new AudioContext()
         }
         if (audioCtxRef.current.state === 'suspended') {
             audioCtxRef.current.resume()

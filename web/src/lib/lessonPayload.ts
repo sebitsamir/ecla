@@ -7,6 +7,22 @@
  * guessing happens anywhere downstream.
  */
 import type { StageName } from '@/lib/sceneTypes'
+import { record, strings } from './jsonBoundary'
+import type { ToolsData, MasteryData } from '@/components/ecla/ToolsPanel'
+
+export type LessonPayload = {
+    code: string
+    conceptId: string
+    canDo: string
+    tools?: ToolsData
+    mastery?: MasteryData | null
+    subLessons: {
+        id: string
+        type: string
+        content?: Record<string, unknown> & { modePurpose?: string }
+        assessment?: unknown
+    }[]
+}
 
 export const STAGE_ORDER = [
     'ENCOUNTER', 'UNDERSTAND', 'NOTICE', 'RECOGNIZE', 'RETRIEVE',
@@ -24,9 +40,9 @@ export type StageActivity = {
     title: string
     purpose: string
     prompt?: string
-    input?: any
-    expectedOutput?: any
-    evaluation?: any
+    input?: unknown
+    expectedOutput?: unknown
+    evaluation?: unknown
 }
 
 export type StagePayload = {
@@ -41,28 +57,33 @@ export type StagePayload = {
 }
 
 export type EnginePayload = {
-    languageTargets: Record<string, unknown>
+    languageTargets: {
+        vocabulary: string[]; patterns: string[]; examples: string[]; chunks: string[]
+        grammar?: string; pronunciation?: string; culture?: string
+    }
     subLessons: StagePayload[]
-    assessment?: any
+    assessment?: unknown
     modePurpose?: string
 }
 
 /** Pull the engine payload for a given experience mode, shape-defensively. */
-export function extractEngine(lesson: any, mode: string = 'STORY'): EnginePayload | null {
-    const exps = Array.isArray(lesson?.subLessons) ? lesson.subLessons : []
-    const preferred = exps.find((e: any) => e?.type === mode)
-    const story = exps.find((e: any) => e?.type === 'STORY') ?? exps[0]
+export function extractEngine(lesson: unknown, mode: string = 'STORY'): EnginePayload | null {
+    const rawExperiences = record(lesson).subLessons
+    const exps = Array.isArray(rawExperiences) ? rawExperiences.map(record) : []
+    const preferred = exps.find(e => e.type === mode)
+    const story = exps.find(e => e.type === 'STORY') ?? exps[0]
     const exp = preferred ?? story
-    const content = exp?.content ?? exp
-    const rawStages: any[] = Array.isArray(content?.subLessons) ? content.subLessons : []
+    const content = record(exp?.content ?? exp)
+    const rawStages: unknown[] = Array.isArray(content.subLessons) ? content.subLessons : []
     if (!rawStages.length) return null
 
     const subLessons: StagePayload[] = rawStages
-        .map((s: any): StagePayload | null => {
+        .map((raw): StagePayload | null => {
+            const s = record(raw)
             const stage = isStage(s?.stage) ? (s.stage as string).trim() as StageName : null
             if (!stage) return null
             const activities: StageActivity[] = (Array.isArray(s?.activities) ? s.activities : [])
-                .map((a: any) => ({
+                .map(record).map(a => ({
                     id: String(a?.id ?? ''),
                     stage,
                     type: String(a?.type ?? ''),
@@ -87,10 +108,16 @@ export function extractEngine(lesson: any, mode: string = 'STORY'): EnginePayloa
         .filter((x): x is StagePayload => x !== null)
 
     if (!subLessons.length) return null
+    const targets = record(content.languageTargets)
+    const text = (value: unknown) => typeof value === 'string' ? value : undefined
     return {
-        languageTargets: (content?.languageTargets ?? {}) as Record<string, unknown>,
+        languageTargets: {
+            vocabulary: strings(targets.vocabulary), patterns: strings(targets.patterns),
+            examples: strings(targets.examples), chunks: strings(targets.chunks),
+            grammar: text(targets.grammar), pronunciation: text(targets.pronunciation), culture: text(targets.culture),
+        },
         subLessons,
         assessment: content?.assessment ?? exp?.assessment ?? undefined,
-        modePurpose: content?.modePurpose ?? undefined,
+        modePurpose: text(content.modePurpose),
     }
 }

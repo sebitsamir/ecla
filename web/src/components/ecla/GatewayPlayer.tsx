@@ -2,20 +2,20 @@
 
 /**
  * GatewayPlayer — The unbroken, hint-less UI (Phase 10).
- * 
+ *
  * No top nav. No "Lesson 4" chrome. No "Correct!" fireworks.
- * Just the setting, the transcript, and the microphone. 
+ * Just the setting, the transcript, and the microphone.
  * The interface gets out of the way so the learner can function.
  */
 import { useEffect, useRef, useState } from 'react'
 import { Mic, Square, Loader2, Send } from 'lucide-react'
 import { useGatewayEngine } from '@/hooks/useGatewayEngine'
-import { GATEWAY_SCENARIOS, GATEWAY_CONFIGS, type GatewayTurn } from '@/lib/gatewayTypes'
-import { useMic } from '@/hooks/useMic' 
+import { GATEWAY_SCENARIOS, GATEWAY_CONFIGS, type GatewayTurn, type GatewayEvidence } from '@/lib/gatewayTypes'
+import { useMic } from '@/hooks/useMic'
 
 export default function GatewayPlayer({ getToken, onGraduate }: {
     getToken: () => Promise<string | null>
-    onGraduate: (evidence: any[]) => void
+    onGraduate: (evidence: GatewayEvidence[]) => void
 }) {
     const engine = useGatewayEngine(getToken)
     const [typed, setTyped] = useState('')
@@ -44,10 +44,10 @@ export default function GatewayPlayer({ getToken, onGraduate }: {
             <div className="min-h-screen bg-[#0B0B10] flex flex-col items-center justify-center p-6 text-center">
                 <h1 className="font-display text-3xl font-bold text-cream mb-4">The Pre-A1 Gateway</h1>
                 <p className="text-cream/60 max-w-md mb-2">
-                    This is the final simulation. 
+                    This is the final simulation.
                 </p>
                 <p className="text-cream/40 max-w-md mb-8 text-sm">
-                    No hints. No translations. No "Correct" or "Incorrect". 
+                    No hints. No translations. No &quot;Correct&quot; or &quot;Incorrect&quot;.
                     Just you, the language, and the people of Madrid.
                 </p>
                 <button
@@ -79,7 +79,7 @@ export default function GatewayPlayer({ getToken, onGraduate }: {
                 {engine.history.map((turn, i) => (
                     <TurnBubble key={i} turn={turn} />
                 ))}
-                
+
                 {engine.isThinking && (
                     <div className="flex items-center gap-2 text-cream/40 text-sm pl-2">
                         <Loader2 className="h-4 w-4 animate-spin" />
@@ -96,15 +96,15 @@ export default function GatewayPlayer({ getToken, onGraduate }: {
                         onClick={mic.state === 'recording' ? mic.stop : mic.start}
                         disabled={engine.isThinking || mic.state === 'processing'}
                         className={`flex h-14 w-14 items-center justify-center rounded-full transition-all flex-shrink-0 ${
-                            mic.state === 'recording' 
-                                ? 'bg-red-500 text-white animate-pulse' 
+                            mic.state === 'recording'
+                                ? 'bg-red-500 text-white animate-pulse'
                                 : 'bg-violet-600/20 border border-violet-500/40 text-violet-300 hover:bg-violet-600/30'
                         }`}
                         aria-label={mic.state === 'recording' ? 'Stop recording' : 'Start speaking'}
                     >
                         {mic.state === 'recording' ? <Square className="h-6 w-6" /> : <Mic className="h-6 w-6" />}
                     </button>
-                    
+
                     <input
                         value={typed}
                         onChange={(e) => setTyped(e.target.value)}
@@ -118,7 +118,7 @@ export default function GatewayPlayer({ getToken, onGraduate }: {
                         disabled={engine.isThinking || mic.state === 'recording'}
                         className="flex-1 rounded-xl border border-white/10 bg-[#1A1A24] px-4 py-3 text-sm text-cream focus:outline-none focus:border-violet-500 disabled:opacity-50"
                     />
-                    
+
                     <button
                         onClick={() => { if (typed.trim()) { engine.submit(typed); setTyped('') } }}
                         disabled={!typed.trim() || engine.isThinking}

@@ -15,10 +15,10 @@ export default function EvidenceCard({ outcomes, developing, onContinue, saving 
 }) {
     return (
         <div className="px-5 sm:px-8 pb-7 pt-2 text-center space-y-5">
-            <p className="text-[11px] uppercase tracking-widest text-cream/40">Communication achieved</p>
+            <p className="text-[11px] uppercase tracking-widest text-cream/40">Practice completed</p>
 
             <div className="text-left max-w-sm mx-auto space-y-2">
-                <p className="text-xs font-bold uppercase tracking-wider text-cream/50 mb-1">You can now</p>
+                <p className="text-xs font-bold uppercase tracking-wider text-cream/50 mb-1">You practiced</p>
                 {outcomes.map(outcome => (
                     <p key={outcome} className="text-sm text-cream/80 flex gap-2">
                         <Check className="h-4 w-4 text-leaf flex-shrink-0 mt-0.5" /> {outcome}

@@ -5,7 +5,7 @@
  * the archetype decides HOW it is experienced (hear → infer → recognize →
  * retrieve → produce → interact → transfer), never WHAT is taught.
  */
-import type { ChallengeSpec, SceneBeat, SceneOption } from '@/lib/sceneTypes'
+import type { ChallengeSpec, SceneBeat } from '@/lib/sceneTypes'
 import type { SceneBlueprint } from '@/lib/blueprint'
 
 export type Target = {
