@@ -19,6 +19,7 @@ export type ApiErrorKind =
     | 'forbidden'
     | 'not_found'
     | 'validation'
+    | 'conflict'
     | 'rate_limit'
     | 'server'
     | 'network'
@@ -55,6 +56,7 @@ export async function apiFetch<T>(
         if (res.status === 403) throw new ApiError('forbidden', 'You do not have access to this.', 403)
         if (res.status === 404) throw new ApiError('not_found', 'That resource was not found.', 404)
         if (res.status === 400) throw new ApiError('validation', (await res.json().catch(() => ({}))).error ?? 'Invalid request.', 400)
+        if (res.status === 409) throw new ApiError('conflict', (await res.json().catch(() => ({}))).error ?? 'This task changed. Reload to continue.', 409)
         if (res.status === 429) throw new ApiError('rate_limit', 'Too many requests. Wait a moment.', 429)
         if (!res.ok) throw new ApiError('server', 'Something went wrong on our end. Try again.', res.status)
         return await res.json() as T

@@ -22,6 +22,7 @@ import performanceRoutes from './routes/performance'
 import transferRoutes from './routes/transfer'
 import contentRoutes from './routes/content'
 import scenesRoutes from './routes/scenes'
+import attemptRoutes from './routes/attempts'
 
 const app = express()
 
@@ -71,6 +72,7 @@ app.use(memoryRoutes)
 app.use(gatewayRoutes)
 app.use(contentRoutes)
 app.use(scenesRoutes)
+app.use(attemptRoutes)
 app.use(performanceRoutes)
 app.use(transferRoutes)
 

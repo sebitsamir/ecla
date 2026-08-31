@@ -82,3 +82,38 @@ Each phase receives a separate commit only with an explicit validation/status
 record. A partial implementation must never be described as educationally proven
 or production-ready. Human review, recording production and the pilot remain
 external work; their absence must not be hidden behind passing software tests.
+
+## Phase 1 software-pilot checkpoint
+
+The golden greeting path now has six versioned server-owned scenes, persistent
+resumable attempts, raw-response grading, support tracking, novel-context transfer
+and delayed retrieval. PostgreSQL transactions and uniqueness constraints protect
+completion, XP and evidence against retries and concurrent requests. The web
+journey includes typing, consented recording/transcription, local playback and
+explicit provisional-result labels. Shared contracts are bundled from the repo root.
+
+All versions remain educator-review pending. Browser speech is only a fallback;
+reference recordings and validated spontaneous spoken interaction are not complete.
+The configured application DB has not been migrated or seeded. An older clean-
+install migration gap (missing CharacterMemory before the Phase 31 ALTER) remains
+a deployment blocker; the additive Phase 1 SQL was tested independently against
+the current pre-Phase-1 schema in an isolated PostgreSQL database.
+
+See `docs/GOLDEN_COMPETENCY.md` for setup, evidence semantics, test coverage and
+the exact remaining human acceptance work. This checkpoint replaces the missing
+attempt/atomic-completion foundation for this competency only; the legacy write
+freeze remains in place elsewhere. Phase 1's full educational exit condition is
+not yet met, and passing software checks must not be represented as that sign-off.
+
+### Phase 1 validation results
+
+- API unit/regression tests: 20 passed.
+- Isolated PostgreSQL integration tests: 8 passed, including independent service
+  instances, eight concurrent completions, database rollback and delayed retrieval.
+- Web regression/render tests: 5 passed.
+- API and web TypeScript checks: passed.
+- Web lint: zero errors or warnings; production build passed with the local API URL.
+- New additive migration: applied successfully against the pre-Phase-1 schema in
+  the disposable database. Full historical clean migrations remain blocked as above.
+- Authenticated browser, physical microphone/provider and human learning outcomes:
+  not verified; no substitute claim made from unit or integration tests.
