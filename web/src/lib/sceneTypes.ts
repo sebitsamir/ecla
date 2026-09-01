@@ -83,7 +83,7 @@ export type SceneBeat =
         challenge?: ChallengeSpec
         stage?: StageName
         captureName?: boolean
-        /** Phase 24: call /voice/assess and record intelligibility evidence. */
+        /** Phase 24: call /voice/assess for a practice-only transcription match; never acoustic evidence. */
         assessIntelligibility?: boolean
     }
     | {

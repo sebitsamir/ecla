@@ -125,7 +125,7 @@ router.get('/api/v1/lessons/:conceptId', async (req: Request, res: Response, nex
                         production: mastery.applicationScore,
                         interaction: mastery.interactionScore,
                         transfer: mastery.transferScore,
-                        retention: null,
+                        retention: mastery.retentionScore,
                     },
                 } : null,
                 subLessons,

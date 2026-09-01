@@ -3,7 +3,7 @@ import { withTemporaryAudio } from '../lib/temporaryAudio'
 import { AppError } from '../lib/errors'
 import { groq } from '../lib/groq'
 import { getOrSyncUserFast } from '../lib/auth'
-import { assessIntelligibility } from '../lib/pronunciationAssess'
+import { assessTranscriptionMatch } from '../lib/pronunciationAssess'
 import { voiceRateLimit } from '../lib/rateLimit'
 
 const router = Router()
@@ -34,7 +34,7 @@ router.post(
     }
 )
 
-/** Phase 24: intelligibility assessment (transcript-based; upgradeable to acoustic). */
+/** Compatibility route: text-only transcription match, explicitly not acoustic. */
 router.post(
     '/api/v1/voice/assess',
     async (req: Request, res: Response, next: NextFunction) => {
@@ -45,7 +45,7 @@ router.post(
                 res.status(400).json({ error: 'transcript and target required' })
                 return
             }
-            const result = assessIntelligibility(transcript, target)
+            const result = assessTranscriptionMatch(transcript, target)
             res.json(result)
         } catch (error) { next(error) }
     }

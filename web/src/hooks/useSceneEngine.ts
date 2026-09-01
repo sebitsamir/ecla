@@ -47,8 +47,8 @@ const PACE_MS = 500
 const ACTION_MS = 1300
 const TTS_BACKSTOP_MS = 4000
 
-/** Phase 24: assess intelligibility via API. */
-async function assessPronunciation(
+/** Phase 24: compare recognized transcript text via API; this is not acoustic evidence. */
+async function assessTranscriptionMatch(
     getToken: () => Promise<string | null>,
     transcript: string,
     target: string,
@@ -188,9 +188,9 @@ export function useSceneEngine({ scene, support = 'medium', getToken, onStage }:
         if (!b || (b.kind !== 'speak' && b.kind !== 'write' && b.kind !== 'unexpected')) return
         push({ who: 'you', text, mine: true })
 
-        // Phase 24: pronunciation intelligibility (listen-then-repeat beats)
+        // Phase 24: transcription match only (listen-then-repeat practice; no pronunciation claim)
         if (b.kind === 'speak' && b.assessIntelligibility && b.expected[0]) {
-            const assess = await assessPronunciation(getToken, text, b.expected[0])
+            const assess = await assessTranscriptionMatch(getToken, text, b.expected[0])
             if (assess) {
                 evidence.current.intelligibility.attempts += 1
                 evidence.current.intelligibility.scores.push(assess.score)
