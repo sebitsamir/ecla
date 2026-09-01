@@ -4,6 +4,7 @@ import { useCallback, useEffect, useRef, useState } from 'react'
 import { apiFetch } from '@/lib/apiClient'
 import { useMic } from '@/hooks/useMic'
 import { GoldenResultPanel } from './GoldenResultPanel'
+import { ScenePrompt } from '@/components/scenes/ScenePrompt'
 import { GOLDEN_CONTRACT, type GoldenAttempt, type GoldenCatalog, type GoldenResult } from '../../../../packages/contracts/golden'
 
 type Props = { getToken: () => Promise<string | null>; onExit: () => void }
@@ -83,14 +84,6 @@ export default function GoldenJourney({ getToken, onExit }: Props) {
         window.dispatchEvent(new Event('ecla:progress-updated'))
     })
 
-    const speak = () => {
-        const step = attempt?.step
-        if (!step?.line || !window.speechSynthesis) return
-        window.speechSynthesis.cancel()
-        const utterance = new SpeechSynthesisUtterance(step.line)
-        utterance.lang = step.audio.locale; utterance.rate = step.audio.rate
-        window.speechSynthesis.speak(utterance)
-    }
 
     return <main className="min-h-screen bg-[#0B0B10] px-4 py-6 text-cream">
         <div className="mx-auto max-w-2xl space-y-6">
@@ -117,7 +110,7 @@ export default function GoldenJourney({ getToken, onExit }: Props) {
                 {attempt.step ? <>
                     <p className="text-xs uppercase text-cream/60">{attempt.step.stage} · Task {attempt.sequence + 1} of {attempt.totalSteps}</p>
                     <h2 ref={taskRef} tabIndex={-1} className="text-lg font-semibold focus:outline-none">{attempt.step.prompt}</h2>
-                    {attempt.step.line && <div className="space-y-2 rounded-xl bg-black/20 p-4"><p className="text-sm text-cream/50">{attempt.step.speaker}</p><p lang="es" className="text-xl">{attempt.step.line}</p>{attempt.step.translation && <p>{attempt.step.translation}</p>}<button className={button} onClick={speak}>Play model (browser voice)</button></div>}
+                    <ScenePrompt step={attempt.step} hideHeading />
                     {attempt.step.kind === 'encounter' && <button className={button} disabled={busy} onClick={() => respond('continue')}>Continue</button>}
                     {attempt.step.kind === 'choice' && <div className="grid gap-3">{attempt.step.options?.map(option => <button key={option.id} className={`${button} text-left`} disabled={busy} onClick={() => respond(option.id)}>{option.label}</button>)}</div>}
                     {attempt.step.kind === 'response' && <form className="space-y-4" onSubmit={event => { event.preventDefault(); if (answer.trim()) respond(answer.trim()) }}>

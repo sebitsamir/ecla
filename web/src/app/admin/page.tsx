@@ -93,7 +93,7 @@ export default function AdminPage() {
                         <ArrowLeft className="h-5 w-5" />
                     </button>
                     <div>
-                        <h1 className="font-display text-2xl font-bold text-cream">Content authoring</h1>
+                        <a href="/admin/scenes" className="rounded-xl border border-white/20 px-4 py-2 text-sm">Canonical scenes</a><h1 className="font-display text-2xl font-bold text-cream">Content authoring</h1>
                         <p className="text-sm text-cream/50">Competency metadata · validation gate · seed phases for depth</p>
                     </div>
                 </header>
