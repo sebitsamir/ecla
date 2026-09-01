@@ -4,6 +4,7 @@
 import { apiFetch } from '@/lib/apiClient'
 import type { ContinueUnit } from '@/components/ecla/dashboard/ContinueCards'
 import type { CourseUnit } from '@/components/ecla/course/StageCard'
+import type { AdaptationPlan } from '../../../packages/contracts/adaptation'
 
 export type DimensionBand = { key: string; avg: number | null; band: string | null }
 export type NextAction = {
@@ -32,6 +33,7 @@ export type LearnerHome = {
     summary: LearnerSummary
     courses: { level: string; title: string; units: CourseUnit[] }[]
     retentionReviews: RetentionReview[]
+    adaptation: AdaptationPlan
 }
 
 const CACHE_KEY = 'ecla:home'

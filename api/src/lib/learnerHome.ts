@@ -6,14 +6,7 @@ import { prisma } from './prisma'
 import { getPublishedCurriculum } from './curriculumCache'
 import { shapeCourseMap, finishedSet, progressedSet, type MasteryRow } from './courseMap'
 import { bandOf, dueReviewsFor } from '../routes/adaptive'
-
-const MODE_BY_DIM: Record<string, string> = {
-    comprehension: 'STORY',
-    recall: 'DRILL',
-    production: 'PROFESSIONAL',
-    interaction: 'IMMERSION',
-    transfer: 'MISSION',
-}
+import { AdaptationService } from '../adaptation/service'
 
 async function loadMasteryMap(userId: string): Promise<Map<string, MasteryRow>> {
     const rows = await prisma.competencyMastery.findMany({
@@ -53,67 +46,6 @@ function computeDimensions(masteryByCompetency: Map<string, MasteryRow>) {
     })
 }
 
-function computeNextActionFromSnapshot(
-    curriculum: Awaited<ReturnType<typeof getPublishedCurriculum>>,
-    masteryByCompetency: Map<string, MasteryRow>,
-    dimensions: ReturnType<typeof computeDimensions>,
-    due: Awaited<ReturnType<typeof dueReviewsFor>>,
-) {
-    if (due.length > 0) {
-        const rv = due[0]
-        return {
-            kind: 'review' as const,
-            competencyId: rv.id,
-            code: rv.code,
-            title: rv.title,
-            canDo: rv.canDo,
-            mode: 'STORY',
-            href: `/learn/${rv.id}?review=1`,
-            reason: 'Someone wants to see you again — a quick hello keeps it alive.',
-        }
-    }
-
-    const finished = finishedSet(masteryByCompetency)
-    const progressed = progressedSet(masteryByCompetency)
-    const weakest = [...dimensions]
-        .filter((d): d is { key: string; avg: number; band: string } => d.avg != null)
-        .sort((a, b) => a.avg - b.avg)[0]
-
-    for (const course of curriculum) {
-        for (const unit of course.units) {
-            for (const comp of unit.competencies) {
-                if (finished.has(comp.id)) continue
-                const open = comp.prerequisiteIds.every(id => progressed.has(id))
-                if (open) {
-                    const mode = weakest ? MODE_BY_DIM[weakest.key] ?? 'STORY' : 'STORY'
-                    const reason = weakest
-                        ? `Because ${weakest.key} is your weakest dimension right now (${weakest.avg}% · ${weakest.band}).`
-                        : 'Your next step in the journey.'
-                    return {
-                        kind: 'lesson' as const,
-                        competencyId: comp.id,
-                        code: comp.code,
-                        title: comp.title,
-                        canDo: comp.canDo,
-                        mode,
-                        href: `/learn/${comp.id}?mode=${mode}`,
-                        reason,
-                    }
-                }
-            }
-        }
-    }
-
-    return {
-        kind: 'gateway' as const,
-        title: 'Pre-A1 Gateway',
-        canDo: 'Demonstrate everything you can do — on your own.',
-        mode: 'MISSION',
-        href: '/gateway',
-        reason: 'Every competency is demonstrated. Time to prove it in the wild.',
-    }
-}
-
 async function buildRetentionReviews(
     due: Awaited<ReturnType<typeof dueReviewsFor>>,
     soon: Array<{
@@ -146,7 +78,7 @@ async function buildRetentionReviews(
 export async function buildLearnerHome(user: { id: string; displayName?: string | null }) {
     const weekAgo = new Date(Date.now() - 7 * 86400000)
 
-    const [curriculum, masteryByCompetency, total, attempts, dueReviews, soonRows] = await Promise.all([
+    const [curriculum, masteryByCompetency, total, attempts, dueReviews, soonRows, adaptation] = await Promise.all([
         getPublishedCurriculum(),
         loadMasteryMap(user.id),
         prisma.competency.count({ where: { level: 'PRE_A1' } }),
@@ -169,6 +101,7 @@ export async function buildLearnerHome(user: { id: string; displayName?: string 
             orderBy: { nextReviewAt: 'asc' },
             take: 3,
         }),
+        new AdaptationService(prisma).plan(user.id),
     ])
 
     const retentionReviews = await buildRetentionReviews(dueReviews, soonRows)
@@ -176,7 +109,12 @@ export async function buildLearnerHome(user: { id: string; displayName?: string 
     const mastered = finishedSet(masteryByCompetency)
     const progressed = progressedSet(masteryByCompetency)
     const dimensions = computeDimensions(masteryByCompetency)
-    const nextAction = computeNextActionFromSnapshot(curriculum, masteryByCompetency, dimensions, dueReviews)
+    const planned = adaptation.actions[0]
+    const nextAction = {
+        ...planned,
+        code: planned.competencyCode,
+        kind: planned.kind === 'practice' || planned.kind === 'repair' || planned.kind === 'transfer' || planned.kind === 'retention' ? 'lesson' as const : planned.kind,
+    }
 
     let weekDemonstrated = 0
     for (const m of masteryByCompetency.values()) {
@@ -214,6 +152,7 @@ export async function buildLearnerHome(user: { id: string; displayName?: string 
         },
         courses,
         retentionReviews,
+        adaptation,
     }
 }
 

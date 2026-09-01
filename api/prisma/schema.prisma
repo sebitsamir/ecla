@@ -65,6 +65,22 @@ model User {
   learningAttempts   LearningAttempt[]
   sceneVisits SceneVisit[]
   assessmentSessions AssessmentSession[]
+  learnerPlanSnapshots LearnerPlanSnapshot[]
+}
+
+model LearnerPlanSnapshot {
+  id              String   @id @default(uuid())
+  userId          String
+  version         String
+  evidenceVersion String
+  plan            Json
+  generatedAt     DateTime @default(now())
+  expiresAt       DateTime
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId, generatedAt])
+  @@unique([userId, evidenceVersion])
 }
 
 model PortfolioReviewDecision {

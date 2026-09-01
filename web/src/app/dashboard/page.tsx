@@ -18,6 +18,7 @@ import RetentionCard from '@/components/ecla/dashboard/RetentionCard'
 import { useAuthReady, useProgressTick } from '@/hooks/useAuthReady'
 import { fetchHome, invalidateHomeCache, type LearnerHome } from '@/lib/summary'
 import { ApiError } from '@/lib/apiClient'
+import Link from 'next/link'
 
 export default function DashboardPage() {
   const { isLoaded, isSignedIn, getToken } = useAuthReady()
@@ -85,6 +86,8 @@ export default function DashboardPage() {
               <NextActionCard action={summary.nextAction} />
             </section>
           )}
+
+          <Link href="/plan" className="inline-flex text-sm font-semibold text-glow hover:underline">See why these actions were selected →</Link>
 
           <div className="grid gap-4 md:gap-6 lg:grid-cols-3">
             <div className="min-w-0 lg:col-span-2">
