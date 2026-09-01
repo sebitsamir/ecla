@@ -10,3 +10,7 @@
  *   content/spanish/pre-a1/phases/preA1.phaseNN.ts
  */
 export { phases } from '../../phases'
+export { PRE_A1_CODES } from './codes'
+export { PRE_A1_PORTFOLIO } from './portfolio'
+export { validatePreA1Portfolio } from './portfolio-validation'
+export type { PreA1PortfolioEntry, PreA1Context, EditorialReview } from './portfolio-types'

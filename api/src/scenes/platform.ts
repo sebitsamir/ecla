@@ -1,6 +1,8 @@
 import type { PrismaClient, Prisma } from '@prisma/client'
 import { AppError } from '../lib/errors'
 import { canonicalJSON, compileScene, migrateSceneSource } from './compiler'
+import { PRE_A1_PORTFOLIO } from '../../prisma/content/spanish/pre-a1/portfolio'
+import { PORTFOLIO_EXPERIMENT_KEY, portfolioReviewBlockers } from '../../prisma/content/spanish/pre-a1/portfolio-version'
 import type { SceneDocument, SceneDelivery } from '../../../packages/contracts/scene'
 const json = (value: unknown) => JSON.parse(JSON.stringify(value)) as Prisma.InputJsonValue
 
@@ -54,6 +56,12 @@ export class ScenePlatform {
             if (!row.reviewedBy) throw new AppError('Review this exact revision before publication', 409)
             const compiled = compileScene(row.source)
             if (compiled.version !== row.version) throw new AppError('Revision integrity check failed', 409)
+            if (compiled.source.experiment?.key === PORTFOLIO_EXPERIMENT_KEY) {
+                const portfolio = PRE_A1_PORTFOLIO.find(item => item.code === compiled.source.competencyCode)
+                if (!portfolio) throw new AppError('Portfolio source is not in the canonical Pre-A1 portfolio', 409)
+                const blockers = portfolioReviewBlockers(portfolio, compiled.source.experiment.variant)
+                if (blockers.length) throw new AppError(`Portfolio publication blocked: ${blockers.join('; ')}`, 409)
+            }
             const publication = await tx.scenePublication.upsert({ where: { sceneId: row.sceneId }, create: { sceneId: row.sceneId, revisionId: id, publishedBy: actor }, update: { revisionId: id, publishedBy: actor, publishedAt: new Date() } })
             await tx.sceneRevisionEvent.create({ data: { revisionId: id, actor, action: 'publish', note: `Replaces ${current?.revisionId ?? 'no revision'}` } })
             return publication

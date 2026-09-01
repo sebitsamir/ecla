@@ -7,6 +7,7 @@ import type { Server } from 'node:http'
 import { ScenePlatform } from '../src/scenes/platform'
 import { scenePlatformRouter } from '../src/routes/scenePlatform'
 import { seedCanonicalScenes } from '../src/scenes/seed'
+import { portfolioSceneSources } from '../src/scenes/preA1Portfolio'
 
 const target = new URL(process.env.TEST_DATABASE_URL ?? 'postgresql://invalid/invalid')
 if (!['127.0.0.1', 'localhost'].includes(target.hostname) || target.port !== '55439' || target.pathname !== '/ecla_phase1_test') throw new Error('Only the isolated localhost:55439/ecla_phase1_test database is allowed')
@@ -82,6 +83,14 @@ test('HTTP authoring always checks admin and strict publication payloads', async
     const response = await fetch(`${origin}/api/v1/admin/scene-revisions/${draft.id}/publish`, { method: 'POST', headers: { ...headers, Authorization: 'Bearer test-admin' }, body: JSON.stringify({ expectedRevisionId: null, reviewed: true }) })
     assert.equal(response.status, 400)
     assert.equal((await platform.list(slug)).find(row => row.id === draft.id)?.reviewedBy, null)
+})
+test('portfolio publication rejects pending independent editorial reviews', async () => {
+    const source = portfolioSceneSources().find(item => item.competencyCode === 'PA1.SOC.GRT.01')
+    assert.ok(source)
+    const revision = await platform.draft('test-editor', source)
+    await platform.review('test-editor', revision.id, 'Reviewed the canonical scene document, meaning, and interaction steps')
+    await assert.rejects(platform.publish('test-editor', revision.id, null), /cultural review is pending.*native-speaker review is pending/)
+    assert.equal(await db.scenePublication.findUnique({ where: { revisionId: revision.id } }), null)
 })
 test('golden-to-canonical migration seeds three repeatable drafts without publishing reserved transfer scenes', async () => {
     const first = await seedCanonicalScenes(db)
