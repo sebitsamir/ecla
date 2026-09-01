@@ -117,3 +117,20 @@ not yet met, and passing software checks must not be represented as that sign-of
   the disposable database. Full historical clean migrations remain blocked as above.
 - Authenticated browser, physical microphone/provider and human learning outcomes:
   not verified; no substitute claim made from unit or integration tests.
+
+## Phase 2 canonical scene platform checkpoint
+
+The scene platform now uses a strict shared `ecla.scene/1` contract compiled on the
+server into immutable content-addressed revisions. Admin-only authoring supports
+validation, explicit v0 migration, draft creation, exact-version preview/review,
+stale-safe publication, unpublication, rollback and audit history. Learners receive
+only published public documents through a generic practice-only renderer; visits
+record the exact version and optional experiment variant without awarding evidence,
+XP or mastery. Three golden practice contexts can be seeded as unpublished drafts.
+Reserved transfer and retention contexts are not exposed by that migration.
+
+Phase 2 validation passed 24 API/unit tests, 13 isolated PostgreSQL integration
+tests, 7 web tests, both type checks, warning-free lint and a production build. The
+configured application database was not changed. The historical migration blocker
+from Phase 1 remains, and authenticated admin/browser acceptance was not possible
+without a test Clerk admin session. See `docs/CANONICAL_SCENE_PLATFORM.md`.

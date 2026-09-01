@@ -102,10 +102,12 @@ export class GoldenService {
             const reason = availability(definition, history, now)
             if (reason) throw new AppError(reason, 409)
             const visited = await tx.learningAttempt.findMany({ where: { userId, competencyId: version.scene.competencyId }, select: { snapshot: true, startedAt: true } })
-            if (definition.purpose === 'retention' && visited.some(row => now.getTime() - row.startedAt.getTime() < DAY_MS)) {
+            const practiceVisits = await tx.sceneVisit.findMany({ where: { userId, revision: { scene: { competencyId: version.scene.competencyId } } }, include: { revision: { select: { source: true } } } })
+            if (definition.purpose === 'retention' && (visited.some(row => now.getTime() - row.startedAt.getTime() < DAY_MS) || practiceVisits.some(row => now.getTime() - row.createdAt.getTime() < DAY_MS))) {
                 throw new AppError('Wait a full day after your last greeting attempt before a retention check.', 409)
             }
             const contextNovel = !visited.some(row => snapshotSchema.parse(row.snapshot).definition.contextFingerprint === definition.contextFingerprint)
+                && !practiceVisits.some(row => (row.revision.source as { contextFingerprint?: string }).contextFingerprint === definition.contextFingerprint)
             const attempt = await tx.learningAttempt.create({ data: {
                 userId, competencyId: version.scene.competencyId, sceneVersionId, idempotencyKey, activeKey: GOLDEN_CODE,
                 startedAt: now, expiresAt: new Date(now.getTime() + ATTEMPT_TTL),

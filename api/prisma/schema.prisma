@@ -63,6 +63,7 @@ model User {
   streakLogs         StreakLog[]
   missionAttempts    MissionAttempt[]
   learningAttempts   LearningAttempt[]
+  sceneVisits SceneVisit[]
 }
 
 model CharacterMemory {
@@ -388,6 +389,8 @@ model Scene {
 
   competency Competency @relation(fields: [competencyId], references: [id], onDelete: Cascade)
   versions AssessmentSceneVersion[]
+  revisions SceneRevision[]
+  publication ScenePublication?
 
   @@index([competencyId])
 }
@@ -449,4 +452,55 @@ model AttemptResponse {
   attempt LearningAttempt @relation(fields: [attemptId], references: [id], onDelete: Cascade)
   @@unique([attemptId, sequence])
   @@unique([attemptId, responseKey])
+}
+
+model SceneRevision {
+  id String @id @default(uuid())
+  sceneId String
+  version String
+  schemaVersion Int
+  compilerVersion String
+  source Json
+  compiled Json
+  reviewedBy String?
+  reviewNote String?
+  reviewedAt DateTime?
+  createdBy String
+  createdAt DateTime @default(now())
+  scene Scene @relation(fields: [sceneId], references: [id], onDelete: Restrict)
+  publication ScenePublication?
+  events SceneRevisionEvent[]
+  visits SceneVisit[]
+  @@unique([sceneId, version])
+}
+model ScenePublication {
+  sceneId String @id
+  revisionId String @unique
+  publishedBy String
+  publishedAt DateTime @default(now())
+  scene Scene @relation(fields: [sceneId], references: [id], onDelete: Restrict)
+  revision SceneRevision @relation(fields: [revisionId], references: [id], onDelete: Restrict)
+}
+model SceneRevisionEvent {
+  id String @id @default(uuid())
+  revisionId String
+  actor String
+  action String
+  note String
+  createdAt DateTime @default(now())
+  revision SceneRevision @relation(fields: [revisionId], references: [id], onDelete: Restrict)
+  @@index([revisionId, createdAt])
+}
+model SceneVisit {
+  id String @id @default(uuid())
+  userId String
+  revisionId String
+  requestKey String
+  experimentKey String?
+  variant String?
+  createdAt DateTime @default(now())
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+  revision SceneRevision @relation(fields: [revisionId], references: [id], onDelete: Restrict)
+  @@unique([userId, requestKey])
+  @@index([revisionId, createdAt])
 }
