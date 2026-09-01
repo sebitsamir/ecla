@@ -21,7 +21,8 @@
     "db:patch": "prisma db execute --schema prisma/schema.prisma --file prisma/migrations/20260829180000_phase31_learner_extensions/migration.sql",
     "db:status": "prisma migrate status",
     "validate:content": "tsx prisma/content/validate-cli.ts",
-    "validate:curriculum": "tsx prisma/content/validate-curriculum-cli.ts"
+    "validate:curriculum": "tsx prisma/content/validate-curriculum-cli.ts",
+    "validate:portfolio": "tsx prisma/content/validate-portfolio-cli.ts"
   },
   "prisma": {
     "seed": "tsx prisma/seed.ts"

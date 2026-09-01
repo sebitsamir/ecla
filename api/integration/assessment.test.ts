@@ -84,7 +84,7 @@ test('rubric review enforces calibration and immutable observation/audit fields'
 })
 test('Gateway enforces full readiness, seven reviewed rubrics and five human acoustic approvals', async () => {
     await assert.rejects(service.startGateway(foreign, randomUUID()))
-    const course = await db.course.findFirstOrThrow({ where: { cefrLevel: 'Pre-A1', language: { code: 'es' } } }); await db.course.update({ where: { id: course.id }, data: { isPublished: true } })
+    const course = await db.course.findFirstOrThrow({ where: { cefrLevel: { in: ['Pre-A1', 'PRE_A1'] }, language: { code: 'es' }, units: { some: { competencies: { some: { isCore: true } } } } } }); await db.course.update({ where: { id: course.id }, data: { isPublished: true } })
     const competencies = await db.competency.findMany({ where: { isCore: true, unit: { courseId: course.id } } })
     for (const competency of competencies) await db.competencyMastery.upsert({ where: { userId_competencyId: { userId: owner, competencyId: competency.id } }, create: { userId: owner, competencyId: competency.id, level: 'CONTROLLED', confidenceLevel: 80, performanceJson: { educatorReviewed: true } }, update: { level: 'CONTROLLED', confidenceLevel: 80, performanceJson: { educatorReviewed: true } } })
     for (const scenario of GATEWAY_SCENARIOS) await reviewedRubric(`gateway:${scenario}`)

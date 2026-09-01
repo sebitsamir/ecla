@@ -90,8 +90,13 @@ export class AssessmentService {
         })
     }
     async startGateway(userId: string, idempotencyKey: string) {
-        const course = await this.db.course.findFirst({ where: { cefrLevel: 'Pre-A1', isPublished: true, language: { code: 'es' } } })
-        if (!course) throw new AppError('Published Spanish Pre-A1 curriculum not found', 409)
+        const candidates = await this.db.course.findMany({
+            where: { cefrLevel: { in: ['Pre-A1', 'PRE_A1'] }, isPublished: true, language: { code: 'es' } },
+            include: { units: { select: { competencies: { where: { isCore: true }, select: { id: true } } } } },
+        })
+        const populated = candidates.filter(item => item.units.some(unit => unit.competencies.length > 0))
+        if (populated.length !== 1) throw new AppError(populated.length ? 'Ambiguous published Spanish Pre-A1 curricula' : 'Published Spanish Pre-A1 curriculum not found', 409)
+        const course = populated[0]
         const competencyWhere = { isCore: true, unit: { courseId: course.id } }
         const masteries = await this.db.competencyMastery.findMany({ where: { userId, competency: competencyWhere } })
         const required = await this.db.competency.count({ where: competencyWhere })
