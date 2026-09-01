@@ -67,6 +67,25 @@ model User {
   assessmentSessions AssessmentSession[]
 }
 
+model PortfolioReviewDecision {
+  id                    String   @id @default(uuid())
+  competencyId          String
+  competencyCode        String
+  contentVersion        String
+  kind                  String
+  decision              String
+  reviewerId            String
+  reviewerQualification String
+  note                  String
+  requestKey            String
+  createdAt             DateTime @default(now())
+
+  competency Competency @relation(fields: [competencyId], references: [id], onDelete: Cascade)
+
+  @@unique([reviewerId, requestKey])
+  @@index([competencyCode, contentVersion, kind, createdAt])
+}
+
 model CharacterMemory {
   id           String   @id @default(cuid())
   userId       String
@@ -166,6 +185,7 @@ model Competency {
   scenes                      Scene[]
   learningAttempts            LearningAttempt[]
   assessmentSessions AssessmentSession[]
+  portfolioReviewDecisions PortfolioReviewDecision[]
 
   @@index([unitId, orderIndex])
 }

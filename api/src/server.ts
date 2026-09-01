@@ -25,6 +25,7 @@ import scenesRoutes from './routes/scenes'
 import attemptRoutes from './routes/attempts'
 import scenePlatformRoutes from './routes/scenePlatform'
 import assessmentRoutes from './routes/assessment'
+import portfolioReviewRoutes from './routes/portfolioReviews'
 
 const app = express()
 
@@ -77,6 +78,7 @@ app.use(scenesRoutes)
 app.use(attemptRoutes)
 app.use(scenePlatformRoutes)
 app.use(assessmentRoutes)
+app.use(portfolioReviewRoutes)
 app.use(performanceRoutes)
 app.use(transferRoutes)
 

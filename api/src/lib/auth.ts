@@ -39,9 +39,17 @@ export function requireAuth(req: Request): string {
 
 export function requireAdmin(req: Request): string {
     const userId = requireAuth(req)
-    if (userId !== process.env.ADMIN_CLERK_ID) {
+    const admins = new Set([process.env.ADMIN_CLERK_ID, ...(process.env.ADMIN_CLERK_IDS ?? '').split(',')].map(value => value?.trim()).filter((value): value is string => !!value))
+    if (!admins.has(userId)) {
         throw new AppError('Forbidden: Admin access only', 403)
     }
+    return userId
+}
+
+export function requirePortfolioReviewer(req: Request): string {
+    const userId = requireAuth(req)
+    const reviewers = new Set([process.env.ADMIN_CLERK_ID, ...(process.env.ADMIN_CLERK_IDS ?? '').split(','), ...(process.env.PORTFOLIO_REVIEWER_CLERK_IDS ?? '').split(',')].map(value => value?.trim()).filter((value): value is string => !!value))
+    if (!reviewers.has(userId)) throw new AppError('Forbidden: Portfolio reviewer access only', 403)
     return userId
 }
 

@@ -10,4 +10,4 @@ if (!report.passed) {
     process.exit(1)
 }
 console.log(`Pre-A1 portfolio structure passed: ${PRE_A1_PORTFOLIO.length} competencies and ${PRE_A1_PORTFOLIO.reduce((sum, item) => sum + item.contexts.length, 0)} authored contexts.`)
-console.log(`Publication readiness: blocked by ${report.reviewBlockers.length} independent review approvals.`)
+console.log(`Static portfolio baseline has ${report.reviewBlockers.length} review slots. Use /admin/portfolio for persistent current-version approval progress.`)

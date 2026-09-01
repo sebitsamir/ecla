@@ -1,8 +1,8 @@
 import type { PrismaClient, Prisma } from '@prisma/client'
 import { AppError } from '../lib/errors'
 import { canonicalJSON, compileScene, migrateSceneSource } from './compiler'
-import { PRE_A1_PORTFOLIO } from '../../prisma/content/spanish/pre-a1/portfolio'
-import { PORTFOLIO_EXPERIMENT_KEY, portfolioReviewBlockers } from '../../prisma/content/spanish/pre-a1/portfolio-version'
+import { PORTFOLIO_EXPERIMENT_KEY } from '../../prisma/content/spanish/pre-a1/portfolio-version'
+import { portfolioPublicationBlockers } from '../portfolio/service'
 import type { SceneDocument, SceneDelivery } from '../../../packages/contracts/scene'
 const json = (value: unknown) => JSON.parse(JSON.stringify(value)) as Prisma.InputJsonValue
 
@@ -51,17 +51,15 @@ export class ScenePlatform {
     async publish(actor: string, id: string, expectedRevisionId: string | null) {
         return this.locked(id, async (tx, row) => {
             const current = await tx.scenePublication.findUnique({ where: { sceneId: row.sceneId } })
-            if (current?.revisionId === id) return current
-            if ((current?.revisionId ?? null) !== expectedRevisionId) throw new AppError('Publication changed; reload before publishing', 409)
             if (!row.reviewedBy) throw new AppError('Review this exact revision before publication', 409)
             const compiled = compileScene(row.source)
             if (compiled.version !== row.version) throw new AppError('Revision integrity check failed', 409)
             if (compiled.source.experiment?.key === PORTFOLIO_EXPERIMENT_KEY) {
-                const portfolio = PRE_A1_PORTFOLIO.find(item => item.code === compiled.source.competencyCode)
-                if (!portfolio) throw new AppError('Portfolio source is not in the canonical Pre-A1 portfolio', 409)
-                const blockers = portfolioReviewBlockers(portfolio, compiled.source.experiment.variant)
+                const blockers = await portfolioPublicationBlockers(tx, compiled.source.competencyCode, compiled.source.experiment.variant)
                 if (blockers.length) throw new AppError(`Portfolio publication blocked: ${blockers.join('; ')}`, 409)
             }
+            if (current?.revisionId === id) return current
+            if ((current?.revisionId ?? null) !== expectedRevisionId) throw new AppError('Publication changed; reload before publishing', 409)
             const publication = await tx.scenePublication.upsert({ where: { sceneId: row.sceneId }, create: { sceneId: row.sceneId, revisionId: id, publishedBy: actor }, update: { revisionId: id, publishedBy: actor, publishedAt: new Date() } })
             await tx.sceneRevisionEvent.create({ data: { revisionId: id, actor, action: 'publish', note: `Replaces ${current?.revisionId ?? 'no revision'}` } })
             return publication
@@ -86,13 +84,24 @@ export class ScenePlatform {
         return { revisionId: id, version: row.version, document: row.compiled as unknown as SceneDocument }
     }
     async delivery(slug: string): Promise<SceneDelivery> {
-        const published = await this.db.scenePublication.findFirst({ where: { scene: { slug } } })
+        const published = await this.db.scenePublication.findFirst({ where: { scene: { slug } }, include: { revision: true } })
         if (!published) throw new AppError('No published canonical scene', 404)
+        const source = compileScene(published.revision.source).source
+        if (source.experiment?.key === PORTFOLIO_EXPERIMENT_KEY) {
+            const blockers = await portfolioPublicationBlockers(this.db, source.competencyCode, source.experiment.variant)
+            if (blockers.length) throw new AppError(`Portfolio publication blocked: ${blockers.join('; ')}`, 409)
+        }
         return this.preview(published.revisionId)
     }
     async catalog(competencyId?: string) {
         const rows = await this.db.scenePublication.findMany({ where: competencyId ? { scene: { competencyId } } : {}, include: { scene: true, revision: true }, orderBy: { scene: { slug: 'asc' } } })
-        return rows.map(row => ({ slug: row.scene.slug, competencyId: row.scene.competencyId, revisionId: row.revisionId, version: row.revision.version, title: (row.revision.compiled as unknown as SceneDocument).title }))
+        const visible = []
+        for (const row of rows) {
+            const source = compileScene(row.revision.source).source
+            if (source.experiment?.key === PORTFOLIO_EXPERIMENT_KEY && (await portfolioPublicationBlockers(this.db, source.competencyCode, source.experiment.variant)).length) continue
+            visible.push({ slug: row.scene.slug, competencyId: row.scene.competencyId, revisionId: row.revisionId, version: row.revision.version, title: (row.revision.compiled as unknown as SceneDocument).title })
+        }
+        return visible
     }
     async visit(userId: string, revisionId: string, requestKey: string) {
         return this.locked(revisionId, async (tx, row) => {
@@ -104,6 +113,10 @@ export class ScenePlatform {
             const publication = await tx.scenePublication.findUnique({ where: { sceneId: row.sceneId } })
             if (publication?.revisionId !== revisionId) throw new AppError('Scene publication changed; reload', 409)
             const { source } = compileScene(row.source)
+            if (source.experiment?.key === PORTFOLIO_EXPERIMENT_KEY) {
+                const blockers = await portfolioPublicationBlockers(tx, source.competencyCode, source.experiment.variant)
+                if (blockers.length) throw new AppError(`Portfolio publication blocked: ${blockers.join('; ')}`, 409)
+            }
             return tx.sceneVisit.create({ data: { userId, revisionId, requestKey, experimentKey: source.experiment?.key, variant: source.experiment?.variant } })
         })
     }
