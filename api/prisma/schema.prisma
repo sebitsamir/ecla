@@ -64,6 +64,7 @@ model User {
   missionAttempts    MissionAttempt[]
   learningAttempts   LearningAttempt[]
   sceneVisits SceneVisit[]
+  assessmentSessions AssessmentSession[]
 }
 
 model CharacterMemory {
@@ -164,6 +165,7 @@ model Competency {
   mastery                     CompetencyMastery[]
   scenes                      Scene[]
   learningAttempts            LearningAttempt[]
+  assessmentSessions AssessmentSession[]
 
   @@index([unitId, orderIndex])
 }
@@ -278,6 +280,7 @@ model Mission {
 
   competency Competency       @relation(fields: [competencyId], references: [id], onDelete: Cascade)
   attempts   MissionAttempt[]
+  assessmentSessions AssessmentSession[]
 
   @@index([competencyId])
 }
@@ -503,4 +506,126 @@ model SceneVisit {
   revision SceneRevision @relation(fields: [revisionId], references: [id], onDelete: Restrict)
   @@unique([userId, requestKey])
   @@index([revisionId, createdAt])
+}
+
+model AssessmentRubric {
+  id String @id @default(uuid())
+  targetKey String
+  version String
+  definition Json
+  evaluatorVersion String
+  status String @default("draft")
+  createdBy String
+  createdAt DateTime @default(now())
+  reviewedBy String?
+  reviewedAt DateTime?
+  reviewNote String?
+  sessions AssessmentSession[]
+  results AssessmentScenarioResult[]
+  audits AssessmentAudit[]
+  @@unique([targetKey, version])
+  @@index([targetKey, status])
+}
+model AssessmentSession {
+  id String @id @default(uuid())
+  userId String
+  kind String
+  missionId String?
+  competencyId String?
+  rubricId String?
+  idempotencyKey String
+  activeKey String?
+  status String @default("active")
+  scenarioOrder String[] @default([])
+  currentScenario Int @default(0)
+  eligibilitySnapshot Json
+  curriculumVersion String
+  startedAt DateTime @default(now())
+  expiresAt DateTime
+  completedAt DateTime?
+  finalDecision Json?
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+  mission Mission? @relation(fields: [missionId], references: [id], onDelete: Restrict)
+  competency Competency? @relation(fields: [competencyId], references: [id], onDelete: Restrict)
+  rubric AssessmentRubric? @relation(fields: [rubricId], references: [id], onDelete: Cascade)
+  turns AssessmentSessionTurn[]
+  results AssessmentScenarioResult[]
+  audits AssessmentAudit[]
+  acoustics AcousticObservation[]
+  @@unique([userId, idempotencyKey])
+  @@unique([userId, activeKey])
+  @@index([userId, kind, completedAt])
+}
+model AssessmentSessionTurn {
+  id String @id @default(uuid())
+  sessionId String
+  sequence Int
+  scenarioId String
+  role String
+  text String
+  source String
+  responseKey String?
+  replyToKey String?
+  repair Boolean @default(false)
+  providerModel String?
+  observedAt DateTime @default(now())
+  session AssessmentSession @relation(fields: [sessionId], references: [id], onDelete: Cascade)
+  @@unique([sessionId, sequence])
+  @@unique([sessionId, responseKey])
+  @@unique([sessionId, replyToKey])
+  @@index([sessionId, scenarioId, sequence])
+}
+model AssessmentScenarioResult {
+  id String @id @default(uuid())
+  sessionId String
+  scenarioId String
+  rubricId String
+  objectiveAchieved Boolean
+  meaningCommunicated Boolean
+  comprehensionEvidence Float
+  repairEvidence Boolean
+  independence Float
+  intelligibility Float?
+  confidence Float
+  autoQualifies Boolean
+  humanDecision Boolean?
+  humanConfidence Float?
+  reviewedBy String?
+  reviewedAt DateTime?
+  reviewNote String?
+  evidence Json
+  evaluatorVersion String
+  evaluatedAt DateTime @default(now())
+  session AssessmentSession @relation(fields: [sessionId], references: [id], onDelete: Cascade)
+  rubric AssessmentRubric @relation(fields: [rubricId], references: [id], onDelete: Restrict)
+  @@unique([sessionId, scenarioId])
+}
+model AcousticObservation {
+  id String @id @default(uuid())
+  sessionId String
+  scenarioId String
+  providerReference String
+  providerVersion String
+  metrics Json
+  confidence Float
+  consentAttested Boolean
+  status String
+  reviewedBy String
+  reviewNote String
+  observedAt DateTime @default(now())
+  session AssessmentSession @relation(fields: [sessionId], references: [id], onDelete: Cascade)
+  @@index([sessionId, scenarioId])
+}
+model AssessmentAudit {
+  id String @id @default(uuid())
+  sessionId String?
+  rubricId String?
+  actor String
+  action String
+  payload Json
+  createdAt DateTime @default(now())
+  session AssessmentSession? @relation(fields: [sessionId], references: [id], onDelete: Cascade)
+  rubric AssessmentRubric? @relation(fields: [rubricId], references: [id], onDelete: Cascade)
+  @@index([sessionId, createdAt])
+  @@index([rubricId, createdAt])
 }

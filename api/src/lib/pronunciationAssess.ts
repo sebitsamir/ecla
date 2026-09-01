@@ -1,6 +1,5 @@
 /**
- * pronunciationAssess — Phase 24: intelligibility scoring from transcript vs target.
- * Acoustic scoring can replace this later; for now we use normalized text distance.
+ * Transcript matching only. This cannot observe pronunciation or acoustics.
  */
 const norm = (s: string) =>
     s.toLowerCase()
@@ -28,17 +27,18 @@ function similarity(a: string, b: string): number {
     return 1 - dist / Math.max(m, n)
 }
 
-export type IntelligibilityResult = {
+export type TranscriptionMatchResult = {
+    kind: 'transcription_match'
     intelligible: boolean
     score: number
     notes?: string
 }
 
-export function assessIntelligibility(transcript: string, target: string): IntelligibilityResult {
+export function assessTranscriptionMatch(transcript: string, target: string): TranscriptionMatchResult {
     const t = norm(transcript)
     const expected = norm(target)
-    if (!t) return { intelligible: false, score: 0, notes: 'No speech detected' }
-    if (!expected) return { intelligible: t.length >= 2, score: t.length >= 2 ? 60 : 0 }
+    if (!t) return { kind: 'transcription_match', intelligible: false, score: 0, notes: 'No transcript returned' }
+    if (!expected) return { kind: 'transcription_match', intelligible: t.length >= 2, score: t.length >= 2 ? 60 : 0, notes: 'Transcript present; no acoustic claim' }
 
     const ratio = similarity(t, expected)
     const contains = t.includes(expected) || expected.includes(t)
@@ -46,10 +46,11 @@ export function assessIntelligibility(transcript: string, target: string): Intel
     const intelligible = score >= 55 || (t.length >= 3 && contains)
 
     return {
+        kind: 'transcription_match',
         intelligible,
         score,
         notes: intelligible
-            ? 'Clear enough to understand'
-            : 'Try again — focus on vowels and stress',
+            ? 'Transcript text matched the expected text; pronunciation was not assessed'
+            : 'Transcript text did not match reliably; no pronunciation conclusion is available',
     }
 }

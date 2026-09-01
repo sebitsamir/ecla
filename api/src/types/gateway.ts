@@ -9,6 +9,7 @@ export const GATEWAY_SCENARIOS = [
     'restaurant_request',
     'deliberate_misunderstanding',
     'free_objective',
+    'travel_schedule',
 ] as const
 
 export type GatewayScenarioId = (typeof GATEWAY_SCENARIOS)[number]
@@ -55,6 +56,12 @@ export const GATEWAY_CONFIGS: Record<GatewayScenarioId, GatewayAIConfig> = {
         setting: 'A hotel lobby',
         secretObjective: "Pretend you didn't hear them the first time. Force them to repeat or repair (¿Puedes repetir?).",
         openingLine: 'Sí, dígame. ¿En qué le ayudo?',
+    },
+    travel_schedule: {
+        role: 'A station clerk',
+        setting: 'A regional bus station',
+        secretObjective: 'Help them identify the morning bus time and platform.',
+        openingLine: 'Buenos días. ¿Adónde quiere ir?',
     },
     free_objective: {
         role: 'A new acquaintance',

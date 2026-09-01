@@ -1,103 +1,33 @@
-import { rejectUnverifiedAssessment } from '../lib/assessmentFreeze'
-/**
- * Missions Route — ECLA AI Conversation Layer (Phase 6)
- *
- * Constitution Art. 14 (learners must interact), Art. 16 (assessment resembles
- * reality), Art. 6.6 (graduation = performance, not quiz).
- *
- * GET  /api/v1/missions/:competencyId          → mission config for the runner
- * POST /api/v1/missions/:competencyId/turn     → AI role-play partner utterance
- * POST /api/v1/missions/:competencyId/evaluate → FUNCTION judge → MissionAttempt
- *
- * The AI partner is a PERSON, not a teacher: it never says "Correct!", never
- * translates, never explains grammar. If the learner repairs (¿Puedes repetir?),
- * it repeats/rephrases simpler. deliberateVariation introduces one small change
- * to test adaptation (Art. 15 transfer).
- *
- * Evaluation is FUNCTION-first: task_completed + meaning_communicated = passed.
- * Accuracy is recorded as evidence, never as a gate (Art. 24).
- */
-
-import { Router, Request, Response, NextFunction } from 'express'
+import { Router } from 'express'
 import { prisma } from '../lib/prisma'
-import { getOrSyncUserFast } from '../lib/auth'
-import { groq } from '../lib/groq'
+import { getOrSyncUser } from '../lib/auth'
 import { AppError } from '../lib/errors'
-
-
+import { rejectUnverifiedAssessment } from '../lib/assessmentFreeze'
 const router = Router()
-
-/** Learner utterances that count as repair strategies (I3 REPAIR — survival skill) */
-const REPAIR_MARKERS = [
-    'no entiendo', 'puedes repetir', 'más despacio', 'mas despacio',
-    'qué significa', 'que significa', 'cómo se dice', 'como se dice', 'otra vez',
-]
-
-export function detectRepair(text: string): boolean {
-    const t = text.toLowerCase()
-    return REPAIR_MARKERS.some(m => t.includes(m))
-}
-
-/** Fetch the mission for a competency (seedSublessons writes one per competency) */
-router.get('/api/v1/missions/:competencyId', async (req: Request, res: Response, next: NextFunction) => {
+router.get('/api/v1/missions/:competencyId', async (req, res, next) => {
     try {
-        await getOrSyncUserFast(req)
+        const user = await getOrSyncUser(req)
         const mission = await prisma.mission.findFirst({
-            where: { competencyId: req.params.competencyId as string },
-            include: { competency: { select: { code: true, title: true, canDo: true, domain: true } } },
+            where: { competencyId: String(req.params.competencyId) },
+            include: { competency: { select: { code: true, title: true, canDo: true } } },
         })
-        if (!mission) throw new AppError('No mission for this competency', 404)
-        res.json({ mission })
-    } catch (error) { next(error) }
-})
-
-/**
- * AI role-play partner turn.
- * Receives the conversation history, returns the partner's next Spanish utterance.
- */
-router.post('/api/v1/missions/:competencyId/turn', async (req: Request, res: Response, next: NextFunction) => {
-    try {
-        await getOrSyncUserFast(req)
-        const { history = [] } = req.body ?? {}
-
-        const mission = await prisma.mission.findFirst({ where: { competencyId: req.params.competencyId as string } })
         if (!mission) throw new AppError('Mission not found', 404)
-
-        const completion = await groq.chat.completions.create({
-            model: 'openai/gpt-oss-20b',
-            temperature: 0.7,
-            max_tokens: 120,
-            reasoning_effort: 'low',
-            response_format: { type: 'json_object' } as any,
-            messages: [
-                {
-                    role: 'system',
-                    content:
-                        `You are a Spanish-speaking PERSON in a realistic situation. You are NOT a teacher.\n` +
-                        `Scenario: ${mission.scenario}\nConversation goal: ${mission.objective}\n` +
-                        `RULES:\n` +
-                        `- Speak ONLY Spanish. Keep each turn under 25 words (Pre-A1 learner).\n` +
-                        `- Beginner-friendly vocabulary, natural and warm.\n` +
-                        `- NEVER say "Correct/Incorrect", never translate, never explain grammar.\n` +
-                        `- If the learner asks for repetition/slower/clarification, repeat or rephrase MORE SIMPLY.\n` +
-                        `- If the learner is unclear, keep the conversation alive with a simple yes/no question.\n` +
-                        `- At most once per conversation, change ONE small detail (price/item/time) to test adaptation.\n` +
-                        `Reply with JSON only: {"text":"..."}`,
-                },
-                ...history.map((h: any) => ({
-                    role: h.role === 'ai' ? 'assistant' : 'user',
-                    content: h.text,
-                })),
-            ],
-        } as any)
-
-        const text = completion.choices[0]?.message?.content ?? '{}'
-        const parsed = JSON.parse(text.match(/\{[\s\S]*\}/)?.[0] ?? '{}')
-        res.json({ text: String(parsed.text ?? 'Hola.') })
-    } catch (error) { next(error) }
+        const mastery = await prisma.competencyMastery.findUnique({
+            where: { userId_competencyId: { userId: user.id, competencyId: mission.competencyId } },
+        })
+        const eligible = !!mastery
+            && ['CONTROLLED', 'TRANSFERRED', 'RETAINED'].includes(mastery.level)
+            && (mastery.confidenceLevel ?? 0) >= 70
+            && (mastery.performanceJson as { educatorReviewed?: boolean } | null)?.educatorReviewed === true
+        res.json({
+            mission: { id: mission.id, title: mission.title, scenario: mission.scenario, objective: mission.objective },
+            eligible,
+            reason: eligible ? null : 'Reviewed CONTROLLED evidence with confidence 70+ is required.',
+        })
+    } catch (error) {
+        next(error)
+    }
 })
-
-/** Retired: client-owned transcripts cannot prove mission completion. */
+router.post('/api/v1/missions/:competencyId/turn', rejectUnverifiedAssessment)
 router.post('/api/v1/missions/:competencyId/evaluate', rejectUnverifiedAssessment)
-
 export default router
