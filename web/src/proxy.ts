@@ -18,8 +18,10 @@ export default clerkMiddleware(async (auth, request) => {
     if (pathname.startsWith('/admin')) {
         const { userId } = await auth()
 
-        // If the user is not the specific admin ID, redirect immediately
-        if (userId !== process.env.ADMIN_CLERK_ID) {
+        const admins = new Set([process.env.ADMIN_CLERK_ID, ...(process.env.ADMIN_CLERK_IDS ?? '').split(',')].map(value => value?.trim()).filter(Boolean))
+        const portfolioReviewers = new Set([...admins, ...(process.env.PORTFOLIO_REVIEWER_CLERK_IDS ?? '').split(',').map(value => value.trim()).filter(Boolean)])
+        const allowed = pathname.startsWith('/admin/portfolio') ? !!userId && portfolioReviewers.has(userId) : !!userId && admins.has(userId)
+        if (!allowed) {
             return NextResponse.redirect(new URL('/', request.url))
         }
     }

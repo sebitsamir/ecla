@@ -93,7 +93,7 @@ export default function AdminPage() {
                         <ArrowLeft className="h-5 w-5" />
                     </button>
                     <div>
-                        <a href="/admin/assessment" className="mr-3 rounded-xl border border-white/20 px-4 py-2 text-sm">Assessment review</a><a href="/admin/scenes" className="rounded-xl border border-white/20 px-4 py-2 text-sm">Canonical scenes</a><h1 className="font-display text-2xl font-bold text-cream">Content authoring</h1>
+                        <div className="mb-3 flex flex-wrap gap-3"><a href="/admin/portfolio" className="rounded-xl border border-white/20 px-4 py-2 text-sm">Pre-A1 review</a><a href="/admin/assessment" className="rounded-xl border border-white/20 px-4 py-2 text-sm">Assessment review</a><a href="/admin/scenes" className="rounded-xl border border-white/20 px-4 py-2 text-sm">Canonical scenes</a></div><h1 className="font-display text-2xl font-bold text-cream">Content authoring</h1>
                         <p className="text-sm text-cream/50">Competency metadata · validation gate · seed phases for depth</p>
                     </div>
                 </header>
