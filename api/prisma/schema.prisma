@@ -83,6 +83,15 @@ model LearnerPlanSnapshot {
   @@unique([userId, evidenceVersion])
 }
 
+model RateLimitBucket {
+  key         String   @id
+  count       Int
+  windowStart DateTime
+  expiresAt   DateTime
+
+  @@index([expiresAt])
+}
+
 model PortfolioReviewDecision {
   id                    String   @id @default(uuid())
   competencyId          String

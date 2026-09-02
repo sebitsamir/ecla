@@ -1,0 +1,52 @@
+name: quality
+on:
+  pull_request:
+  push:
+    branches: [main]
+permissions:
+  contents: read
+concurrency:
+  group: quality-${{ github.ref }}
+  cancel-in-progress: true
+jobs:
+  api:
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:18
+        env:
+          POSTGRES_USER: ecla_test
+          POSTGRES_PASSWORD: ecla-phase1-test-only
+          POSTGRES_DB: ecla_phase1_test
+        ports: ['55439:5432']
+        options: >-
+          --health-cmd "pg_isready -U ecla_test -d ecla_phase1_test"
+          --health-interval 5s --health-timeout 5s --health-retries 10
+    defaults: { run: { working-directory: api } }
+    env:
+      DATABASE_URL: postgresql://ecla_test:ecla-phase1-test-only@127.0.0.1:55439/ecla_phase1_test
+      TEST_DATABASE_URL: postgresql://ecla_test:ecla-phase1-test-only@127.0.0.1:55439/ecla_phase1_test
+      GROQ_API_KEY: test-no-network
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with: { node-version: 24, cache: npm, cache-dependency-path: api/package-lock.json }
+      - run: npm ci
+      - run: npx prisma migrate deploy
+      - run: npm run validate
+      - run: npm run test:integration
+      - run: npm run build
+      - run: npm audit --omit=dev --omit=optional --audit-level=high
+  web:
+    runs-on: ubuntu-latest
+    defaults: { run: { working-directory: web } }
+    env:
+      NEXT_PUBLIC_API_URL: https://api.staging.invalid
+      NEXT_PUBLIC_ANALYTICS_ENABLED: 'false'
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with: { node-version: 24, cache: npm, cache-dependency-path: web/package-lock.json }
+      - run: npm ci
+      - run: npm run validate
+      - run: npm audit --omit=dev --audit-level=high

@@ -4,35 +4,34 @@ import { getOrSyncUserFast } from '../lib/auth'
 import { AppError } from '../lib/errors'
 import { chatSchema } from '../lib/schemas'
 import { buildLearnerChatContext, formatChatSystemPrompt } from '../lib/learnerContext'
-import { aiRateLimit } from '../lib/rateLimit'
+import { aiDailyBudget, aiRateLimit } from '../lib/rateLimit'
+import { providerOptions } from '../lib/aiPolicy'
+import { errorMessage, log } from '../lib/observability'
 
 const router = Router()
-
-console.log('[BOOT] chat routes v6 (curriculum-bound) loaded')
 
 async function callGroqWithRetry(params: any, maxRetries = 2): Promise<string | null> {
     for (let attempt = 0; attempt <= maxRetries; attempt++) {
         try {
-            const completion = await groq.chat.completions.create(params)
+            const completion = await groq.chat.completions.create(params, providerOptions())
             const reply = completion.choices[0]?.message?.content
             if (reply) return reply
-            console.warn(`[CHAT] Attempt ${attempt + 1}: empty response`)
-        } catch (error: any) {
-            console.error(`[CHAT] Attempt ${attempt + 1} failed:`, error.message)
+            log('warn', 'chat_provider_empty', { attempt: attempt + 1 })
+        } catch (error: unknown) {
+            log('warn', 'chat_provider_failed', { attempt: attempt + 1, error: errorMessage(error) })
         }
         if (attempt < maxRetries) await new Promise(r => setTimeout(r, 500 * (attempt + 1)))
     }
     return null
 }
 
-router.post('/api/v1/chat', aiRateLimit, async (req: Request, res: Response, next: NextFunction) => {
+router.post('/api/v1/chat', aiRateLimit, aiDailyBudget, async (req: Request, res: Response, next: NextFunction) => {
     try {
         const isVoice = req.body?.voice === true
         const wantsStream = isVoice && req.body?.stream === true
 
         const parsed = chatSchema.safeParse(req.body)
         if (!parsed.success) {
-            console.error('[CHAT] Validation failed:', JSON.stringify(parsed.error.flatten()))
             throw new AppError('Invalid chat data', 400)
         }
 
@@ -62,7 +61,7 @@ router.post('/api/v1/chat', aiRateLimit, async (req: Request, res: Response, nex
                         max_tokens: 250,             
                         reasoning_effort: 'low', 
                         stream: true,
-                    } as any)
+                    } as any, providerOptions())
 
                     let chunks = 0
                     let finish = ''
@@ -73,11 +72,11 @@ router.post('/api/v1/chat', aiRateLimit, async (req: Request, res: Response, nex
                         if (delta) { chunks++; res.write(`data: ${JSON.stringify({ delta })}\n\n`) }
                     }
 
-                    console.log(`[CHAT] stream attempt ${attempt + 1}: chunks=${chunks} finish=${finish}`)
+                    log('info', 'chat_stream_completed', { attempt: attempt + 1, chunks, finish })
                     if (chunks > 0) { res.write('data: [DONE]\n\n'); return res.end() }
-                    console.warn(`[CHAT] Stream attempt ${attempt + 1}: empty (finish=${finish})`)
-                } catch (e: any) {
-                    console.error(`[CHAT] Stream attempt ${attempt + 1} failed:`, e.message)
+                    log('warn', 'chat_stream_empty', { attempt: attempt + 1, finish })
+                } catch (error: unknown) {
+                    log('warn', 'chat_stream_failed', { attempt: attempt + 1, error: errorMessage(error) })
                 }
                 if (attempt < 2) await new Promise(r => setTimeout(r, 500 * (attempt + 1)))
             }

@@ -3,6 +3,8 @@ import express, { Request, Response, NextFunction } from 'express'
 import cors from 'cors'
 import { clerkMiddleware } from '@clerk/express'
 import { AppError } from './lib/errors'
+import { errorMessage, log, requestIdOf, requestObservability } from './lib/observability'
+import { runtimeState } from './lib/runtimeState'
 
 import healthRoutes from './routes/health'
 import userRoutes from './routes/user'
@@ -27,8 +29,17 @@ import scenePlatformRoutes from './routes/scenePlatform'
 import assessmentRoutes from './routes/assessment'
 import portfolioReviewRoutes from './routes/portfolioReviews'
 import adaptationRoutes from './routes/adaptation'
+import privacyRoutes from './routes/privacy'
 
 const app = express()
+app.disable('x-powered-by')
+app.use(requestObservability)
+app.use((_req, res, next) => {
+    res.setHeader('X-Content-Type-Options', 'nosniff')
+    res.setHeader('Referrer-Policy', 'no-referrer')
+    res.setHeader('Permissions-Policy', 'camera=(), geolocation=()')
+    next()
+})
 
 const allowedOrigin =
     process.env.FRONTEND_URL ||
@@ -40,7 +51,7 @@ app.use(cors({
     credentials: true,
     methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE'],
     allowedHeaders: ['Content-Type', 'Authorization'],
-    exposedHeaders: ['Content-Length'],
+    exposedHeaders: ['Content-Length', 'X-Request-Id', 'RateLimit-Limit', 'RateLimit-Remaining', 'RateLimit-Reset', 'Retry-After'],
     maxAge: 86400,
 }))
 
@@ -48,13 +59,6 @@ app.use(cors({
 app.use(express.json({ limit: '2mb' }))
 app.use(express.urlencoded({ extended: false, limit: '2mb' }))
 app.use(clerkMiddleware())
-
-if (process.env.NODE_ENV === 'development') {
-    app.use((req: Request, _res: Response, next: NextFunction) => {
-        console.log(`[${new Date().toISOString()}] ${req.method} ${req.path}`)
-        next()
-    })
-}
 
 // Trust reverse proxy (Railway, Vercel, Fly) so req.ip works correctly
 app.set('trust proxy', 1)
@@ -81,6 +85,7 @@ app.use(scenePlatformRoutes)
 app.use(assessmentRoutes)
 app.use(portfolioReviewRoutes)
 app.use(adaptationRoutes)
+app.use(privacyRoutes)
 app.use(performanceRoutes)
 app.use(transferRoutes)
 
@@ -92,27 +97,22 @@ app.use((_req: Request, res: Response) => {
 // Error handler — must be after all routes
 function errorHandler(err: Error, req: Request, res: Response, _next: NextFunction) {
     // Log with request context for easier debugging
-    console.error(
-        `[ERROR] ${req.method} ${req.path} —`,
-        err instanceof AppError ? `${err.statusCode} ${err.message}` : err.message
-    )
-    if (process.env.NODE_ENV === 'development') {
-        console.error(err.stack)
-    }
+    const requestId = requestIdOf(res)
+    log('error', 'request_error', { requestId, method: req.method, path: req.path, status: err instanceof AppError ? err.statusCode : 500, error: errorMessage(err), ...(process.env.NODE_ENV === 'development' ? { stack: err.stack } : {}) })
 
     if (err instanceof AppError) {
-        return res.status(err.statusCode).json({ error: err.message })
+        return res.status(err.statusCode).json({ error: err.message, requestId })
     }
 
     // Handle common Express body-parser errors gracefully
     if (err instanceof SyntaxError && 'body' in err) {
-        return res.status(400).json({ error: 'Malformed JSON body' })
+        return res.status(400).json({ error: 'Malformed JSON body', requestId })
     }
     if ((err as any)?.type === 'entity.too.large') {
-        return res.status(413).json({ error: 'Request body too large' })
+        return res.status(413).json({ error: 'Request body too large', requestId })
     }
 
-    return res.status(500).json({ error: 'Internal server error' })
+    return res.status(500).json({ error: 'Internal server error', requestId })
 }
 app.use(errorHandler)
 
@@ -120,7 +120,7 @@ const PORT = parseInt(process.env.PORT || '4000', 10)
 const HOST = process.env.HOST || '0.0.0.0'
 
 const server = app.listen(PORT, HOST, () => {
-    console.log(`ecla API running on http://${HOST}:${PORT}`)
+    log('info', 'server_started', { host: HOST, port: PORT, environment: process.env.NODE_ENV ?? 'development' })
 })
 
 // ── Graceful shutdown ──
@@ -131,11 +131,12 @@ let isShuttingDown = false
 const shutdown = async (signal: string) => {
     if (isShuttingDown) return
     isShuttingDown = true
-    console.log(`\n${signal} received. Draining connections...`)
+    runtimeState.beginShutdown()
+    log('info', 'shutdown_started', { signal })
 
     // Stop accepting new connections
     server.close(() => {
-        console.log('HTTP server closed.')
+        log('info', 'http_server_closed')
     })
 
     // Disconnect Prisma (wait up to 5s)
@@ -144,9 +145,9 @@ const shutdown = async (signal: string) => {
             prisma.$disconnect(),
             new Promise((_, reject) => setTimeout(() => reject(new Error('Prisma timeout')), 5000)),
         ])
-        console.log('Prisma disconnected.')
+        log('info', 'database_disconnected')
     } catch (e) {
-        console.error('Prisma disconnect failed:', e)
+        log('error', 'database_disconnect_failed', { error: errorMessage(e) })
     }
 
     process.exit(0)
@@ -157,10 +158,10 @@ process.on('SIGINT', () => shutdown('SIGINT'))
 
 // Catch unhandled rejections so the server doesn't die silently
 process.on('unhandledRejection', (reason) => {
-    console.error('[UNHANDLED REJECTION]', reason)
+    log('error', 'unhandled_rejection', { error: errorMessage(reason) })
 })
 
 process.on('uncaughtException', (err) => {
-    console.error('[UNCAUGHT EXCEPTION]', err)
+    log('error', 'uncaught_exception', { error: errorMessage(err) })
     process.exit(1)
 })

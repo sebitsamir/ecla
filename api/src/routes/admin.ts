@@ -10,6 +10,8 @@ import { AppError } from '../lib/errors'
 import { sanitizeAIOutput, CONTENT_SYSTEM_PROMPT } from '../lib/ai'
 import { generateSchema, exerciseGenSchema } from '../lib/schemas'
 import { phases, runContentValidation } from '../lib/contentValidation'
+import { aiDailyBudget, aiRateLimit } from '../lib/rateLimit'
+import { providerOptions } from '../lib/aiPolicy'
 
 const router = Router()
 
@@ -109,7 +111,7 @@ router.post('/api/v1/admin/validate-content', async (req: Request, res: Response
     } catch (error) { next(error) }
 })
 
-router.post('/api/v1/admin/generate-flavor', async (req: Request, res: Response, next: NextFunction) => {
+router.post('/api/v1/admin/generate-flavor', aiRateLimit, aiDailyBudget, async (req: Request, res: Response, next: NextFunction) => {
     try {
         requireAdmin(req)
         const parsed = generateSchema.safeParse(req.body)
@@ -134,13 +136,13 @@ router.post('/api/v1/admin/generate-flavor', async (req: Request, res: Response,
             ],
             temperature: 0.7,
             max_tokens: 150,
-        })
+        }, providerOptions())
 
         res.json({ text: sanitizeAIOutput(completion.choices[0]?.message?.content ?? '') })
     } catch (error) { next(error) }
 })
 
-router.post('/api/v1/admin/generate-exercises', async (req: Request, res: Response, next: NextFunction) => {
+router.post('/api/v1/admin/generate-exercises', aiRateLimit, aiDailyBudget, async (req: Request, res: Response, next: NextFunction) => {
     try {
         requireAdmin(req)
         const parsed = exerciseGenSchema.safeParse(req.body)
@@ -162,7 +164,7 @@ Return ONLY a valid JSON array of exercises.`
             ],
             temperature: 0.7,
             max_tokens: 500,
-        })
+        }, providerOptions())
 
         let text = completion.choices[0]?.message?.content ?? '[]'
         text = text.replace(/```json/g, '').replace(/```/g, '').trim()

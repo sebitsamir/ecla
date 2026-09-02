@@ -1,0 +1,37 @@
+services:
+  postgres:
+    image: postgres:18
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: ecla
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?required}
+      POSTGRES_DB: ecla_staging
+    volumes: [ecla_staging_db:/var/lib/postgresql/data]
+    healthcheck: { test: [CMD-SHELL, "pg_isready -U ecla -d ecla_staging"], interval: 5s, timeout: 5s, retries: 12 }
+  migrate:
+    build: { context: ., dockerfile: api/Dockerfile, target: build }
+    env_file: deploy/staging.env
+    environment:
+      DATABASE_URL: postgresql://ecla:${POSTGRES_PASSWORD}@postgres:5432/ecla_staging
+    depends_on: { postgres: { condition: service_healthy } }
+    command: ["npx", "prisma", "migrate", "deploy"]
+    restart: "no"
+  api:
+    build: { context: ., dockerfile: api/Dockerfile, target: runtime }
+    restart: unless-stopped
+    env_file: deploy/staging.env
+    environment:
+      DATABASE_URL: postgresql://ecla:${POSTGRES_PASSWORD}@postgres:5432/ecla_staging
+      NODE_ENV: production
+    depends_on: { migrate: { condition: service_completed_successfully } }
+    ports: ["4000:4000"]
+  web:
+    build:
+      context: .
+      dockerfile: web/Dockerfile
+      args: { NEXT_PUBLIC_API_URL: "${STAGING_API_URL:?required}", NEXT_PUBLIC_ANALYTICS_ENABLED: "false" }
+    restart: unless-stopped
+    depends_on: [api]
+    ports: ["3000:3000"]
+volumes:
+  ecla_staging_db:

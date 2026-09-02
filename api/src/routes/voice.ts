@@ -4,13 +4,15 @@ import { AppError } from '../lib/errors'
 import { groq } from '../lib/groq'
 import { getOrSyncUserFast } from '../lib/auth'
 import { assessTranscriptionMatch } from '../lib/pronunciationAssess'
-import { voiceRateLimit } from '../lib/rateLimit'
+import { voiceDailyBudget, voiceRateLimit } from '../lib/rateLimit'
+import { providerOptions, TRANSCRIPTION_TIMEOUT_MS } from '../lib/aiPolicy'
 
 const router = Router()
 
 router.post(
     '/api/v1/voice/transcribe',
     voiceRateLimit,
+    voiceDailyBudget,
     raw({ type: ['audio/*', 'application/octet-stream'], limit: '15mb' }),
     async (req: Request, res: Response, next: NextFunction) => {
         try {
@@ -27,7 +29,7 @@ router.post(
                 // NEUTRAL prompt: locks language + conversational style
                 // WITHOUT biasing vocabulary toward beginner phrases
                 prompt: 'Conversación en español entre un tutor y un estudiante.',
-            }))
+            }, providerOptions(TRANSCRIPTION_TIMEOUT_MS)))
             const text = (transcription.text ?? '').trim()
             res.json({ text })
         } catch (error) { next(error) }
