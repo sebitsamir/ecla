@@ -6,6 +6,8 @@ Authenticated learners can request `GET /api/v1/privacy/export`. The export incl
 
 Temporary voice files are deleted after provider processing succeeds or fails. Raw audio is not persisted by ECLA. Provider processing requires an explicit UI consent check. Rate buckets expire after at most two windows and are removed by the retention job. Derived study-plan snapshots are retained for 90 days and learner events for 365 days. Authoritative attempts, assessment evidence, progress, and account identity remain until the learner deletes learning data or an operator fulfills an account-erasure request.
 
+Educational-pilot participation is opt-in and versioned. Privacy exports include the learner's pilot participation, coded interviews, predictions, and observations. Learning-data deletion removes the participant record and its dependent research observations. Study teams keep recruitment contact details and any re-identification key outside ECLA, and do not place raw interview transcripts or audio in pilot records.
+
 Analytics is disabled unless `NEXT_PUBLIC_ANALYTICS_ENABLED=true` and a key are both present. Do Not Track disables initialization. Autocapture, persistent browser identity, and session recording are disabled.
 
 ## Security review

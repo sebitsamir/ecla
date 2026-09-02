@@ -66,6 +66,124 @@ model User {
   sceneVisits SceneVisit[]
   assessmentSessions AssessmentSession[]
   learnerPlanSnapshots LearnerPlanSnapshot[]
+  pilotParticipations PilotParticipant[]
+}
+
+model PilotStudy {
+  id               String   @id @default(uuid())
+  slug             String   @unique
+  title            String
+  protocolVersion  String
+  consentVersion   String
+  consentTextHash  String
+  status           String   @default("draft")
+  targetMin        Int      @default(20)
+  targetMax        Int      @default(30)
+  durationWeeks    Int
+  createdBy        String
+  createdAt        DateTime @default(now())
+  startedAt        DateTime?
+  completedAt      DateTime?
+  participants     PilotParticipant[]
+  revisions        PilotRevision[]
+}
+
+model PilotParticipant {
+  id                    String   @id @default(uuid())
+  studyId               String
+  userId                String
+  participantCode       String
+  status                String   @default("invited")
+  beginnerVerifiedBy    String
+  beginnerVerifiedAt    DateTime @default(now())
+  eligibilityInstrument String
+  consentVersion        String?
+  consentedAt           DateTime?
+  withdrawnAt           DateTime?
+  withdrawalReason      String?
+  enrolledAt            DateTime @default(now())
+  study                 PilotStudy @relation(fields: [studyId], references: [id], onDelete: Restrict)
+  user                  User @relation(fields: [userId], references: [id], onDelete: Cascade)
+  measurements          PilotMeasurement[]
+  interviews            PilotInterview[]
+  predictions           PilotPrediction[]
+
+  @@unique([studyId, userId])
+  @@unique([studyId, participantCode])
+  @@index([studyId, status])
+}
+
+model PilotPrediction {
+  id                 String   @id @default(uuid())
+  participantId      String
+  competencyCode     String?
+  situationId        String
+  modelVersion       String
+  predictedMastery   Float
+  evidenceCutoffAt   DateTime
+  lockedBy           String
+  lockedAt           DateTime @default(now())
+  participant        PilotParticipant @relation(fields: [participantId], references: [id], onDelete: Cascade)
+  measurement        PilotMeasurement?
+
+  @@unique([participantId, situationId, modelVersion])
+  @@index([participantId, lockedAt])
+}
+
+model PilotMeasurement {
+  id                 String   @id @default(uuid())
+  participantId      String
+  kind               String
+  week               Int?
+  competencyCode     String?
+  situationId        String?
+  instrumentVersion  String
+  predictedMastery   Float?
+  predictionId       String?  @unique
+  observedPerformance Float
+  assessorId         String
+  assessorIndependent Boolean @default(false)
+  evidenceReference  String
+  requestKey         String
+  notes              String?
+  observedAt         DateTime
+  createdAt          DateTime @default(now())
+  participant        PilotParticipant @relation(fields: [participantId], references: [id], onDelete: Cascade)
+  prediction          PilotPrediction? @relation(fields: [predictionId], references: [id], onDelete: Restrict)
+
+  @@unique([participantId, requestKey])
+  @@index([participantId, kind, observedAt])
+  @@index([competencyCode, kind])
+}
+
+model PilotInterview {
+  id             String   @id @default(uuid())
+  participantId  String
+  week           Int
+  interviewerId  String
+  instrumentVersion String
+  codedThemes    Json
+  summary        String
+  requestKey     String
+  conductedAt    DateTime
+  createdAt      DateTime @default(now())
+  participant    PilotParticipant @relation(fields: [participantId], references: [id], onDelete: Cascade)
+
+  @@unique([participantId, week])
+  @@unique([participantId, requestKey])
+}
+
+model PilotRevision {
+  id              String   @id @default(uuid())
+  studyId         String
+  actor            String
+  decision         String
+  rationale        String
+  affectedVersions Json
+  createdAt        DateTime @default(now())
+  study            PilotStudy @relation(fields: [studyId], references: [id], onDelete: Restrict)
+
+  @@index([studyId, createdAt])
 }
 
 model LearnerPlanSnapshot {
