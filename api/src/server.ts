@@ -30,6 +30,7 @@ import assessmentRoutes from './routes/assessment'
 import portfolioReviewRoutes from './routes/portfolioReviews'
 import adaptationRoutes from './routes/adaptation'
 import privacyRoutes from './routes/privacy'
+import pilotRoutes from './routes/pilot'
 
 const app = express()
 app.disable('x-powered-by')
@@ -86,6 +87,7 @@ app.use(assessmentRoutes)
 app.use(portfolioReviewRoutes)
 app.use(adaptationRoutes)
 app.use(privacyRoutes)
+app.use(pilotRoutes)
 app.use(performanceRoutes)
 app.use(transferRoutes)
 
