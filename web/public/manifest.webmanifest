@@ -1,0 +1,10 @@
+{
+  "name": "ECLA Spanish",
+  "short_name": "ECLA",
+  "description": "Practice Spanish for real situations.",
+  "start_url": "/dashboard",
+  "display": "standalone",
+  "background_color": "#0B0B10",
+  "theme_color": "#0B0B10",
+  "icons": [{ "src": "/favicon.svg", "sizes": "any", "type": "image/svg+xml" }]
+}

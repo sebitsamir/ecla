@@ -85,6 +85,7 @@ export default function AppShell({ children }: { children: ReactNode }) {
 
     return (
         <main className="min-h-screen bg-[#0B0B10] font-body text-white">
+            <a href="#main-content" className="sr-only z-[100] rounded-lg bg-glow px-4 py-2 text-night-900 focus:not-sr-only focus:fixed focus:left-3 focus:top-3">Skip to content</a>
             {/* ── Top bar (all sizes) ─ */}
             <header className="sticky top-0 z-40 border-b border-white/5 bg-[#0B0B10]/90 backdrop-blur">
                 <div className="flex h-14 items-center gap-3 px-4 md:px-6">
@@ -160,8 +161,11 @@ export default function AppShell({ children }: { children: ReactNode }) {
                 )}
 
                 {/* ── Content  */}
-                <div className="min-w-0 flex-1 px-4 py-8 md:px-8">{children}</div>
+                <div id="main-content" className="min-w-0 flex-1 px-4 py-6 pb-24 md:px-8 md:py-8 md:pb-8">{children}</div>
             </div>
+            <nav aria-label="Primary mobile navigation" className="safe-bottom fixed inset-x-0 bottom-0 z-40 grid grid-cols-5 border-t border-white/10 bg-[#0B0B10]/95 px-1 pt-2 backdrop-blur md:hidden">
+                {NAV.filter(item => ['/dashboard','/course','/review','/chat','/progress'].includes(item.href)).map(item => { const active = pathname === item.href; return <Link key={item.href} href={item.href} aria-current={active ? 'page' : undefined} className={`flex min-h-14 flex-col items-center justify-center gap-1 rounded-lg text-[10px] font-semibold ${active ? 'text-glow' : 'text-cream/50'}`}><item.icon className="h-5 w-5" />{item.label === 'My Learning' ? 'Learn' : item.label.replace(' with Ecla','')}</Link> })}
+            </nav>
         </main>
     )
 }

@@ -5,6 +5,7 @@ import { apiFetch } from '@/lib/apiClient'
 import { useMic } from '@/hooks/useMic'
 import { GoldenResultPanel } from './GoldenResultPanel'
 import { ScenePrompt } from '@/components/scenes/ScenePrompt'
+import { SceneWorld } from '@/components/scenes/SceneWorld'
 import { GOLDEN_CONTRACT, type GoldenAttempt, type GoldenCatalog, type GoldenResult } from '../../../../packages/contracts/golden'
 
 type Props = { getToken: () => Promise<string | null>; onExit: () => void }
@@ -18,6 +19,7 @@ export default function GoldenJourney({ getToken, onExit }: Props) {
     const [error, setError] = useState<string | null>(null)
     const [feedback, setFeedback] = useState<string | null>(null)
     const [consent, setConsent] = useState(false)
+    const [resumed, setResumed] = useState(false)
     const working = useRef(false)
     const pendingResponse = useRef<{ sequence: number; answer: string; responseKey: string } | null>(null)
     const startKeys = useRef(new Map<string, string>())
@@ -44,7 +46,7 @@ export default function GoldenJourney({ getToken, onExit }: Props) {
         let cancelled = false
         request<GoldenCatalog>('/api/v1/attempts/golden').then(async next => {
             const active = next.activeAttemptId ? await request<GoldenAttempt>(`/api/v1/attempts/${next.activeAttemptId}`) : null
-            if (!cancelled) { setCatalog(next); setAttempt(active) }
+            if (!cancelled) { setCatalog(next); setAttempt(active); setResumed(!!active) }
         }).catch(reason => { if (!cancelled) setError(reason instanceof Error ? reason.message : 'Could not load your greeting journey.') })
         return () => { cancelled = true; window.speechSynthesis?.cancel() }
     }, [request])
@@ -62,7 +64,7 @@ export default function GoldenJourney({ getToken, onExit }: Props) {
         const idempotencyKey = startKeys.current.get(sceneVersionId) ?? crypto.randomUUID()
         startKeys.current.set(sceneVersionId, idempotencyKey)
         setAttempt(await request<GoldenAttempt>('/api/v1/attempts/start', { sceneVersionId, idempotencyKey }))
-        setAnswer(''); setFeedback(null); pendingResponse.current = null
+        setAnswer(''); setFeedback(null); setResumed(false); pendingResponse.current = null
     })
 
     const respond = (text: string) => run(async () => {
@@ -104,8 +106,8 @@ export default function GoldenJourney({ getToken, onExit }: Props) {
             </section>}
             {attempt?.status === 'expired' && <section><p>This attempt expired. Your existing responses remain stored; begin a fresh attempt to continue.</p><button className={button} onClick={() => run(load)}>Back to scenes</button></section>}
             {attempt?.status === 'active' && <section className="space-y-5 rounded-2xl border border-white/10 bg-white/5 p-6">
-                <p className="text-xs uppercase tracking-widest text-cream/60">{attempt.scene.setting}</p>
-                <h1 className="text-2xl font-bold">{attempt.scene.title}</h1>
+                {resumed && <p role="status" className="rounded-xl border border-leaf/25 bg-leaf/5 p-3 text-sm text-leaf">Welcome back. Your saved responses are intact; continue at task {attempt.sequence + 1}.</p>}
+                <SceneWorld setting={attempt.scene.setting} speaker={attempt.step?.speaker} title={attempt.scene.title} />
                 <progress aria-label="Scene progress" className="w-full" value={attempt.sequence} max={attempt.totalSteps} />
                 {attempt.step ? <>
                     <p className="text-xs uppercase text-cream/60">{attempt.step.stage} · Task {attempt.sequence + 1} of {attempt.totalSteps}</p>

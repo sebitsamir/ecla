@@ -62,6 +62,7 @@ before(async () => {
 })
 after(async () => {
     if (server) await new Promise<void>((resolve, reject) => server.close(error => error ? reject(error) : resolve()))
+    await db.characterMemory.deleteMany({ where: { userId: { in: users } } })
     await db.user.deleteMany({ where: { id: { in: users } } })
     await db.$disconnect()
 })
@@ -101,7 +102,10 @@ test('independent service instances serialize starts, responses and eight concur
     assert.equal((await db.userExperienceProgress.findFirstOrThrow({ where: { userId: owner } })).attempts, 1)
     assert.equal((await db.competencyMastery.findFirstOrThrow({ where: { userId: owner } })).exposureCount, 1)
     assert.equal((await db.streakLog.findFirstOrThrow({ where: { userId: owner } })).lessonsDone, 1)
+    const relationship = await db.characterMemory.findFirstOrThrow({ where: { userId: owner } })
+    assert.equal(relationship.characterId, 'marta'); assert.equal(relationship.encounters, 1)
     assert.equal((await finish(owner, 0)).xpAwarded, 0)
+    assert.equal((await db.characterMemory.findFirstOrThrow({ where: { userId: owner } })).encounters, 2)
 })
 test('a late database failure rolls back attempt, mastery, progress and XP together', async () => {
     const owner = await user(2147483647)

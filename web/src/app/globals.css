@@ -281,3 +281,9 @@ button, a, [role="button"] {
 @media (max-width: 390px) {
     .scene-mobile-compact { padding-left: 0.75rem; padding-right: 0.75rem; }
 }
+
+@keyframes scene-presence {
+    0%, 100% { transform: translateY(0) rotate(-1deg); }
+    50% { transform: translateY(-5px) rotate(1deg); }
+}
+.scene-character { animation: scene-presence 4.5s ease-in-out infinite; }
