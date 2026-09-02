@@ -3,7 +3,7 @@ import { z } from 'zod'
 import { getOrSyncUser, requireAdmin } from '../lib/auth'
 import { AppError } from '../lib/errors'
 import { prisma } from '../lib/prisma'
-import { missionRateLimit } from '../lib/rateLimit'
+import { missionDailyBudget, missionRateLimit } from '../lib/rateLimit'
 import { AssessmentService } from '../assessment/service'
 import { GroqConversationPartner } from '../assessment/providers'
 import { RubricService } from '../assessment/rubrics'
@@ -16,7 +16,7 @@ export function createAssessmentRouter(service: AssessmentService, rubrics: Rubr
     router.post('/api/v1/missions/:competencyId/sessions', missionRateLimit, async (req, res, next) => { try { const owner = await learner(req); const body = parse(z.object({ idempotencyKey: uuid }).strict(), req.body); res.json(await service.startMission(owner, String(req.params.competencyId), body.idempotencyKey)) } catch (error) { next(error) } })
     router.post('/api/v1/gateway/sessions', missionRateLimit, async (req, res, next) => { try { const owner = await learner(req); const body = parse(z.object({ idempotencyKey: uuid }).strict(), req.body); res.json(await service.startGateway(owner, body.idempotencyKey)) } catch (error) { next(error) } })
     router.get('/api/v1/assessment-sessions/:id', async (req, res, next) => { try { res.json(await service.get(await learner(req), sessionId(req))) } catch (error) { next(error) } })
-    router.post('/api/v1/assessment-sessions/:id/turns', missionRateLimit, async (req, res, next) => { try { const owner = await learner(req); const body = parse(z.object({ responseKey: uuid, text: z.string().trim().min(1).max(500), source: z.enum(['typed', 'transcript']) }).strict(), req.body); res.json(await service.turn(owner, sessionId(req), body)) } catch (error) { next(error) } })
+    router.post('/api/v1/assessment-sessions/:id/turns', missionRateLimit, missionDailyBudget, async (req, res, next) => { try { const owner = await learner(req); const body = parse(z.object({ responseKey: uuid, text: z.string().trim().min(1).max(500), source: z.enum(['typed', 'transcript']) }).strict(), req.body); res.json(await service.turn(owner, sessionId(req), body)) } catch (error) { next(error) } })
     router.post('/api/v1/assessment-sessions/:id/evaluate', async (req, res, next) => { try { const owner = await learner(req); parse(z.object({}).strict(), req.body); res.json(await service.evaluateScenario(owner, sessionId(req))) } catch (error) { next(error) } })
     router.post('/api/v1/assessment-sessions/:id/finalize', async (req, res, next) => { try { const owner = await learner(req); parse(z.object({}).strict(), req.body); res.json(await service.finalizeGateway(owner, sessionId(req))) } catch (error) { next(error) } })
     router.post('/api/v1/admin/assessment-rubrics', async (req, res, next) => { try { res.json(await rubrics.draft(admin(req), req.body)) } catch (error) { next(error) } })

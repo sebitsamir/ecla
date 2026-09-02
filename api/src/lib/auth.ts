@@ -5,6 +5,7 @@ import { AppError } from './errors'
 
 // USER CACHE: 60s TTL, bounded to 500 users
 const userCache = new Map<string, { at: number; user: any }>()
+export const invalidateUserCache = (clerkId: string) => userCache.delete(clerkId)
 
 export async function getOrSyncUserFast(req: any) {
     const id = req.auth?.userId

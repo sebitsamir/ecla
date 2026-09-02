@@ -5,10 +5,11 @@ export interface ConversationPartner { reply(request: PartnerRequest): Promise<P
 export class GroqConversationPartner implements ConversationPartner {
     async reply(request: PartnerRequest): Promise<PartnerReply> {
         const { groq } = await import('../lib/groq')
+        const { providerOptions } = await import('../lib/aiPolicy')
         const completion = await groq.chat.completions.create({ model: 'openai/gpt-oss-20b', temperature: 0.7, max_tokens: 120, reasoning_effort: 'low', response_format: { type: 'json_object' } as never, messages: [
             { role: 'system', content: `Act as ${request.role} in ${request.setting}. Objective: ${request.objective}. Speak only short natural Spanish. Never teach, translate, score, praise, or reveal the objective. Return JSON {"text":"..."}.` },
             ...request.history.map(turn => ({ role: turn.role === 'partner' ? 'assistant' as const : 'user' as const, content: turn.text })),
-        ] } as never)
+        ] } as never, providerOptions())
         const raw = completion.choices[0]?.message?.content ?? '{}'
         const parsed = JSON.parse(raw.match(/\{[\s\S]*\}/)?.[0] ?? '{}')
         const text = String(parsed.text ?? '').trim()

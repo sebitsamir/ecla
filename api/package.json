@@ -2,12 +2,13 @@
   "name": "api",
   "version": "1.0.0",
   "description": "",
-  "main": "index.js",
+  "main": "dist/api/src/server.js",
   "scripts": {
     "test": "tsx --test tests/**/*.test.ts",
     "dev": "tsx watch src/server.ts",
-    "start": "tsx src/server.ts",
-    "build": "prisma generate",
+    "start": "node dist/api/src/server.js",
+    "start:source": "tsx src/server.ts",
+    "build": "prisma generate && tsc -p tsconfig.json",
     "typecheck": "tsc --noEmit",
     "prisma:migrate": "prisma migrate dev",
     "prisma:generate": "prisma generate",
@@ -17,12 +18,14 @@
     "seed:all": "tsx prisma/seedAll.ts",
     "seed:golden": "tsx prisma/seedGolden.ts",
     "seed:scenes": "tsx prisma/seedScenes.ts",
-    "test:integration": "tsx --test --test-concurrency=1 integration/*.test.ts",
+    "test:integration": "node scripts/run-integration.mjs",
     "db:patch": "prisma db execute --schema prisma/schema.prisma --file prisma/migrations/20260829180000_phase31_learner_extensions/migration.sql",
     "db:status": "prisma migrate status",
     "validate:content": "tsx prisma/content/validate-cli.ts",
     "validate:curriculum": "tsx prisma/content/validate-curriculum-cli.ts",
-    "validate:portfolio": "tsx prisma/content/validate-portfolio-cli.ts"
+    "validate:portfolio": "tsx prisma/content/validate-portfolio-cli.ts",
+    "validate": "npm run typecheck && npm test && npm run validate:content && npm run validate:curriculum && npm run validate:portfolio",
+    "retention": "node dist/api/src/ops/retention.js"
   },
   "prisma": {
     "seed": "tsx prisma/seed.ts"

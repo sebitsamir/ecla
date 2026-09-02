@@ -8,15 +8,16 @@ import { usePathname, useSearchParams } from 'next/navigation'
 export function PostHogProvider({ children }: { children: React.ReactNode }) {
     useEffect(() => {
         // Prevent crash if the env variable is missing
-        if (!process.env.NEXT_PUBLIC_POSTHOG_KEY) {
-            console.warn('PostHog key is missing. Analytics will be disabled.')
+        if (process.env.NEXT_PUBLIC_ANALYTICS_ENABLED !== 'true' || !process.env.NEXT_PUBLIC_POSTHOG_KEY || navigator.doNotTrack === '1') {
             return
         }
 
         posthog.init(process.env.NEXT_PUBLIC_POSTHOG_KEY, {
             api_host: process.env.NEXT_PUBLIC_POSTHOG_HOST || 'https://app.posthog.com',
             capture_pageview: false, // We capture pageviews manually
-            disable_session_recording: false, // Enable session recording for heatmaps
+            disable_session_recording: true,
+            autocapture: false,
+            persistence: 'memory',
             person_profiles: 'identified_only', // Only create profiles for identified users
         })
     }, [])
