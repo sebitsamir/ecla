@@ -27,6 +27,18 @@ export default clerkMiddleware(async (auth, request) => {
     }
 
     return NextResponse.next()
+}, {
+    contentSecurityPolicy: {
+        directives: {
+            'base-uri': ['self'],
+            'connect-src': ['https:', 'wss:'],
+            'font-src': ['self', 'https://fonts.gstatic.com'],
+            'frame-ancestors': ['none'],
+            'img-src': ['data:', 'blob:', 'https:'],
+            'media-src': ['self', 'blob:'],
+            'object-src': ['none'],
+        },
+    },
 })
 
 export const config = {

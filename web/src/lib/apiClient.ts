@@ -37,14 +37,24 @@ export class ApiError extends Error {
     }
 }
 
-export async function apiFetch<T>(
-    path: string,
-    getToken: () => Promise<string | null>,
-    init?: RequestInit,
-): Promise<T> {
-    try {
-        const token = await getToken()
-        const res = await fetch(`${API_URL}${path}`, {
+type TokenGetter = (options?: { skipCache?: boolean }) => Promise<string | null>
+
+const tokenDelay = (milliseconds: number) => new Promise(resolve => setTimeout(resolve, milliseconds))
+
+/** Clerk can report a signed-in session just before its first token is available. */
+async function acquireToken(getToken: TokenGetter, skipCache = false): Promise<string> {
+    for (let attempt = 0; attempt < 3; attempt += 1) {
+        const token = await getToken(skipCache ? { skipCache: true } : undefined)
+        if (token) return token
+        if (attempt < 2) await tokenDelay(100 * (attempt + 1))
+    }
+    throw new ApiError('unauthorized', 'Your session is still starting. Please retry.', 401)
+}
+
+async function authenticatedFetch(path: string, getToken: TokenGetter, init?: RequestInit) {
+    const request = async (skipCache = false) => {
+        const token = await acquireToken(getToken, skipCache)
+        return fetch(`${API_URL}${path}`, {
             ...init,
             headers: {
                 ...(init?.headers ?? {}),
@@ -52,6 +62,19 @@ export async function apiFetch<T>(
                 ...(init?.body && !(init.body instanceof FormData) ? { 'Content-Type': 'application/json' } : {}),
             },
         })
+    }
+
+    const response = await request()
+    return response.status === 401 ? request(true) : response
+}
+
+export async function apiFetch<T>(
+    path: string,
+    getToken: TokenGetter,
+    init?: RequestInit,
+): Promise<T> {
+    try {
+        const res = await authenticatedFetch(path, getToken, init)
         if (res.status === 401) throw new ApiError('unauthorized', 'Please sign in again.', 401)
         if (res.status === 403) throw new ApiError('forbidden', 'You do not have access to this.', 403)
         if (res.status === 404) throw new ApiError('not_found', 'That resource was not found.', 404)
