@@ -44,12 +44,6 @@ interface GoalOption {
     icon: React.ComponentType<{ className?: string; style?: React.CSSProperties }>
 }
 
-interface QuizQuestion {
-    prompt: string
-    options: string[]
-    answer: string
-}
-
 const motivations: MotivationOption[] = [
     { id: 'TRAVEL', label: 'Travel', description: 'Navigate new countries with confidence', icon: Plane, defaultMode: 'IMMERSION' },
     { id: 'HERITAGE', label: 'Family & Heritage', description: 'Connect with your roots and loved ones', icon: Heart, defaultMode: 'STORY' },
@@ -70,20 +64,6 @@ const dailyGoals: GoalOption[] = [
     { xp: 100, label: 'Intensive', description: '20+ minutes per day', icon: Target },
 ]
 
-const placementQuiz: QuizQuestion[] = [
-    { prompt: '¿Cómo te llamas?', options: ['Me llamo Ana', 'Tengo hambre', 'Está lejos', 'Hay agua'], answer: 'Me llamo Ana' },
-    { prompt: '¿Dónde está el baño?', options: ['Está cerca', 'Es rojo', 'Son las tres', 'Estoy cansado'], answer: 'Está cerca' },
-    { prompt: 'Ayer ___ al cine.', options: ['fui', 'voy', 'iré', 'iría'], answer: 'fui' },
-    { prompt: 'Si tuviera tiempo, ___ más español.', options: ['estudiaría', 'estudio', 'estudiaré', 'estudié'], answer: 'estudiaría' },
-    { prompt: 'No creo que él ___ razón.', options: ['tenga', 'tiene', 'tuvo', 'tendrá'], answer: 'tenga' },
-]
-
-function calculateLevel(experience: ExperienceLevel, score: number): string {
-    if (experience === 'BEGINNER') return 'A1'
-    if (experience === 'SOME_BASICS') return score >= 3 ? 'A2' : 'A1'
-    return score >= 3 ? 'B1' : 'A2'
-}
-
 export default function OnboardingPage() {
     const router = useRouter()
     const { isLoaded, isSignedIn, getToken } = useAuth()
@@ -98,10 +78,6 @@ export default function OnboardingPage() {
     const [dailyGoalXp, setDailyGoalXp] = useState(50)
 
     const [experience, setExperience] = useState<ExperienceLevel | null>(null)
-    const [showQuiz, setShowQuiz] = useState(false)
-    const [quizIndex, setQuizIndex] = useState(0)
-    const [quizScore, setQuizScore] = useState(0)
-    const [currentLevel, setCurrentLevel] = useState('A1')
 
     useEffect(() => {
         async function checkStatus() {
@@ -146,33 +122,8 @@ export default function OnboardingPage() {
 
     const selectExperience = useCallback((value: ExperienceLevel) => {
         setExperience(value)
-        if (value === 'BEGINNER') {
-            setShowQuiz(false)
-            setCurrentLevel('A1')
-            setTimeout(() => setStep(4), 200)
-            return
-        }
-        setShowQuiz(true)
-        setQuizIndex(0)
-        setQuizScore(0)
+        setTimeout(() => setStep(4), 200)
     }, [])
-
-    const answerQuiz = useCallback(
-        (selectedAnswer: string) => {
-            const isCorrect = placementQuiz[quizIndex].answer === selectedAnswer
-            const nextScore = isCorrect ? quizScore + 1 : quizScore
-            setQuizScore(nextScore)
-            if (quizIndex < placementQuiz.length - 1) {
-                setQuizIndex(quizIndex + 1)
-                return
-            }
-            if (experience) {
-                setCurrentLevel(calculateLevel(experience, nextScore))
-            }
-            setTimeout(() => setStep(4), 200)
-        },
-        [quizIndex, quizScore, experience]
-    )
 
     const selectDailyGoal = useCallback((xp: number) => {
         setDailyGoalXp(xp)
@@ -195,7 +146,6 @@ export default function OnboardingPage() {
                     motivation,
                     preferredMode,
                     dailyGoalXp,
-                    currentLevel,
                 }),
             })
             if (!res.ok) {
@@ -206,7 +156,7 @@ export default function OnboardingPage() {
                 motivation: motivation,
                 preferred_mode: preferredMode,
                 daily_goal_xp: dailyGoalXp,
-                starting_level: currentLevel,
+                starting_preference: experience,
             })
             router.push('/dashboard')
             router.refresh()
@@ -351,14 +301,14 @@ export default function OnboardingPage() {
                             </div>
                         )}
 
-                        {step === 3 && !showQuiz && (
+                        {step === 3 && (
                             <div className="space-y-6">
                                 <div>
                                     <h1 className="font-display text-2xl md:text-3xl font-bold mb-2">
-                                        What&apos;s your current level?
+                                        How much Spanish have you used?
                                     </h1>
                                     <p className="text-cream/60">
-                                        We&apos;ll place you at the right starting point. Complete beginners skip the quiz.
+                                        This adjusts your first support level. Placement comes from completed, server-scored situations rather than a self-scored quiz.
                                     </p>
                                 </div>
                                 <div className="space-y-3">
@@ -366,51 +316,20 @@ export default function OnboardingPage() {
                                         <button
                                             key={level}
                                             onClick={() => selectExperience(level)}
-                                            className="w-full p-4 sm:p-5 rounded-xl border border-white/10 hover:border-glow/50 hover:bg-glow/5 text-left transition-all duration-200 active:scale-[0.98]"
+                                            aria-pressed={experience === level}
+                                            className={`w-full p-4 sm:p-5 rounded-xl border hover:border-glow/50 hover:bg-glow/5 text-left transition-all duration-200 active:scale-[0.98] ${experience === level ? 'border-glow/50 bg-glow/5' : 'border-white/10'}`}
                                         >
                                             <p className="font-semibold mb-1">
-                                                {level === 'BEGINNER' ? 'Complete Beginner' : level === 'SOME_BASICS' ? 'Some Basics' : 'Intermediate or Higher'}
+                                                {level === 'BEGINNER' ? 'This is my first Spanish' : level === 'SOME_BASICS' ? 'I know a few useful phrases' : 'I have used Spanish before'}
                                             </p>
                                             <p className="text-xs sm:text-sm text-cream/50">
-                                                {level === 'BEGINNER' ? 'I know nothing or only a few words' : level === 'SOME_BASICS' ? 'I know a few phrases and common words' : 'I can hold a basic conversation'}
+                                                {level === 'BEGINNER' ? 'Begin with maximum support and a calm first encounter.' : level === 'SOME_BASICS' ? 'Begin with familiar situations, then fade support from observed success.' : 'Start at Pre-A1 and let independent evidence open harder actions quickly.'}
                                             </p>
                                         </button>
                                     ))}
                                 </div>
                                 <button onClick={() => setStep(2)} className="flex items-center gap-2 text-sm text-cream/50 hover:text-cream transition-colors">
                                     <ArrowLeft className="w-4 h-4" /> Back
-                                </button>
-                            </div>
-                        )}
-
-                        {step === 3 && showQuiz && (
-                            <div className="space-y-6">
-                                <div>
-                                    <div className="flex items-center justify-between mb-4">
-                                        <p className="text-sm text-cream/50">Question {quizIndex + 1} of {placementQuiz.length}</p>
-                                        <div className="flex gap-1">
-                                            {placementQuiz.map((_, i) => (
-                                                <div key={i} className={`h-1 w-6 rounded-full ${i < quizIndex ? 'bg-glow' : i === quizIndex ? 'bg-glow/60' : 'bg-white/20'}`} />
-                                            ))}
-                                        </div>
-                                    </div>
-                                    <h1 className="font-display text-xl sm:text-2xl md:text-3xl font-bold mb-6">
-                                        {placementQuiz[quizIndex].prompt}
-                                    </h1>
-                                </div>
-                                <div className="space-y-2 sm:space-y-3">
-                                    {placementQuiz[quizIndex].options.map(option => (
-                                        <button
-                                            key={option}
-                                            onClick={() => answerQuiz(option)}
-                                            className="w-full p-3.5 sm:p-4 rounded-xl border border-white/10 hover:border-glow/50 hover:bg-glow/5 text-left transition-all duration-200 font-medium text-sm sm:text-base active:scale-[0.98]"
-                                        >
-                                            {option}
-                                        </button>
-                                    ))}
-                                </div>
-                                <button onClick={() => setShowQuiz(false)} className="flex items-center gap-2 text-sm text-cream/50 hover:text-cream transition-colors">
-                                    <ArrowLeft className="w-4 w-4" /> Back
                                 </button>
                             </div>
                         )}
@@ -497,11 +416,12 @@ export default function OnboardingPage() {
                                     </div>
                                     <div className="p-3.5 sm:p-4 rounded-xl bg-white/[0.03] border border-white/5 flex items-center justify-between">
                                         <div className="min-w-0 flex-1">
-                                            <p className="text-xs sm:text-sm text-cream/50 mb-1">Starting Level</p>
-                                            <p className="font-semibold">{currentLevel}</p>
+                                            <p className="text-xs sm:text-sm text-cream/50 mb-1">Placement</p>
+                                            <p className="font-semibold">Evidence-based Pre-A1 start</p>
                                         </div>
                                         <GraduationCap className="w-5 h-5 text-cream/50 flex-shrink-0" />
                                     </div>
+                                    <p className="rounded-xl border border-glow/20 bg-glow/5 p-4 text-sm leading-relaxed text-cream/65">After your first completed situation, ECLA will explain your placement and next actions from observed performance, support use, and context—not from this preference form.</p>
                                     <div className="p-3.5 sm:p-4 rounded-xl bg-white/[0.03] border border-white/5 flex items-center justify-between">
                                         <div className="min-w-0 flex-1">
                                             <p className="text-xs sm:text-sm text-cream/50 mb-1">Daily Goal</p>

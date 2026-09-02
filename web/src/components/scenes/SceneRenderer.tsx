@@ -2,6 +2,7 @@
 import { useEffect, useState } from 'react'
 import type { SceneDelivery } from '../../../../packages/contracts/scene'
 import { ScenePrompt } from './ScenePrompt'
+import { SceneWorld } from './SceneWorld'
 
 /** Renders only the server document; no local curriculum compilation or mastery writes. */
 export function SceneRenderer({ delivery, preview = false, onExit }: { delivery: SceneDelivery; preview?: boolean; onExit: () => void }) {
@@ -10,12 +11,12 @@ export function SceneRenderer({ delivery, preview = false, onExit }: { delivery:
     const step = delivery.document.steps[sequence]
     useEffect(() => () => { window.speechSynthesis?.cancel() }, [])
     const next = () => { window.speechSynthesis?.cancel(); setSequence(value => value + 1); setAnswer('') }
-    return <section className="mx-auto max-w-2xl space-y-5 rounded-2xl border border-white/10 p-6 text-cream">
+    return <section className="mx-auto max-w-2xl space-y-5 text-cream">
         <p role="status">{preview ? 'Author preview' : 'Practice only'} · No XP, score or mastery is awarded.</p>
-        <h1 className="text-3xl font-bold">{delivery.document.title}</h1>
-        <p>{delivery.document.setting}</p><p className="text-sm text-cream/60">{delivery.document.objective}</p>
+        <SceneWorld setting={delivery.document.setting} speaker={step?.speaker} title={delivery.document.title} />
+        <p className="text-sm text-cream/60">{delivery.document.objective}</p>
         <progress aria-label="Scene progress" className="w-full" max={delivery.document.steps.length} value={sequence} />
-        {step ? <div key={step.id} className="space-y-4">
+        {step ? <div key={step.id} className="animate-fade-up space-y-4 rounded-2xl border border-white/10 bg-[#13131B] p-5 sm:p-6">
             <ScenePrompt step={step} />
             {step.kind === 'encounter' && <button className="rounded-xl border px-4 py-3" onClick={next}>Continue</button>}
             {step.kind === 'choice' && <div className="grid gap-3">{step.options?.map(option => <button className="rounded-xl border border-white/20 p-3 text-left" key={option.id} onClick={next}>{option.label}</button>)}</div>}

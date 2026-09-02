@@ -33,7 +33,7 @@ export function useSpeech(defaultLang = 'es-ES') {
         setSpeaking(false)
     }, [supported])
 
-    const speak = useCallback((text: string, opts?: { audioUrl?: string | null; lang?: string }) => {
+    const speak = useCallback((text: string, opts?: { audioUrl?: string | null; lang?: string; rate?: number }) => {
         if (!text) return
         stop()
         const lang = opts?.lang ?? defaultLang
@@ -52,7 +52,7 @@ export function useSpeech(defaultLang = 'es-ES') {
         if (!supported) return
         const u = new SpeechSynthesisUtterance(text)
         u.lang = lang
-        u.rate = 0.92   // slightly slower = learner-friendly
+        u.rate = Math.max(0.5, Math.min(1.2, opts?.rate ?? 0.92))
         u.pitch = 1
         const prefix = lang.split('-')[0]
         const voice =

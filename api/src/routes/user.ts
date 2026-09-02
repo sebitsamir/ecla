@@ -107,7 +107,6 @@ router.post('/api/v1/sync-user', async (req: Request, res: Response, next: NextF
  * - motivation: 'TRAVEL' | 'HERITAGE' | 'CAREER' | 'FUN'
  * - preferredMode: 'STORY' | 'DRILL' | 'IMMERSION' | 'PROFESSIONAL'
  * - dailyGoalXp: 20 | 50 | 100
- * - currentLevel: 'A1' | 'A2' | 'B1' | 'B2' | 'C1' (optional)
  * 
  * Updates user record:
  * - Sets onboardingCompleted: true
@@ -127,7 +126,7 @@ router.post('/api/v1/onboarding/complete', async (req: Request, res: Response, n
             throw new AppError('Invalid onboarding data', 400)
         }
 
-        const { motivation, preferredMode, dailyGoalXp, currentLevel } = parsed.data
+        const { motivation, preferredMode, dailyGoalXp } = parsed.data
 
         const user = await prisma.user.update({
             where: { clerkId: userId },
@@ -135,7 +134,6 @@ router.post('/api/v1/onboarding/complete', async (req: Request, res: Response, n
                 motivation,
                 preferredMode,
                 dailyGoalXp,
-                currentLevel: currentLevel ?? null,
                 onboardingCompleted: true,
             },
         })

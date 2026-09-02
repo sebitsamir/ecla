@@ -3,6 +3,7 @@ import { Baloo_2, Nunito } from 'next/font/google';
 import { ClerkProvider } from "@clerk/nextjs";
 import { PostHogProvider } from '@/components/PostHogProvider';
 import FeedbackButton from '@/components/FeedbackButton'; // <--- ADD THIS
+import ServiceWorkerRegistration from '@/components/ServiceWorkerRegistration'
 import "./globals.css";
 
 const baloo = Baloo_2({ subsets: ['latin'], variable: '--font-display', weight: ['600', '700', '800'] })
@@ -16,6 +17,7 @@ export const metadata: Metadata = {
   title: 'Ecla',
   description: 'One curriculum. Four ways to learn.',
   icons: [{ url: '/favicon.svg', type: 'image/svg+xml' }],
+  manifest: '/manifest.webmanifest',
 };
 
 export default function RootLayout({
@@ -30,6 +32,7 @@ export default function RootLayout({
           <PostHogProvider>
             {children}
             <FeedbackButton />
+            <ServiceWorkerRegistration />
           </PostHogProvider>
         </body>
       </html>

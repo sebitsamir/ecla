@@ -15,7 +15,7 @@ describe('unverified assessment containment', () => {
         for (const routes of await Promise.all([
             import('../src/routes/learner'), import('../src/routes/lessons'),
             import('../src/routes/gateway'), import('../src/routes/missions'),
-            import('../src/routes/performance'),
+            import('../src/routes/performance'), import('../src/routes/memory'),
         ])) app.use(routes.default)
         const server = app.listen(0, '127.0.0.1')
         await once(server, 'listening')
@@ -26,6 +26,7 @@ describe('unverified assessment containment', () => {
                 '/api/v1/lessons/complete', '/api/v1/learner/demonstrate',
                 '/api/v1/evidence', '/api/v1/gateway/complete',
                 '/api/v1/missions/forged/evaluate', '/api/v1/learner/performance',
+                '/api/v1/learner/error', '/api/v1/learner/memory/encounter',
             ]
             const responses = await Promise.all(paths.flatMap(path => Array.from({ length: 3 }, () => fetch(
                 `http://127.0.0.1:${address.port}${path}/`,

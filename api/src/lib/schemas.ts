@@ -4,8 +4,7 @@ export const onboardingSchema = z.object({
     motivation: z.enum(['TRAVEL', 'HERITAGE', 'CAREER', 'FUN']),
     preferredMode: z.enum(['STORY', 'DRILL', 'IMMERSION', 'PROFESSIONAL']),
     dailyGoalXp: z.number().int().min(1).max(1000),
-    currentLevel: z.enum(['A1', 'A2', 'B1', 'B2', 'C1']).optional(),
-})
+}).strict()
 
 export const gradeRequestSchema = z.object({
     answer: z.string().min(1).max(500),

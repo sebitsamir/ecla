@@ -19,6 +19,7 @@ import { useAuthReady, useProgressTick } from '@/hooks/useAuthReady'
 import { fetchHome, invalidateHomeCache, type LearnerHome } from '@/lib/summary'
 import { ApiError } from '@/lib/apiClient'
 import Link from 'next/link'
+import RelationshipsCard from '@/components/ecla/dashboard/RelationshipsCard'
 
 export default function DashboardPage() {
   const { isLoaded, isSignedIn, getToken } = useAuthReady()
@@ -107,6 +108,8 @@ export default function DashboardPage() {
             <WeekEvidence week={summary.week} />
             <RetentionCard reviews={home?.retentionReviews} />
           </div>
+
+          <RelationshipsCard getToken={getToken} />
 
           <section>
             <p className="mb-3 text-xs font-bold uppercase tracking-wider text-cream/50">Continue learning</p>

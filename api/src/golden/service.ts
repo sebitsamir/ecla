@@ -201,6 +201,17 @@ export class GoldenService {
                 performanceJson: json({ source: GOLDEN_CONTRACT, scope: 'text-mediated', educatorReviewed: snapshot.reviewed, attemptId: id }),
             }
             await tx.competencyMastery.upsert({ where: { userId_competencyId: { userId, competencyId: attempt.competencyId } }, create: { userId, competencyId: attempt.competencyId, ...mastery }, update: mastery })
+            const speaker = snapshot.definition.steps.find(step => step.speaker)?.speaker
+            if (speaker) {
+                const characterId = speaker.toLocaleLowerCase().normalize('NFD').replace(/\p{M}/gu, '').replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '')
+                const memory = await tx.characterMemory.findUnique({ where: { userId_characterId: { userId, characterId } } })
+                const encounters = (memory?.encounters ?? 0) + 1
+                await tx.characterMemory.upsert({
+                    where: { userId_characterId: { userId, characterId } },
+                    create: { userId, characterId, encounters: 1, relationship: 'stranger', location: snapshot.definition.setting, memories: [`Completed: ${snapshot.definition.title}`] },
+                    update: { encounters: { increment: 1 }, lastMetAt: now, relationship: encounters >= 7 ? 'friend' : encounters >= 3 ? 'acquaintance' : 'stranger', location: snapshot.definition.setting, memories: json([...(Array.isArray(memory?.memories) ? memory.memories as string[] : []), `Completed: ${snapshot.definition.title}`].slice(-10)) },
+                })
+            }
             if (xpAwarded) {
                 await tx.user.update({ where: { id: userId }, data: { xpTotal: { increment: xpAwarded }, lastActiveAt: now } })
                 const date = now.toISOString().slice(0, 10)

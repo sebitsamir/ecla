@@ -17,6 +17,9 @@ export type CharacterMemory = {
     encounters: number
     firstMetAt: string
     lastMetAt: string
+    relationship?: string | null
+    memories?: string[] | null
+    meta?: { personality: string; occupation: string; location: string } | null
 }
 
 export type LearnerMemory = {
