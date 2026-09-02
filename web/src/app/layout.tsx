@@ -26,16 +26,16 @@ export default function RootLayout({
   children: React.ReactNode;
 }) {
   return (
-    <ClerkProvider>
-      <html lang="en">
-        <body className={`${baloo.variable} ${nunito.variable}`}>
+    <html lang="en">
+      <body className={`${baloo.variable} ${nunito.variable}`}>
+        <ClerkProvider dynamic>
           <PostHogProvider>
             {children}
             <FeedbackButton />
             <ServiceWorkerRegistration />
           </PostHogProvider>
-        </body>
-      </html>
-    </ClerkProvider>
+        </ClerkProvider>
+      </body>
+    </html>
   );
 }
