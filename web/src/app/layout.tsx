@@ -1,13 +1,13 @@
 import type { Metadata } from "next";
-import { Baloo_2, Nunito } from 'next/font/google';
+import { Instrument_Serif, Geist } from 'next/font/google';
 import { ClerkProvider } from "@clerk/nextjs";
 import { PostHogProvider } from '@/components/PostHogProvider';
 import FeedbackButton from '@/components/FeedbackButton'; // <--- ADD THIS
 import ServiceWorkerRegistration from '@/components/ServiceWorkerRegistration'
 import "./globals.css";
 
-const baloo = Baloo_2({ subsets: ['latin'], variable: '--font-display', weight: ['600', '700', '800'] })
-const nunito = Nunito({ subsets: ['latin'], variable: '--font-body', weight: ['400', '600', '700', '800'] })
+const instrumentserif = Instrument_Serif({ subsets: ['latin'], variable: '--font-ecla-display', weight: ['400'] })
+const geist = Geist({ subsets: ['latin'], variable: '--font-ecla-body', display: 'swap' })
 
 export const viewport = {
   width: 'device-width',
@@ -27,7 +27,7 @@ export default function RootLayout({
 }) {
   return (
     <html lang="en">
-      <body className={`${baloo.variable} ${nunito.variable}`}>
+      <body className={`${instrumentserif.variable} ${geist.variable}`}>
         <ClerkProvider dynamic>
           <PostHogProvider>
             {children}
