@@ -32,29 +32,32 @@ export default function NextActionCard({ action }: { action: NextAction }) {
             : 'Enter the scene'
 
     return (
-        <section className="flex h-full flex-col rounded-2xl border border-glow/25 bg-[#13131B] p-5 sm:p-6">
-            <p className="text-[11px] font-semibold uppercase tracking-widest text-glow">
+        <section className="relative flex h-full flex-col overflow-hidden rounded-experience border border-ember/30 bg-carbon p-5 shadow-glow-md sm:p-6">
+            <div aria-hidden className="absolute inset-0 bg-[radial-gradient(circle_at_100%_0%,rgba(255,122,61,.18),transparent_55%)]" />
+            <div className="relative flex h-full flex-col">
+            <p className="text-[11px] font-semibold uppercase tracking-[.18em] text-ember-soft">
                 {action?.kind === 'review' ? 'Due today' : 'Your next step'}
             </p>
-            <h2 className="font-display mt-2 text-xl font-bold leading-tight text-cream sm:text-2xl">
+            <h2 className="font-display mt-3 text-2xl leading-tight text-ivory">
                 {title}
             </h2>
             {description && (
-                <p className="mt-2 text-sm leading-relaxed text-cream/60">{description}</p>
+                <p className="mt-3 text-sm leading-relaxed text-stone">{description}</p>
             )}
             {action?.reason && (
-                <p className="mt-3 flex items-start gap-2 text-xs leading-relaxed text-cream/45">
-                    <Lightbulb className="mt-0.5 h-3.5 w-3.5 flex-shrink-0 text-glow" />
+                <p className="mt-4 flex items-start gap-2 text-xs leading-relaxed text-stone">
+                    <Lightbulb className="mt-0.5 size-3.5 shrink-0 text-ember-soft" />
                     {action.reason}
                 </p>
             )}
             <div className="mt-auto pt-5">
                 <Link
                     href={href}
-                    className="inline-flex w-full items-center justify-center gap-2 rounded-xl bg-glow py-3.5 text-sm font-bold text-night-900 shadow-[0_0_24px_rgba(255,200,0,0.2)] transition-all hover:bg-glow/90 active:scale-[0.98] sm:w-auto sm:px-6"
+                    className="ecla-control inline-flex min-h-12 w-full items-center justify-center gap-2 rounded-control bg-ember px-6 text-sm font-semibold text-obsidian hover:bg-ember-soft"
                 >
                     {cta} <ArrowRight className="h-4 w-4" />
                 </Link>
+            </div>
             </div>
         </section>
     )
