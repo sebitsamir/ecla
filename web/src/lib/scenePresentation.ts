@@ -1,5 +1,13 @@
 export type SceneMood = 'cafe' | 'street' | 'classroom' | 'service' | 'home'
 
+export const sceneBackground: Record<SceneMood, string> = {
+    cafe: '/worlds/spanish-cafe-scene-v1.webp',
+    street: '/worlds/spanish-evening-v2.webp',
+    classroom: '/worlds/spanish-day-v1.webp',
+    service: '/worlds/spanish-night-v1.webp',
+    home: '/worlds/spanish-morning-v1.webp',
+}
+
 export function sceneMood(setting: string): SceneMood {
     const value = setting.toLowerCase()
     if (/café|cafe|restaurant|market|shop|kiosk/.test(value)) return 'cafe'
