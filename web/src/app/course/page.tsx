@@ -13,6 +13,8 @@ import NextActionCard from '@/components/ecla/dashboard/NextActionCard'
 import { useAuthReady, useProgressTick } from '@/hooks/useAuthReady'
 import { fetchHome, invalidateHomeCache, type LearnerHome } from '@/lib/summary'
 import { ApiError } from '@/lib/apiClient'
+import Image from 'next/image'
+import { Check, Compass, Lock, Sparkles } from 'lucide-react'
 
 export default function CoursePage() {
     const { isLoaded, isSignedIn, userId, getToken } = useAuthReady()
@@ -71,42 +73,40 @@ export default function CoursePage() {
     const all = (course?.units ?? []).flatMap(u => u.competencies ?? [])
     const mastered = all.filter(c => c.status === 'mastered').length
     const developing = all.filter(c => c.status === 'developing').length
-    const ahead = all.length - mastered - developing
+    const locked = all.filter(c => c.status === 'locked').length
+    const available = all.length - locked
 
     const hereId = course?.units.find(u => (u.counts?.developing ?? 0) > 0)?.id
         ?? course?.units.find(u => (u.counts?.upcoming ?? 0) > 0)?.id
+    const focus = selected ?? all.find(c => c.status === 'developing')
+        ?? all.find(c => c.status !== 'locked')
+        ?? null
 
     return (
         <AppShell>
             {!course ? (
-                <p className="text-sm text-cream/60">No published course yet.</p>
+                <div className="ecla-surface rounded-experience p-8 text-stone">No published course is available yet.</div>
             ) : (
-                <div className="grid gap-8 xl:grid-cols-[minmax(0,1fr)_360px]">
-                    <div className="min-w-0">
-                        <header className="mb-6 sm:mb-8">
-                            <p className="text-[11px] font-semibold uppercase tracking-widest text-glow">
-                                Spanish · {String(course.level).replace(/_/g, '-')}
-                            </p>
-                            <h1 className="font-display mt-1 text-2xl font-bold text-cream sm:text-3xl md:text-4xl">
-                                {course.title}
-                            </h1>
-                            <p className="mt-2 max-w-2xl text-sm text-cream/50">
-                                Nine units · {all.length} scenes · curriculum from your database, experienced in context.
-                            </p>
-                            <div className="mt-3 flex flex-wrap gap-2">
-                                <span className="rounded-full border border-leaf/30 bg-leaf/10 px-3 py-1 text-[11px] font-semibold text-leaf">
-                                    {mastered} demonstrated
-                                </span>
-                                <span className="rounded-full border border-glow/30 bg-glow/10 px-3 py-1 text-[11px] font-semibold text-glow">
-                                    {developing} developing
-                                </span>
-                                <span className="rounded-full border border-white/10 bg-white/5 px-3 py-1 text-[11px] font-semibold text-cream/50">
-                                    {ahead} ahead
-                                </span>
+                <div>
+                    <section className="relative mb-10 min-h-[24rem] overflow-hidden rounded-experience border border-line shadow-[0_30px_100px_rgba(0,0,0,.42)] sm:min-h-[29rem]">
+                        <Image src="/worlds/spanish-evening-v2.webp" alt="" fill priority sizes="(max-width: 1320px) 100vw, 1240px" className="object-cover" />
+                        <div aria-hidden className="absolute inset-0 bg-[linear-gradient(90deg,rgba(9,9,10,.92)_0%,rgba(9,9,10,.66)_52%,rgba(9,9,10,.22)_100%)]" />
+                        <div aria-hidden className="absolute inset-0 bg-gradient-to-t from-obsidian/75 via-transparent to-black/20" />
+                        <div className="relative flex min-h-[24rem] max-w-3xl flex-col justify-end p-6 sm:min-h-[29rem] sm:p-10">
+                            <p className="flex items-center gap-2 text-xs font-semibold uppercase tracking-[.2em] text-ember-soft"><Compass className="size-4" />Spanish · {String(course.level).replace(/_/g, '-')}</p>
+                            <h1 className="font-display mt-3 text-4xl leading-[1.02] text-ivory sm:text-6xl">{course.title}</h1>
+                            <p className="mt-4 max-w-xl text-base leading-relaxed text-ivory/75">{course.units.length} units · {all.length} capabilities · one connected journey through real situations.</p>
+                            <div className="mt-7 grid max-w-2xl grid-cols-3 gap-2 sm:gap-3">
+                                <div className="rounded-control border border-white/15 bg-black/35 p-3 backdrop-blur-md sm:p-4"><p className="flex items-center gap-1.5 text-[10px] uppercase tracking-wide text-ivory/55"><Check className="size-3 text-success" />Demonstrated</p><p className="font-display mt-1 text-2xl sm:text-3xl">{mastered}</p></div>
+                                <div className="rounded-control border border-white/15 bg-black/35 p-3 backdrop-blur-md sm:p-4"><p className="flex items-center gap-1.5 text-[10px] uppercase tracking-wide text-ivory/55"><Sparkles className="size-3 text-ember-soft" />Developing</p><p className="font-display mt-1 text-2xl sm:text-3xl">{developing}</p></div>
+                                <div className="rounded-control border border-white/15 bg-black/35 p-3 backdrop-blur-md sm:p-4"><p className="flex items-center gap-1.5 text-[10px] uppercase tracking-wide text-ivory/55"><Lock className="size-3 text-stone" />Available</p><p className="font-display mt-1 text-2xl sm:text-3xl">{available}</p></div>
                             </div>
-                        </header>
-
-                        <ol className="space-y-3 sm:space-y-4">
+                        </div>
+                    </section>
+                <div className="grid gap-10 xl:grid-cols-[minmax(0,1fr)_360px]">
+                    <div className="min-w-0">
+                        <header className="mb-7"><p className="text-xs font-semibold uppercase tracking-[.2em] text-ember-soft">Your route</p><h2 className="font-display mt-2 text-3xl text-ivory sm:text-4xl">Follow the path at your pace.</h2><p className="mt-3 max-w-2xl text-sm leading-relaxed text-stone">Each unit opens from your recorded progress. Select an available step to enter its real-world scene.</p></header>
+                        <ol className="space-y-6">
                             {course.units.map((u, i) => (
                                 <StageCard
                                     key={u.id}
@@ -130,18 +130,19 @@ export default function CoursePage() {
 
                     <div className="min-w-0 space-y-5 xl:sticky xl:top-20 xl:self-start">
                         {summary?.nextAction && <NextActionCard action={summary.nextAction} />}
-                        <CompetencyDetail competency={selected ?? (all[0] ? {
-                            id: all[0].id,
-                            code: all[0].code,
-                            title: all[0].title,
-                            canDo: all[0].canDo,
-                            status: all[0].status,
-                            href: all[0].href,
-                            patterns: all[0].patterns,
-                            evidence: all[0].evidence ?? undefined,
-                        } : null)} />
+                        <CompetencyDetail competency={focus ? {
+                            id: focus.id,
+                            code: focus.code,
+                            title: focus.title,
+                            canDo: focus.canDo,
+                            status: focus.status,
+                            href: focus.href,
+                            patterns: focus.patterns,
+                            evidence: focus.evidence ?? undefined,
+                        } : null} />
                         {summary && <AbilityProfile dimensions={summary.dimensions ?? []} />}
                     </div>
+                </div>
                 </div>
             )}
         </AppShell>

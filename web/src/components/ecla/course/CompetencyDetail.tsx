@@ -4,7 +4,7 @@
  * CompetencyDetail — Phase 27: curriculum visible without textbook feel.
  */
 import Link from 'next/link'
-import { ArrowRight } from 'lucide-react'
+import { ArrowRight, CheckCircle2, Circle } from 'lucide-react'
 import { sceneTitleFor } from '@/content/sceneTitles'
 
 export type CompetencyEvidence = {
@@ -45,8 +45,8 @@ function evidenceIcon(v?: number | null, mastered?: boolean) {
 export default function CompetencyDetail({ competency }: { competency: CompetencyEvidence | null }) {
     if (!competency) {
         return (
-            <section className="rounded-2xl border border-white/10 bg-[#13131B] p-5 sm:p-6">
-                <p className="text-sm text-cream/50">Select a competency to see what you can do and the evidence ECLA has collected.</p>
+            <section className="rounded-experience border border-line bg-carbon p-6">
+                <p className="text-sm text-stone">Select a capability to see its scene and recorded evidence.</p>
             </section>
         )
     }
@@ -57,37 +57,38 @@ export default function CompetencyDetail({ competency }: { competency: Competenc
     const href = competency.href ?? `/learn/${competency.id}?mode=STORY`
 
     return (
-        <section className="rounded-2xl border border-white/10 bg-[#13131B] p-5 sm:p-6">
-            <p className="text-[11px] font-semibold uppercase tracking-widest text-glow">Scene</p>
-            <p className="mt-2 font-display text-lg font-bold leading-snug text-cream">
+        <section className="overflow-hidden rounded-experience border border-line bg-carbon shadow-glow-md">
+            <div className="ecla-thread" /><div className="p-5 sm:p-6">
+            <div className="flex items-center justify-between gap-3"><p className="text-[11px] font-semibold uppercase tracking-[.18em] text-ember-soft">Current capability</p><span className={`rounded-full border px-2.5 py-1 text-[10px] font-semibold uppercase tracking-wide ${mastered ? 'border-success/30 bg-success/10 text-success' : 'border-ember/30 bg-ember/10 text-ember-soft'}`}>{competency.status}</span></div>
+            <p className="font-display mt-5 text-2xl leading-snug text-ivory">
                 {sceneTitle}
             </p>
-            <p className="mt-2 text-sm leading-relaxed text-cream/60">
+            <p className="mt-3 text-sm leading-relaxed text-stone">
                 &ldquo;{competency.canDo ?? competency.code}&rdquo;
             </p>
-            <p className="mt-1 text-[10px] font-semibold uppercase tracking-widest text-cream/35">{competency.code}</p>
+            <p className="mt-2 text-[10px] font-semibold uppercase tracking-[.14em] text-ash">{competency.code}</p>
 
             {competency.patterns && competency.patterns.length > 0 && (
                 <div className="mt-4">
-                    <p className="mb-2 text-[11px] font-semibold uppercase tracking-widest text-cream/50">Language</p>
-                    <ul className="space-y-1">
+                    <p className="mb-2 text-[11px] font-semibold uppercase tracking-[.16em] text-stone">Language in this scene</p>
+                    <ul className="space-y-2">
                         {competency.patterns.slice(0, 5).map(p => (
-                            <li key={p} className="text-sm text-cream/80">{p}</li>
+                            <li key={p} className="flex items-start gap-2 text-sm text-ivory/85"><Circle className="mt-1 size-2 shrink-0 fill-ember text-ember" />{p}</li>
                         ))}
                     </ul>
                 </div>
             )}
 
             <div className="mt-4">
-                <p className="mb-2 text-[11px] font-semibold uppercase tracking-widest text-cream/50">Evidence</p>
-                <ul className="space-y-1.5">
+                <p className="mb-3 text-[11px] font-semibold uppercase tracking-[.16em] text-stone">Recorded evidence</p>
+                <ul className="grid grid-cols-2 gap-2">
                     {EVIDENCE_DIMS.map(d => {
                         const v = ev[d.key as keyof typeof ev]
                         return (
-                            <li key={d.key} className="flex items-center justify-between text-sm">
-                                <span className="text-cream/70">{d.label}</span>
-                                <span className={v != null && v >= 70 ? 'text-leaf' : 'text-cream/40'}>
-                                    {evidenceIcon(v, mastered && v != null && v >= 60)}
+                            <li key={d.key} className="flex items-center justify-between rounded-control border border-line bg-obsidian/35 px-3 py-2.5 text-xs">
+                                <span className="text-stone">{d.label}</span>
+                                <span className={v != null && v >= 70 ? 'text-success' : 'text-ash'}>
+                                    {v != null && v >= 70 ? <CheckCircle2 className="size-4" aria-label={evidenceIcon(v, mastered && v >= 60)} /> : evidenceIcon(v, mastered && v != null && v >= 60)}
                                 </span>
                             </li>
                         )
@@ -98,12 +99,13 @@ export default function CompetencyDetail({ competency }: { competency: Competenc
             {competency.status !== 'locked' && (
                 <Link
                     href={href}
-                    className="mt-5 flex w-full items-center justify-center gap-2 rounded-xl bg-glow py-3 text-sm font-bold text-night-900 transition-all hover:bg-glow/90 active:scale-[0.98]"
+                    className="ecla-control mt-5 flex min-h-12 w-full items-center justify-center gap-2 rounded-control bg-ember px-4 text-sm font-semibold text-obsidian hover:bg-ember-soft"
                 >
                     {competency.status === 'mastered' ? 'Review in scene' : 'Continue'}
                     <ArrowRight className="h-4 w-4" aria-hidden />
                 </Link>
             )}
+            </div>
         </section>
     )
 }
