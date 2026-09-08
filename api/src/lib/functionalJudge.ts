@@ -5,6 +5,7 @@
  * Output passes through a deterministic rubric before any mastery decision.
  */
 import { groq } from './groq'
+import { providerOptions } from './aiPolicy'
 
 export type JudgeInput = {
     answer: string
@@ -63,7 +64,7 @@ export async function functionalJudge(input: JudgeInput): Promise<JudgeResult> {
                     ].filter(Boolean).join('\n'),
                 },
             ],
-        } as any)
+        } as any, providerOptions())
 
         const raw = completion.choices[0]?.message?.content ?? '{}'
         const parsed = JSON.parse(raw.match(/\{[\s\S]*\}/)?.[0] ?? '{}')

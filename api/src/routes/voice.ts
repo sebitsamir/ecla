@@ -6,6 +6,7 @@ import { getOrSyncUserFast } from '../lib/auth'
 import { assessTranscriptionMatch } from '../lib/pronunciationAssess'
 import { voiceDailyBudget, voiceRateLimit } from '../lib/rateLimit'
 import { providerOptions, TRANSCRIPTION_TIMEOUT_MS } from '../lib/aiPolicy'
+import { validateAudioUpload } from '../lib/audioValidation'
 
 const router = Router()
 
@@ -20,6 +21,7 @@ router.post(
             if (!Buffer.isBuffer(req.body) || req.body.length === 0) {
                 throw new AppError('A non-empty audio recording is required', 400)
             }
+            await validateAudioUpload(req.body, req.headers['content-type'])
             const transcription = await withTemporaryAudio(req.body, file => groq.audio.transcriptions.create({
                 file,
                 model: 'whisper-large-v3-turbo',   // FULL model — best accuracy for advanced/complex Spanish

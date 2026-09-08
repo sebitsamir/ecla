@@ -1,6 +1,6 @@
 'use client'
 
-import { API_URL } from '@/lib/apiClient'
+import { authFetch } from '@/lib/apiClient'
 
 /**
  * /chat — AI tutor conversational interface (premium pass).
@@ -54,9 +54,7 @@ function ChatPageContent() {
     useEffect(() => {
         ;(async () => {
             try {
-                const token = await getToken()
-                const res = await fetch(`${API_URL}/api/v1/learner/chat-context`, {
-                    headers: { Authorization: `Bearer ${token}` },
+                const res = await authFetch(`/api/v1/learner/chat-context`, getToken, {
                 })
                 if (res.ok) {
                     const data = await res.json()
@@ -93,17 +91,18 @@ function ChatPageContent() {
         setThinking(true)
         thinkingRef.current = true
         try {
-            const token = await getToken()
-            const res = await fetch(`${API_URL}/api/v1/chat`, {
+            const res = await authFetch(`/api/v1/chat`, getToken, {
                 method: 'POST',
-                headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+                headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({
                     messages: next.map(m => ({ role: m.role, content: m.content })),
                     voice: voiceMode,
                 }),
             })
+            if (!res.ok) throw new Error('Tutor unavailable')
             const data = await res.json()
-            const reply = data.reply ?? '…'
+            if (typeof data.reply !== 'string' || !data.reply.trim()) throw new Error('Empty tutor response')
+            const reply = data.reply
             setMessages(m => [...m, { role: 'assistant', content: reply }])
             if (voiceMode) speakSpanish(reply, speakOpts)
         } catch (e) {
@@ -150,10 +149,9 @@ function ChatPageContent() {
                 const blob = new Blob(chunksRef.current, { type: 'audio/webm' })
                 stream.getTracks().forEach(t => t.stop())
                 try {
-                    const token = await getToken()
-                    const res = await fetch(`${API_URL}/api/v1/voice/transcribe`, {
+                    const res = await authFetch(`/api/v1/voice/transcribe`, getToken, {
                         method: 'POST',
-                        headers: { Authorization: `Bearer ${token}`, 'Content-Type': blob.type },
+                        headers: { 'Content-Type': blob.type },
                         body: blob,
                     })
                     const data = await res.json()

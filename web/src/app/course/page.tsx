@@ -15,7 +15,7 @@ import { fetchHome, invalidateHomeCache, type LearnerHome } from '@/lib/summary'
 import { ApiError } from '@/lib/apiClient'
 
 export default function CoursePage() {
-    const { isLoaded, isSignedIn, getToken } = useAuthReady()
+    const { isLoaded, isSignedIn, userId, getToken } = useAuthReady()
     const tick = useProgressTick()
     const [home, setHome] = useState<LearnerHome | null>(null)
     const [loadError, setError] = useState<ApiError | null>(null)
@@ -27,7 +27,7 @@ export default function CoursePage() {
 
     useEffect(() => {
         if (!isLoaded) return
-        if (!isSignedIn) return
+        if (!isSignedIn || !userId) return
 
         let cancelled = false
         ;(async () => {
@@ -35,7 +35,7 @@ export default function CoursePage() {
             setError(null)
             try {
                 if (tick > 0) invalidateHomeCache()
-                const data = await fetchHome(getToken, { force: tick > 0 })
+                const data = await fetchHome(getToken, { force: tick > 0, userId })
                 if (!cancelled) setHome(data)
             } catch (e) {
                 if (!cancelled) setError(e instanceof ApiError ? e : new ApiError('network', 'Could not load your course map.'))
@@ -45,7 +45,7 @@ export default function CoursePage() {
         })()
 
         return () => { cancelled = true }
-    }, [isLoaded, isSignedIn, getToken, tick])
+    }, [isLoaded, isSignedIn, userId, getToken, tick])
 
     if (!isLoaded || loading) {
         return (

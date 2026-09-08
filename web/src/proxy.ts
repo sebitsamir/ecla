@@ -31,7 +31,14 @@ export default clerkMiddleware(async (auth, request) => {
     contentSecurityPolicy: {
         directives: {
             'base-uri': ['self'],
-            'connect-src': ['https:', 'wss:'],
+            'connect-src': [
+                'self',
+                'https:',
+                'wss:',
+                ...(process.env.NODE_ENV === 'production'
+                    ? []
+                    : ['http://localhost:4000', 'http://127.0.0.1:4000']),
+            ],
             'font-src': ['self', 'https://fonts.gstatic.com'],
             'frame-ancestors': ['none'],
             'img-src': ['data:', 'blob:', 'https:'],

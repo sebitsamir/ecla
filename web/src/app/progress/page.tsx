@@ -1,6 +1,6 @@
 'use client'
 
-import { API_URL } from '@/lib/apiClient'
+import { authFetch } from '@/lib/apiClient'
 
 /**
  * /progress — the evidence ledger (premium pass).
@@ -77,9 +77,8 @@ export default function ProgressPage() {
     useEffect(() => {
         (async () => {
             try {
-                const token = await getToken()
                 const [comp, sum] = await Promise.all([
-                    fetch(`${API_URL}/api/v1/learner/competencies`, { headers: { Authorization: `Bearer ${token}` } }).then(r => r.json()),
+                    authFetch(`/api/v1/learner/competencies`, getToken, { }).then(r => r.json()),
                     fetchSummary(getToken),
                 ])
                 setData(comp)
