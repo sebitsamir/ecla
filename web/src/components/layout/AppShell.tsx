@@ -1,171 +1,113 @@
 'use client'
 
-/**
- * AppShell — permanent chrome (Phase 11.1, revised).
- *
- * Fixes applied:
- * - Responsive: hamburger + slide-in drawer below md; fixed sidebar md+.
- * - Amber/gold primary (brand), semantic colors untouched.
- * - Functional user area: Clerk avatar + name + menu (email, sign out).
- * - Fuller nav: Home / My Learning / Gateway / Progress (all real routes).
- */
-import { useState } from 'react'
+import { useEffect, useRef, useState, type ReactNode } from 'react'
 import Link from 'next/link'
+import Image from 'next/image'
 import { usePathname } from 'next/navigation'
 import { useClerk, useUser } from '@clerk/nextjs'
-import { Flag, Home, LogOut, Map, Menu, MessageCircle, Repeat, TrendingUp, X } from 'lucide-react'
-import type { ReactNode } from 'react'
+import { BookOpen, Home, LogOut, MessageCircle, Repeat2, Route, TrendingUp, X } from 'lucide-react'
+import { LogoMark } from '@/components/BrandLogo'
+import { IconButton } from '@/components/ui'
 
-const NAV = [
-    { href: '/dashboard', label: 'Home', icon: Home },
-    { href: '/course', label: 'My Learning', icon: Map },
-    { href: '/review', label: 'Review', icon: Repeat },
-    { href: '/chat', label: 'Chat with Ecla', icon: MessageCircle },
-    { href: '/gateway', label: 'Gateway', icon: Flag },
-    { href: '/progress', label: 'Progress', icon: TrendingUp },
-]
+const PRIMARY_NAV = [
+  { href: '/dashboard', label: 'Home', icon: Home },
+  { href: '/course', label: 'Learn', icon: Route },
+  { href: '/review', label: 'Practice', icon: Repeat2 },
+  { href: '/progress', label: 'Progress', icon: TrendingUp },
+] as const
+
+const SECONDARY_NAV = [
+  { href: '/chat', label: 'Chat with Ecla', icon: MessageCircle },
+  { href: '/gateway', label: 'Gateway assessment', icon: BookOpen },
+] as const
+
+function isCurrent(pathname: string, href: string) {
+  return pathname === href || (href === '/course' && pathname.startsWith('/learn/'))
+}
 
 function Brand() {
-    return (
-        <Link href="/dashboard" className="px-2">
-            <span className="font-display text-xl font-bold tracking-tight text-cream">ECLA</span>
-            <span className="block text-[10px] uppercase tracking-widest text-cream/40">Speak · Understand · Use</span>
-        </Link>
-    )
+  return (
+    <Link href="/dashboard" className="ecla-control inline-flex min-h-11 items-center gap-2 rounded-control px-1 text-ivory" aria-label="Ecla home">
+      <LogoMark size={30} />
+      <span className="font-display text-2xl leading-none">Ecla</span>
+    </Link>
+  )
 }
 
-function NavLinks({ onNavigate }: { onNavigate?: () => void }) {
-    const pathname = usePathname()
-    return (
-        <nav className="flex flex-col gap-1">
-            {NAV.map(item => {
-                const active = pathname === item.href
-                return (
-                    <Link
-                        key={item.href}
-                        href={item.href}
-                        onClick={onNavigate}
-                        className={`flex items-center gap-3 rounded-xl px-3 py-2.5 text-sm font-semibold transition-colors ${active ? 'bg-glow text-night-900' : 'text-cream/60 hover:bg-white/5 hover:text-cream'
-                            }`}
-                    >
-                        <item.icon className="h-4 w-4" /> {item.label}
-                    </Link>
-                )
-            })}
-        </nav>
-    )
-}
-
-function SidebarFoot() {
-    return (
-        <div className="mt-auto w-full min-w-0 rounded-2xl border border-white/10 bg-[#13131B] p-4">
-            <p className="mb-1 truncate text-xs font-bold text-cream/80">Learn for real life</p>
-            <p className="text-[11px] leading-relaxed text-cream/50">Not just words. Language for what matters.</p>
-        </div>
-    )
+function PrimaryNavigation({ mobile = false }: { mobile?: boolean }) {
+  const pathname = usePathname()
+  return (
+    <nav aria-label="Primary navigation" className={mobile ? 'grid grid-cols-4' : 'flex items-stretch gap-1'}>
+      {PRIMARY_NAV.map(({ href, label, icon: Icon }) => {
+        const active = isCurrent(pathname, href)
+        return (
+          <Link key={href} href={href} aria-current={active ? 'page' : undefined}
+            className={mobile
+              ? `ecla-control flex min-h-14 flex-col items-center justify-center gap-1 rounded-control text-[10px] font-medium ${active ? 'text-ember-soft' : 'text-ash'}`
+              : `ecla-control relative flex min-h-14 items-center px-3 text-xs font-medium ${active ? 'text-ivory' : 'text-stone hover:text-ivory'}`}>
+            <Icon className={mobile ? 'size-5' : 'hidden'} aria-hidden />
+            <span>{label}</span>
+            {!mobile && active ? <span className="absolute inset-x-3 bottom-0 h-px bg-ember shadow-[0_0_12px_rgba(255,122,61,.7)]" /> : null}
+          </Link>
+        )
+      })}
+    </nav>
+  )
 }
 
 export default function AppShell({ children }: { children: ReactNode }) {
-    const { user } = useUser()
-    const { signOut } = useClerk()
-    const [navOpen, setNavOpen] = useState(false)
-    const [menuOpen, setMenuOpen] = useState(false)
-    const pathname = usePathname()
+  const { user } = useUser()
+  const { signOut } = useClerk()
+  const [accountOpen, setAccountOpen] = useState(false)
+  const accountRef = useRef<HTMLDivElement>(null)
+  const name = user?.firstName ?? user?.username ?? 'Learner'
+  const image = user?.imageUrl
 
-    // Close overlays on navigation.
-    const [previousPath, setPreviousPath] = useState(pathname)
-    if (previousPath !== pathname) {
-        setPreviousPath(pathname)
-        setNavOpen(false)
-        setMenuOpen(false)
+  useEffect(() => {
+    if (!accountOpen) return
+    const close = (event: MouseEvent) => {
+      if (!accountRef.current?.contains(event.target as Node)) setAccountOpen(false)
     }
+    const escape = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') setAccountOpen(false)
+    }
+    document.addEventListener('mousedown', close)
+    document.addEventListener('keydown', escape)
+    return () => {
+      document.removeEventListener('mousedown', close)
+      document.removeEventListener('keydown', escape)
+    }
+  }, [accountOpen])
 
-    const name = user?.firstName ?? user?.username ?? 'Learner'
-    const image = user?.imageUrl
-
-    return (
-        <main className="min-h-screen bg-[#0B0B10] font-body text-white">
-            <a href="#main-content" className="sr-only z-[100] rounded-lg bg-glow px-4 py-2 text-night-900 focus:not-sr-only focus:fixed focus:left-3 focus:top-3">Skip to content</a>
-            {/* ── Top bar (all sizes) ─ */}
-            <header className="sticky top-0 z-40 border-b border-white/5 bg-[#0B0B10]/90 backdrop-blur">
-                <div className="flex h-14 items-center gap-3 px-4 md:px-6">
-                    <button
-                        onClick={() => setNavOpen(true)}
-                        aria-label="Open navigation"
-                        className="rounded-lg p-2 text-cream/60 hover:bg-white/5 hover:text-cream md:hidden"
-                    >
-                        <Menu className="h-5 w-5" />
-                    </button>
-                    <span className="font-display text-lg font-bold md:hidden">ECLA</span>
-                    <span className="hidden md:block"><Brand /></span>
-
-                    <div className="ml-auto relative">
-                        <button
-                            onClick={() => setMenuOpen(v => !v)}
-                            className="flex items-center gap-2 rounded-full border border-white/10 bg-[#13131B] py-1 pl-1 pr-3 hover:border-glow/40 transition-colors"
-                            aria-label="Account menu"
-                        >
-                            {image ? (
-                                // eslint-disable-next-line @next/next/no-img-element
-                                <img src={image} alt={name} className="h-7 w-7 rounded-full object-cover" />
-                            ) : (
-                                <span className="flex h-7 w-7 items-center justify-center rounded-full bg-glow/20 text-xs font-bold text-glow">
-                                    {name.charAt(0).toUpperCase()}
-                                </span>
-                            )}
-                            <span className="hidden text-sm text-cream/80 sm:block">{name}</span>
-                        </button>
-
-                        {menuOpen && (
-                            <div className="absolute right-0 mt-2 w-60 rounded-xl border border-white/10 bg-[#13131B] p-2 shadow-2xl">
-                                <div className="border-b border-white/5 px-3 py-2">
-                                    <p className="text-sm font-semibold text-cream">{name}</p>
-                                    <p className="truncate text-xs text-cream/50">
-                                        {user?.primaryEmailAddress?.emailAddress ?? ''}
-                                    </p>
-                                </div>
-                                <button
-                                    onClick={() => signOut()}
-                                    className="mt-1 flex w-full items-center gap-2 rounded-lg px-3 py-2 text-sm text-cream/80 hover:bg-white/5"
-                                >
-                                    <LogOut className="h-4 w-4" /> Sign out
-                                </button>
-                            </div>
-                        )}
-                    </div>
+  return (
+    <main className="min-h-screen bg-transparent font-body text-ivory">
+      <a href="#main-content" className="fixed left-3 top-3 z-[70] -translate-y-20 rounded-control bg-ember px-4 py-2 text-sm font-semibold text-obsidian transition-transform focus:translate-y-0">Skip to content</a>
+      <header className="sticky top-0 z-40 border-b border-line bg-obsidian/82 backdrop-blur-xl">
+        <div className="mx-auto flex h-16 max-w-[1440px] items-center gap-6 px-4 sm:px-6 lg:px-10">
+          <Brand />
+          <div className="hidden md:block"><PrimaryNavigation /></div>
+          <div ref={accountRef} className="relative ml-auto">
+            <button onClick={() => setAccountOpen(value => !value)} aria-expanded={accountOpen} aria-haspopup="menu"
+              className="ecla-control flex min-h-11 items-center gap-2 rounded-full border border-line bg-surface py-1 pl-1 pr-3 text-stone hover:border-line-strong hover:text-ivory">
+              {image ? <Image src={image} alt="" width={32} height={32} className="size-8 rounded-full object-cover" /> : <span className="flex size-8 items-center justify-center rounded-full bg-ember/15 text-xs font-semibold text-ember-soft">{name.charAt(0).toUpperCase()}</span>}
+              <span className="hidden max-w-32 truncate text-xs sm:block">{name}</span>
+            </button>
+            {accountOpen ? (
+              <div role="menu" className="ecla-surface absolute right-0 mt-2 w-64 rounded-surface p-2 animate-fade-in">
+                <div className="flex items-center justify-between px-3 py-2">
+                  <div className="min-w-0"><p className="truncate text-sm font-medium text-ivory">{name}</p><p className="truncate text-xs text-ash">{user?.primaryEmailAddress?.emailAddress ?? ''}</p></div>
+                  <IconButton label="Close account menu" onClick={() => setAccountOpen(false)} className="size-9 border-transparent bg-transparent"><X className="size-4" /></IconButton>
                 </div>
-            </header>
-
-            <div className="mx-auto flex max-w-[1400px]">
-                {/* ── Desktop sidebar ─ */}
-                {/* Desktop sidebar: add min-w-0 */}
-                <aside className="sticky top-14 hidden h-[calc(100vh-3.5rem)] w-56 min-w-0 flex-shrink-0 flex-col gap-4 border-r border-white/5 px-4 py-6 md:flex">
-                    <NavLinks />
-                    <SidebarFoot />
-                </aside>
-
-                {/* ── Mobile drawer ─ */}
-                {navOpen && (
-                    <div className="fixed inset-0 z-50 bg-black/60 md:hidden" onClick={() => setNavOpen(false)}>
-                        <div className="flex h-full w-72 flex-col gap-6 bg-[#0B0B10] p-4" onClick={e => e.stopPropagation()}>
-                            <div className="flex items-center justify-between">
-                                <Brand />
-                                <button onClick={() => setNavOpen(false)} aria-label="Close navigation" className="rounded-lg p-2 text-cream/60 hover:text-cream">
-                                    <X className="h-5 w-5" />
-                                </button>
-                            </div>
-                            <NavLinks onNavigate={() => setNavOpen(false)} />
-                            <SidebarFoot />
-                        </div>
-                    </div>
-                )}
-
-                {/* ── Content  */}
-                <div id="main-content" className="min-w-0 flex-1 px-4 py-6 pb-24 md:px-8 md:py-8 md:pb-8">{children}</div>
-            </div>
-            <nav aria-label="Primary mobile navigation" className="safe-bottom fixed inset-x-0 bottom-0 z-40 grid grid-cols-5 border-t border-white/10 bg-[#0B0B10]/95 px-1 pt-2 backdrop-blur md:hidden">
-                {NAV.filter(item => ['/dashboard','/course','/review','/chat','/progress'].includes(item.href)).map(item => { const active = pathname === item.href; return <Link key={item.href} href={item.href} aria-current={active ? 'page' : undefined} className={`flex min-h-14 flex-col items-center justify-center gap-1 rounded-lg text-[10px] font-semibold ${active ? 'text-glow' : 'text-cream/50'}`}><item.icon className="h-5 w-5" />{item.label === 'My Learning' ? 'Learn' : item.label.replace(' with Ecla','')}</Link> })}
-            </nav>
-        </main>
-    )
+                <div className="my-1 h-px bg-line" />
+                {SECONDARY_NAV.map(({ href, label, icon: Icon }) => <Link role="menuitem" key={href} href={href} onClick={() => setAccountOpen(false)} className="ecla-control flex min-h-11 items-center gap-3 rounded-control px-3 text-sm text-stone hover:bg-white/[0.05] hover:text-ivory"><Icon className="size-4" />{label}</Link>)}
+                <button role="menuitem" onClick={() => signOut()} className="ecla-control flex min-h-11 w-full items-center gap-3 rounded-control px-3 text-sm text-stone hover:bg-white/[0.05] hover:text-ivory"><LogOut className="size-4" />Sign out</button>
+              </div>
+            ) : null}
+          </div>
+        </div>
+      </header>
+      <div id="main-content" className="mx-auto min-w-0 max-w-[1320px] px-4 py-6 pb-24 sm:px-6 md:py-9 md:pb-10 lg:px-10">{children}</div>
+      <div className="safe-bottom fixed inset-x-0 bottom-0 z-40 border-t border-line bg-obsidian/94 px-1 pt-1 backdrop-blur-xl md:hidden"><PrimaryNavigation mobile /></div>
+    </main>
+  )
 }

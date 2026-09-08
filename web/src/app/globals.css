@@ -1,205 +1,131 @@
-@import url('https://fonts.googleapis.com/css2?family=Baloo+2:wght@600;700;800&family=Nunito:wght@400;600;700;800&display=swap');
 @import "tailwindcss";
 
 :root {
-  --background: #080A18;
-  --foreground: #F4F1EA;
+  color-scheme: dark;
+  --background: #09090a;
+  --foreground: #f4f0e8;
+  --ecla-obsidian: #09090a;
+  --ecla-ink: #101012;
+  --ecla-carbon: #17171a;
+  --ecla-slate: #25252a;
+  --ecla-ivory: #f4f0e8;
+  --ecla-stone: #b8b2a8;
+  --ecla-ash: #7e7a73;
+  --ecla-ember: #ff7a3d;
+  --ecla-ember-soft: #ffb26f;
+  --ecla-ember-deep: #9e3d1c;
+  --ecla-success: #78ad82;
+  --ecla-warning: #c99b54;
+  --ecla-danger: #a94e49;
+  --ecla-info: #7591a8;
+  --ecla-line: rgba(244,240,232,.10);
+  --ecla-line-strong: rgba(244,240,232,.2);
+  --ecla-surface: rgba(23,23,26,.82);
+  --ecla-surface-raised: rgba(37,37,42,.88);
+  --ecla-ease: cubic-bezier(.22,1,.36,1);
+  --ecla-exit: cubic-bezier(.4,0,1,1);
+  --ecla-shadow: 0 24px 80px rgba(0,0,0,.34);
 }
 
-@theme inline {
+@theme {
   --color-background: var(--background);
   --color-foreground: var(--foreground);
-  --font-sans: var(--font-geist-sans);
-  --font-mono: var(--font-geist-mono);
-}
-
-/* ============ ECLA V2 — DESIGN TOKENS ============ */
-@theme {
-  /* Night World palette */
-  --color-night-950: #080A18;
-  --color-night-900: #0d1024;
-  --color-night-800: #171B3D;
-  --color-night-700: #232a52;
-
-  /* Firefly glow — reserved for mascot, streaks, key highlights */
-  --color-glow: #FFC857;
-  --color-glow-bright: #FFE29A;
-  --color-glow-deep: #F2A93B;
-
-  /* Mode identities */
-  --color-story: #ffb45a;
-  --color-drill: #4DD8E6;
-  --color-immersion: #B98CF0;
-  --color-pro: #7FA6FF;
-
-  /* Semantic — warm, never clinical */
-  --color-coral: #FF6B5E;
-  --color-leaf: #7ED99A;
-  --color-cream: #F4F1EA;
-
-  /* Typography — rounded display + clean body */
+  --color-obsidian: var(--ecla-obsidian);
+  --color-ink: var(--ecla-ink);
+  --color-carbon: var(--ecla-carbon);
+  --color-slate: var(--ecla-slate);
+  --color-ivory: var(--ecla-ivory);
+  --color-stone: var(--ecla-stone);
+  --color-ash: var(--ecla-ash);
+  --color-ember: var(--ecla-ember);
+  --color-ember-soft: var(--ecla-ember-soft);
+  --color-ember-deep: var(--ecla-ember-deep);
+  --color-success: var(--ecla-success);
+  --color-warning: var(--ecla-warning);
+  --color-danger: var(--ecla-danger);
+  --color-danger-soft: #df8c84;
+  --color-info: var(--ecla-info);
+  --color-line: var(--ecla-line);
+  --color-line-strong: var(--ecla-line-strong);
+  --color-surface: var(--ecla-surface);
+  --color-surface-raised: var(--ecla-surface-raised);
+  --color-night-950: var(--ecla-obsidian);
+  --color-night-900: var(--ecla-ink);
+  --color-night-800: var(--ecla-carbon);
+  --color-night-700: var(--ecla-slate);
+  --color-glow: var(--ecla-ember);
+  --color-glow-bright: var(--ecla-ember-soft);
+  --color-glow-deep: var(--ecla-ember-deep);
+  --color-coral: #d86459;
+  --color-leaf: var(--ecla-success);
+  --color-cream: var(--ecla-ivory);
+  --color-story: #dc945d;
+  --color-drill: #6fa4a8;
+  --color-immersion: #8d7aa8;
+  --color-pro: #748da8;
   --font-display: var(--font-ecla-display);
   --font-body: var(--font-ecla-body);
-
-  /* Shape & light language */
-  --radius-card: 20px;
-  --shadow-glow-sm: 0 0 18px rgba(255, 200, 87, 0.25);
-  --shadow-glow-md: 0 0 32px rgba(255, 200, 87, 0.35);
+  --radius-control: 14px;
+  --radius-surface: 18px;
+  --radius-experience: 28px;
+  --radius-card: 18px;
+  --shadow-glow-sm: 0 0 24px rgba(255,122,61,.12);
+  --shadow-glow-md: 0 22px 70px rgba(0,0,0,.36);
 }
 
+* { box-sizing: border-box; }
+html, body { min-height: 100%; overscroll-behavior-y: none; }
+html { background: var(--ecla-obsidian); }
 body {
-  background: var(--background);
-  color: var(--foreground);
-  font-family: var(--font-body);
-}
-
-h1, h2, h3, .font-display {
-  font-family: var(--font-display);
-}
-
-/* Mobile Polish & Native Feel */
-html, body {
-  overscroll-behavior-y: none;
+  margin: 0;
+  background:
+    radial-gradient(circle at 72% -12%, rgba(255,122,61,.075), transparent 30rem),
+    linear-gradient(180deg, #0d0c0c 0%, var(--ecla-obsidian) 36rem);
+  color: var(--ecla-ivory);
+  font-family: var(--font-ecla-body), system-ui, sans-serif;
+  text-rendering: optimizeLegibility;
   -webkit-tap-highlight-color: transparent;
 }
-
-/* Safe area insets for iPhone notches and home indicators */
-@supports (padding: max(0px)) {
-  .safe-bottom {
-    padding-bottom: max(1rem, env(safe-area-inset-bottom));
-  }
-  .safe-top {
-    padding-top: max(1rem, env(safe-area-inset-top));
-  }
+h1,h2,h3,.font-display { font-family: var(--font-ecla-display), Georgia, serif; font-weight: 400; }
+button,a,[role="button"] { touch-action: manipulation; }
+button,input,textarea,select { font: inherit; }
+::selection { background: rgba(255,122,61,.28); color: var(--ecla-ivory); }
+:focus-visible { outline: 2px solid var(--ecla-ember-soft); outline-offset: 3px; }
+.ecla-control { transition: color 160ms var(--ecla-ease), background-color 160ms var(--ecla-ease), border-color 160ms var(--ecla-ease), transform 120ms var(--ecla-ease); }
+.ecla-control:active:not(:disabled) { transform: scale(.98); }
+.ecla-control:disabled { cursor: not-allowed; opacity: .46; }
+.ecla-surface { border: 1px solid var(--ecla-line); background: var(--ecla-surface); box-shadow: var(--ecla-shadow); backdrop-filter: blur(20px); }
+.ecla-thread { height: 1px; background: linear-gradient(90deg, transparent, var(--ecla-ember-soft), transparent); box-shadow: 0 0 16px rgba(255,122,61,.3); }
+.ecla-skeleton { position: relative; overflow: hidden; background: rgba(244,240,232,.055); }
+.ecla-skeleton::after { content:""; position:absolute; inset:0; transform:translateX(-100%); background:linear-gradient(90deg,transparent,rgba(244,240,232,.07),transparent); animation:ecla-shimmer 1.8s ease-in-out infinite; }
+.ecla-loading-mark { width:.8rem; height:.8rem; border:1.5px solid currentColor; border-right-color:transparent; border-radius:50%; animation:ecla-spin .7s linear infinite; }
+.no-scrollbar,.scrollbar-hide { scrollbar-width:none; -ms-overflow-style:none; }
+.no-scrollbar::-webkit-scrollbar,.scrollbar-hide::-webkit-scrollbar { display:none; }
+@supports (padding: env(safe-area-inset-bottom)) { .safe-bottom { padding-bottom:max(.5rem,env(safe-area-inset-bottom)); } .safe-top { padding-top:max(1rem,env(safe-area-inset-top)); } }
+@keyframes ecla-fade-up { from { opacity:0; transform:translateY(12px); } to { opacity:1; transform:translateY(0); } }
+@keyframes ecla-fade-in { from { opacity:0; } to { opacity:1; } }
+@keyframes ecla-shimmer { to { transform:translateX(100%); } }
+@keyframes ecla-spin { to { transform:rotate(360deg); } }
+@keyframes ecla-breathe { 0%,100% { transform:scale(1); } 50% { transform:scale(1.025); } }
+@keyframes ecla-steam { 0% { transform:translateY(0);opacity:0 } 25% { opacity:.5 } 100% { transform:translateY(-56px);opacity:0 } }
+@keyframes ecla-streak { 0% { transform:translateX(0);opacity:0 } 15% { opacity:.7 } 100% { transform:translateX(340%);opacity:0 } }
+@keyframes ecla-dust { 0%,100% { transform:translate(0);opacity:.12 } 50% { transform:translate(5px,-8px);opacity:.3 } }
+@keyframes ecla-pulse-ring { from { transform:scale(1);opacity:.5 } to { transform:scale(1.6);opacity:0 } }
+@keyframes ecla-context-flash { 0%,100% { opacity:0;transform:translate(-50%,-8px) } 20%,80% { opacity:1;transform:translate(-50%,0) } }
+@keyframes ecla-mic-pulse { 0%,100% { box-shadow:0 0 0 0 rgba(255,122,61,.38) } 50% { box-shadow:0 0 0 16px rgba(255,122,61,0) } }
+@keyframes scene-presence { 0%,100% { transform:translateY(0) } 50% { transform:translateY(-3px) } }
+.animate-fade-up { animation:ecla-fade-up 520ms var(--ecla-ease) both; }
+.animate-fade-in { animation:ecla-fade-in 420ms var(--ecla-ease) both; }
+.animate-breathe { animation:ecla-breathe 14s ease-in-out infinite; }
+.animate-steam { animation:ecla-steam 4s ease-out infinite; }
+.animate-streak { animation:ecla-streak 8s linear infinite; }
+.animate-dust { animation:ecla-dust 10s ease-in-out infinite; }
+.animate-pulse-ring { animation:ecla-pulse-ring 1.8s ease-out infinite; }
+.animate-context-flash { animation:ecla-context-flash 2.4s var(--ecla-ease) both; }
+.animate-mic-pulse { animation:ecla-mic-pulse 1.8s ease-out infinite; }
+.animate-flash-green,.animate-flash-amber { animation:ecla-fade-in 320ms var(--ecla-ease); }
+.scene-character { animation:scene-presence 6s ease-in-out infinite; }
+@media (max-width:390px) { .scene-mobile-compact { padding-inline:.75rem; } }
+@media (prefers-reduced-motion:reduce) {
+  *,*::before,*::after { scroll-behavior:auto!important; animation-duration:.01ms!important; animation-iteration-count:1!important; transition-duration:.01ms!important; }
 }
-
-/* Prevent double-tap zoom on buttons (makes taps feel instant) */
-button, a, [role="button"] {
-  touch-action: manipulation;
-}
-
-/* Hide scrollbars but keep functionality for horizontal scrolls */
-.no-scrollbar::-webkit-scrollbar {
-  display: none;
-}
-.no-scrollbar {
-  -ms-overflow-style: none;
-  scrollbar-width: none;
-}
-
-/* ── ECLA motion: calm, never fireworks (§23) ── */
-@keyframes ecla-fade-up {
-    from { opacity: 0; transform: translateY(8px); }
-    to   { opacity: 1; transform: translateY(0); }
-}
-@keyframes ecla-fade-in {
-    from { opacity: 0; }
-    to   { opacity: 1; }
-}
-.animate-fade-up { animation: ecla-fade-up 0.4s ease both; }
-.animate-fade-in { animation: ecla-fade-in 0.5s ease both; }
-
-/* ── ECLA motion: calm, cinematic transitions ── */
-@keyframes ecla-fade-up {
-    from { opacity: 0; transform: translateY(12px); }
-    to   { opacity: 1; transform: translateY(0); }
-}
-@keyframes ecla-fade-in {
-    from { opacity: 0; }
-    to   { opacity: 1; }
-}
-.animate-fade-up { animation: ecla-fade-up 0.5s cubic-bezier(0.16, 1, 0.3, 1) both; }
-.animate-fade-in { animation: ecla-fade-in 0.6s ease both; }
-
-@keyframes flash-green {
-    0%, 100% { box-shadow: 0 0 0 0 rgba(34, 197, 94, 0); }
-    50% { box-shadow: 0 0 15px 2px rgba(34, 197, 94, 0.6); background-color: rgba(34, 197, 94, 0.2); }
-}
-@keyframes flash-amber {
-    0%, 100% { box-shadow: 0 0 0 0 rgba(245, 158, 11, 0); }
-    50% { box-shadow: 0 0 15px 2px rgba(245, 158, 11, 0.6); background-color: rgba(245, 158, 11, 0.2); }
-}
-.animate-flash-green { animation: flash-green 0.8s ease-out; }
-.animate-flash-amber { animation: flash-amber 0.8s ease-out; }
-
-/* ── Phase S3.3: Stage-specific animations ── */
-@keyframes ecla-context-flash {
-    0% { opacity: 0; transform: translate(-50%, -8px); }
-    20% { opacity: 1; transform: translate(-50%, 0); }
-    80% { opacity: 1; transform: translate(-50%, 0); }
-    100% { opacity: 0; transform: translate(-50%, -8px); }
-}
-.animate-context-flash { animation: ecla-context-flash 2.4s ease both; }
-
-@keyframes ecla-mic-pulse {
-    0%, 100% { box-shadow: 0 0 0 0 rgba(139, 92, 246, 0.6); }
-    50% { box-shadow: 0 0 0 16px rgba(139, 92, 246, 0); }
-}
-.animate-mic-pulse { animation: ecla-mic-pulse 1.8s ease-out infinite; }
-
-/* ── Phase S3.4: environmental life ── */
-@keyframes ecla-breathe { 0%, 100% { transform: scale(1); } 50% { transform: scale(1.045); } }
-.animate-breathe { animation: ecla-breathe 22s ease-in-out infinite; }
-
-@keyframes ecla-steam {
-    0%   { transform: translateY(0) scaleY(1); opacity: 0; }
-    25%  { opacity: .7; }
-    100% { transform: translateY(-56px) scaleY(1.4); opacity: 0; }
-}
-.animate-steam { animation: ecla-steam 3.6s ease-out infinite; }
-
-@keyframes ecla-streak {
-    0%   { transform: translateX(0); opacity: 0; }
-    15%  { opacity: 1; }
-    100% { transform: translateX(340%); opacity: 0; }
-}
-.animate-streak { animation: ecla-streak 7s linear infinite; }
-
-@keyframes ecla-dust {
-    0%, 100% { transform: translate(0, 0); opacity: .15; }
-    50%      { transform: translate(6px, -10px); opacity: .5; }
-}
-.animate-dust { animation: ecla-dust 9s ease-in-out infinite; }
-
-@keyframes ecla-pulse-ring {
-    0%   { transform: scale(1);   opacity: 0.6; }
-    100% { transform: scale(1.8); opacity: 0; }
-}
-.animate-pulse-ring { animation: ecla-pulse-ring 1.8s ease-out infinite; }
-
-/* ── Phase S3.7: immersive surfaces never show browser chrome ── */
-.scrollbar-hide {
-    -ms-overflow-style: none;
-    scrollbar-width: none;
-}
-.scrollbar-hide::-webkit-scrollbar {
-    display: none;
-}
-
-/* ── Phase 41-42: mobile safe areas + accessibility ── */
-@supports (padding: env(safe-area-inset-bottom)) {
-    .safe-bottom { padding-bottom: env(safe-area-inset-bottom); }
-}
-
-:focus-visible {
-    outline: 2px solid var(--color-glow);
-    outline-offset: 2px;
-}
-
-@media (prefers-reduced-motion: reduce) {
-    *, *::before, *::after {
-        animation-duration: 0.01ms !important;
-        animation-iteration-count: 1 !important;
-        transition-duration: 0.01ms !important;
-    }
-}
-
-@media (max-width: 390px) {
-    .scene-mobile-compact { padding-left: 0.75rem; padding-right: 0.75rem; }
-}
-
-@keyframes scene-presence {
-    0%, 100% { transform: translateY(0) rotate(-1deg); }
-    50% { transform: translateY(-5px) rotate(1deg); }
-}
-.scene-character { animation: scene-presence 4.5s ease-in-out infinite; }
