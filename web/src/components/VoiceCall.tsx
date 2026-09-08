@@ -1,6 +1,6 @@
 'use client'
 
-import { API_URL } from '@/lib/apiClient'
+import { authFetch } from '@/lib/apiClient'
 
 import { useEffect, useRef, useState } from 'react'
 import { useAuth } from '@clerk/nextjs'
@@ -126,12 +126,10 @@ export default function VoiceCall({ onEnd }: { onEnd: (lines: CallLine[]) => voi
     }
 
     async function streamReply(): Promise<string> {
-        const token = await getToken()
-        const res = await fetch(`${API_URL}/api/v1/chat`, {
+        const res = await authFetch(`/api/v1/chat`, getToken, {
             method: 'POST',
             headers: {
-                'Content-Type': 'application/json',
-                Authorization: `Bearer ${token}`
+                'Content-Type': 'application/json'
             },
             body: JSON.stringify({
                 messages: historyRef.current.slice(-10),
@@ -146,7 +144,7 @@ export default function VoiceCall({ onEnd }: { onEnd: (lines: CallLine[]) => voi
         pushLine({ role: 'assistant', text: '' })
         const reader = res.body.getReader()
         const decoder = new TextDecoder()
-        let raw = '', full = '', speakBuf = ''
+        let raw = '', full = '', speakBuf = '', streamError = ''
 
         for (;;) {
             const { done, value } = await reader.read()
@@ -162,7 +160,8 @@ export default function VoiceCall({ onEnd }: { onEnd: (lines: CallLine[]) => voi
                 if (payload === '[DONE]') continue
                 
                 try {
-                    const { delta } = JSON.parse(payload)
+                    const { delta, error } = JSON.parse(payload)
+                    if (typeof error === 'string') { streamError = error; continue }
                     if (!delta) continue
                     full += delta
                     speakBuf += delta
@@ -179,6 +178,7 @@ export default function VoiceCall({ onEnd }: { onEnd: (lines: CallLine[]) => voi
             }
         }
         
+        if (streamError) throw new Error(streamError)
         if (speakBuf.trim()) enqueue([speakBuf.trim()])
         if (!full) throw new Error('empty stream')
         return full

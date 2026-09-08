@@ -6,7 +6,7 @@
 import { execSync } from 'child_process'
 import path from 'path'
 
-const root = path.join(__dirname)
+const root = path.join(__dirname, '..')
 
 function run(cmd: string, label: string) {
     console.log(`\n── ${label} ──`)

@@ -1,6 +1,6 @@
 'use client'
 
-import { API_URL } from '@/lib/apiClient'
+import { authFetch } from '@/lib/apiClient'
 
 /**
  * Can-Do Truth Panel — ECLA Dashboard Component
@@ -79,9 +79,7 @@ export default function CanDoPanel() {
     useEffect(() => {
         async function fetchLearnerData() {
             try {
-                const token = await getToken()
-                const res = await fetch(`${API_URL}/api/v1/learner/competencies`, {
-                    headers: { Authorization: `Bearer ${token}` },
+                const res = await authFetch(`/api/v1/learner/competencies`, getToken, {
                 })
                 if (res.ok) {
                     const json = await res.json()

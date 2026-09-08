@@ -10,7 +10,7 @@ import { errorMessage, log } from '../lib/observability'
 
 const router = Router()
 
-async function callGroqWithRetry(params: any, maxRetries = 2): Promise<string | null> {
+async function callGroqWithRetry(params: any, maxRetries = 1): Promise<string | null> {
     for (let attempt = 0; attempt <= maxRetries; attempt++) {
         try {
             const completion = await groq.chat.completions.create(params, providerOptions())
@@ -52,7 +52,8 @@ router.post('/api/v1/chat', aiRateLimit, aiDailyBudget, async (req: Request, res
             res.setHeader('Connection', 'keep-alive')
             res.flushHeaders()
 
-            for (let attempt = 0; attempt <= 2; attempt++) {
+            for (let attempt = 0; attempt <= 1; attempt++) {
+                let chunks = 0
                 try {
                     const stream = await groq.chat.completions.create({
                         model: 'openai/gpt-oss-20b',
@@ -63,7 +64,6 @@ router.post('/api/v1/chat', aiRateLimit, aiDailyBudget, async (req: Request, res
                         stream: true,
                     } as any, providerOptions())
 
-                    let chunks = 0
                     let finish = ''
                     for await (const chunk of stream as any) {
                         const choice = chunk.choices?.[0]
@@ -77,11 +77,16 @@ router.post('/api/v1/chat', aiRateLimit, aiDailyBudget, async (req: Request, res
                     log('warn', 'chat_stream_empty', { attempt: attempt + 1, finish })
                 } catch (error: unknown) {
                     log('warn', 'chat_stream_failed', { attempt: attempt + 1, error: errorMessage(error) })
+                    if (chunks > 0) {
+                        res.write(`data: ${JSON.stringify({ error: 'The tutor connection ended early.' })}\n\n`)
+                        res.write('data: [DONE]\n\n')
+                        return res.end()
+                    }
                 }
-                if (attempt < 2) await new Promise(r => setTimeout(r, 500 * (attempt + 1)))
+                if (attempt < 1) await new Promise(r => setTimeout(r, 500 * (attempt + 1)))
             }
 
-            res.write(`data: ${JSON.stringify({ delta: 'No te oí bien. ¿Puedes repetir?' })}\n\n`)
+            res.write(`data: ${JSON.stringify({ error: 'The tutor is temporarily unavailable.' })}\n\n`)
             res.write('data: [DONE]\n\n')
             return res.end()
         }
@@ -95,7 +100,8 @@ router.post('/api/v1/chat', aiRateLimit, aiDailyBudget, async (req: Request, res
             reasoning_effort: 'low',
         } as any)
 
-        res.json({ reply: reply ?? 'No te oí bien. ¿Puedes repetir?' })
+        if (!reply) throw new AppError('The tutor is temporarily unavailable', 503)
+        res.json({ reply })
     } catch (error) {
         next(error)
     }

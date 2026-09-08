@@ -7,7 +7,7 @@ import type { PreA1PortfolioEntry } from '../../prisma/content/spanish/pre-a1/po
 export type PortfolioReviewKind = 'cultural' | 'native_speaker'
 export type PortfolioReviewDecisionValue = 'approved' | 'rejected'
 type Db = PrismaClient | Prisma.TransactionClient
-type Decision = { id: string; kind: string; decision: string; reviewerId: string; reviewerQualification: string; note: string; requestKey: string; createdAt: Date }
+type Decision = { id: string; competencyCode: string; contentVersion: string; kind: string; decision: string; reviewerId: string; reviewerQualification: string; note: string; requestKey: string; createdAt: Date }
 
 export function latestReviewDecisions(rows: Decision[]) {
     const result: Partial<Record<PortfolioReviewKind, Decision>> = {}
@@ -39,9 +39,8 @@ export class PortfolioReviewService {
         if (!item) throw new AppError('Pre-A1 portfolio competency not found', 404)
         return item
     }
-    private async row(db: Db, item: PreA1PortfolioEntry) {
+    private view(item: PreA1PortfolioEntry, decisions: Decision[]) {
         const version = portfolioContentVersion(item)
-        const decisions = await db.portfolioReviewDecision.findMany({ where: { competencyCode: item.code, contentVersion: version }, orderBy: [{ createdAt: 'desc' }, { id: 'desc' }] })
         const current = latestReviewDecisions(decisions)
         return {
             code: item.code, contentVersion: version, realization: item.realization, contexts: item.contexts,
@@ -51,9 +50,26 @@ export class PortfolioReviewService {
             blockers: reviewBlockers(item, decisions), history: decisions,
         }
     }
+    private async row(db: Db, item: PreA1PortfolioEntry) {
+        const version = portfolioContentVersion(item)
+        const decisions = await db.portfolioReviewDecision.findMany({ where: { competencyCode: item.code, contentVersion: version }, orderBy: [{ createdAt: 'desc' }, { id: 'desc' }] })
+        return this.view(item, decisions)
+    }
     async catalog() {
-        const items = []
-        for (const entry of PRE_A1_PORTFOLIO) items.push(await this.row(this.db, entry))
+        const codes = PRE_A1_PORTFOLIO.map(entry => entry.code)
+        const versions = new Map(PRE_A1_PORTFOLIO.map(entry => [entry.code, portfolioContentVersion(entry)]))
+        const decisions = await this.db.portfolioReviewDecision.findMany({
+            where: { competencyCode: { in: codes } },
+            orderBy: [{ createdAt: 'desc' }, { id: 'desc' }],
+        })
+        const byCompetency = new Map<string, Decision[]>()
+        for (const decision of decisions) {
+            if (decision.contentVersion !== versions.get(decision.competencyCode)) continue
+            const rows = byCompetency.get(decision.competencyCode) ?? []
+            rows.push(decision)
+            byCompetency.set(decision.competencyCode, rows)
+        }
+        const items = PRE_A1_PORTFOLIO.map(entry => this.view(entry, byCompetency.get(entry.code) ?? []))
         const approved = items.reduce((sum, item) => sum + Number(item.reviews.cultural?.decision === 'approved') + Number(item.reviews.native_speaker?.decision === 'approved'), 0)
         return { totalSlots: items.length * 2, approvedSlots: approved, remainingSlots: items.length * 2 - approved, publishableCompetencies: items.filter(item => item.blockers.length === 0).length, items }
     }

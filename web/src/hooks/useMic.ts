@@ -1,6 +1,6 @@
 'use client'
 
-import { API_URL } from '@/lib/apiClient'
+import { authFetch } from '@/lib/apiClient'
 import { useCallback, useEffect, useRef, useState } from 'react'
 
 export type MicState = 'idle' | 'recording' | 'processing'
@@ -59,10 +59,9 @@ export function useMic(getToken: () => Promise<string | null>, onText: (text: st
                 upload.current = controller
                 const timeout = setTimeout(() => controller.abort(), 30000)
                 try {
-                    const token = await getToken()
                     if (!mounted.current) return
-                    const response = await fetch(`${API_URL}/api/v1/voice/transcribe`, {
-                        method: 'POST', headers: { Authorization: `Bearer ${token}`, 'Content-Type': blob.type },
+                    const response = await authFetch(`/api/v1/voice/transcribe`, getToken, {
+                        method: 'POST', headers: { 'Content-Type': blob.type },
                         body: blob, signal: controller.signal,
                     })
                     if (!response.ok) throw new Error('Transcription failed')

@@ -8,15 +8,14 @@ const userCache = new Map<string, { at: number; user: any }>()
 export const invalidateUserCache = (clerkId: string) => userCache.delete(clerkId)
 
 export async function getOrSyncUserFast(req: any) {
-    const id = req.auth?.userId
-    if (!id) return getOrSyncUser(req)
+    const id = requireAuth(req)
     
     const hit = userCache.get(id)
     if (hit && Date.now() - hit.at < 60_000) {
         return hit.user
     }
     
-    const user = await getOrSyncUser(req)
+    const user = await findOrSyncUser(id)
     userCache.set(id, { at: Date.now(), user })
     
     // Prevent memory leaks
@@ -54,6 +53,13 @@ export function requirePortfolioReviewer(req: Request): string {
     return userId
 }
 
+export function requirePilotAssessor(req: Request): string {
+    const userId = requireAuth(req)
+    const assessors = new Set((process.env.PILOT_ASSESSOR_CLERK_IDS ?? '').split(',').map(value => value.trim()).filter(Boolean))
+    if (!assessors.has(userId)) throw new AppError('Forbidden: Independent pilot assessor access only', 403)
+    return userId
+}
+
 export async function getClerkEmail(userId: string): Promise<string> {
     try {
         const clerkUser = await clerkClient.users.getUser(userId)
@@ -68,7 +74,10 @@ export async function getClerkEmail(userId: string): Promise<string> {
 }
 
 export async function getOrSyncUser(req: Request) {
-    const userId = requireAuth(req)
+    return findOrSyncUser(requireAuth(req))
+}
+
+async function findOrSyncUser(userId: string) {
     let user = await prisma.user.findUnique({ where: { clerkId: userId } })
     if (user) return user
 
