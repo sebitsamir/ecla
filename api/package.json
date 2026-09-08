@@ -27,9 +27,6 @@
     "validate": "npm run typecheck && npm test && npm run validate:content && npm run validate:curriculum && npm run validate:portfolio",
     "retention": "node dist/api/src/ops/retention.js"
   },
-  "prisma": {
-    "seed": "tsx prisma/seed.ts"
-  },
   "keywords": [],
   "author": "",
   "license": "ISC",
@@ -51,6 +48,9 @@
     "@types/node": "^26.1.2",
     "prisma": "^6.19.3",
     "tsx": "^4.23.9",
-    "typescript": "^7.0.2"
+    "typescript": "5.9.3"
+  },
+  "overrides": {
+    "deepmerge-ts": "^8.0.0"
   }
 }

@@ -33,8 +33,13 @@ jobs:
         with: { node-version: 24, cache: npm, cache-dependency-path: api/package-lock.json }
       - run: npm ci
       - run: npx prisma migrate deploy
-      - run: npm run validate
+      - run: npm run typecheck
+      - run: npm test
       - run: npm run test:integration
+      - run: npm run seed:all
+      - run: npm run validate:content
+      - run: npm run validate:curriculum
+      - run: npm run validate:portfolio
       - run: npm run build
       - run: npm audit --omit=dev --omit=optional --audit-level=high
   web:
