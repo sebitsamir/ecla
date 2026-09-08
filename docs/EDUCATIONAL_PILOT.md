@@ -52,4 +52,4 @@ The educational-proof claim may be approved only after all automated blockers cl
 7. Admin reads the report and records every scoring or curriculum revision decision.
 8. After the full duration, admin calls `POST /api/v1/admin/pilots/:slug/complete`; the API refuses while any completeness blocker remains.
 
-All write endpoints require Clerk authentication. Study creation, screening attestation, predictions, measurements, interviews, reports, and revisions require configured API administrators. Learners can only consent to or withdraw their own invitation.
+All write endpoints require Clerk authentication. Study creation, screening attestation, predictions, interviews, reports, and revisions require configured API administrators. Outcomes require a user in `PILOT_ASSESSOR_CLERK_IDS`, and the API rejects the person who screened the participant or locked the prediction. Learners can only consent to or withdraw their own invitation.

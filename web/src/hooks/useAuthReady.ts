@@ -5,8 +5,8 @@ import { useAuth } from '@clerk/nextjs'
 
 /** Wait for Clerk before API calls — prevents 401s on first paint. */
 export function useAuthReady() {
-    const { isLoaded, isSignedIn, getToken } = useAuth()
-    return { isLoaded, isSignedIn, getToken }
+    const { isLoaded, isSignedIn, userId, getToken } = useAuth()
+    return { isLoaded, isSignedIn, userId, getToken }
 }
 
 /** Refetch when lesson progress is saved elsewhere in the app. */

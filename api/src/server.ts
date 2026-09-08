@@ -32,8 +32,18 @@ import adaptationRoutes from './routes/adaptation'
 import privacyRoutes from './routes/privacy'
 import pilotRoutes from './routes/pilot'
 
+const allowedOrigin =
+    process.env.FRONTEND_URL ||
+    process.env.APP_ORIGIN ||
+    'http://localhost:3000'
+
 const app = express()
 app.disable('x-powered-by')
+app.use(clerkMiddleware(
+    process.env.NODE_ENV === 'production'
+        ? { authorizedParties: [allowedOrigin] }
+        : {},
+))
 app.use(requestObservability)
 app.use((_req, res, next) => {
     res.setHeader('X-Content-Type-Options', 'nosniff')
@@ -41,11 +51,6 @@ app.use((_req, res, next) => {
     res.setHeader('Permissions-Policy', 'camera=(), geolocation=()')
     next()
 })
-
-const allowedOrigin =
-    process.env.FRONTEND_URL ||
-    process.env.APP_ORIGIN ||
-    'http://localhost:3000'
 
 app.use(cors({
     origin: allowedOrigin,
@@ -59,8 +64,6 @@ app.use(cors({
 // JSON body — voice route uses its own raw parser (15mb), so this limit is for API payloads only
 app.use(express.json({ limit: '2mb' }))
 app.use(express.urlencoded({ extended: false, limit: '2mb' }))
-app.use(clerkMiddleware())
-
 // Trust reverse proxy (Railway, Vercel, Fly) so req.ip works correctly
 app.set('trust proxy', 1)
 

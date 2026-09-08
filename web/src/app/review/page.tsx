@@ -1,6 +1,6 @@
 'use client'
 
-import { API_URL } from '@/lib/apiClient'
+import { authFetch } from '@/lib/apiClient'
 
 /**
  * /review — Phase 29: scene-based spaced retrieval.
@@ -35,9 +35,7 @@ export default function ReviewPage() {
     useEffect(() => {
         (async () => {
             try {
-                const token = await getToken()
-                const res = await fetch(`${API_URL}/api/v1/adaptive/review`, {
-                    headers: { Authorization: `Bearer ${token}` },
+                const res = await authFetch(`/api/v1/adaptive/review`, getToken, {
                 })
                 if (!res.ok) throw new Error('Could not load reviews')
                 const data = await res.json()

@@ -1,6 +1,6 @@
 'use client'
 
-import { API_URL } from '@/lib/apiClient'
+import { authFetch } from '@/lib/apiClient'
 
 /**
  * Next Up Card — Adaptive Engine UI
@@ -51,9 +51,7 @@ export default function NextUpCard() {
     useEffect(() => {
         async function fetchRecommendation() {
             try {
-                const token = await getToken()
-                const res = await fetch(`${API_URL}/api/v1/learner/next-activity`, {
-                    headers: { Authorization: `Bearer ${token}` },
+                const res = await authFetch(`/api/v1/learner/next-activity`, getToken, {
                 })
                 if (res.ok) {
                     const data = await res.json()

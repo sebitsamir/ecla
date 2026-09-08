@@ -1,7 +1,8 @@
 'use client'
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import { useAuthReady } from '@/hooks/useAuthReady'
-import { apiFetch } from '@/lib/apiClient'
+import ApiState from '@/components/ApiState'
+import { ApiError, apiFetch } from '@/lib/apiClient'
 
 type Decision = { id: string; kind: 'cultural' | 'native_speaker'; decision: 'approved' | 'rejected'; reviewerId: string; reviewerQualification: string; note: string; createdAt: string }
 type Context = { slug: string; setting: string; partner: string; opening: string; learnerGoal: string; variation: string }
@@ -17,24 +18,32 @@ type ReviewKind = 'cultural' | 'native_speaker'
 
 const blank = { qualification: '', note: '' }
 export default function PortfolioReviewPage() {
-    const { getToken } = useAuthReady()
+    const { isLoaded, isSignedIn, getToken } = useAuthReady()
     const [catalog, setCatalog] = useState<Catalog | null>(null)
     const [selectedCode, setSelectedCode] = useState<string>('')
     const [forms, setForms] = useState<Record<ReviewKind, typeof blank>>({ cultural: { ...blank }, native_speaker: { ...blank } })
     const [showComplete, setShowComplete] = useState(false)
     const [busy, setBusy] = useState(false)
+    const [loadError, setLoadError] = useState<ApiError | null>(null)
     const [message, setMessage] = useState<string | null>(null)
     const load = useCallback(async () => {
-        const result = await apiFetch<Catalog>('/api/v1/admin/pre-a1-portfolio', getToken)
-        setCatalog(result)
-    }, [getToken])
+        if (!isLoaded || !isSignedIn) return
+        setLoadError(null)
+        try {
+            const result = await apiFetch<Catalog>('/api/v1/admin/pre-a1-portfolio', getToken)
+            setCatalog(result)
+        } catch (error) {
+            setLoadError(error instanceof ApiError ? error : new ApiError('network', 'Could not load portfolio reviews.'))
+        }
+    }, [getToken, isLoaded, isSignedIn])
     useEffect(() => {
+        if (!isLoaded || !isSignedIn) return
         let active = true
         apiFetch<Catalog>('/api/v1/admin/pre-a1-portfolio', getToken)
             .then(result => { if (active) setCatalog(result) })
-            .catch(error => { if (active) setMessage(error instanceof Error ? error.message : 'Could not load reviews') })
+            .catch(error => { if (active) setLoadError(error instanceof ApiError ? error : new ApiError('network', 'Could not load portfolio reviews.')) })
         return () => { active = false }
-    }, [getToken])
+    }, [getToken, isLoaded, isSignedIn])
     const visible = useMemo(() => catalog?.items.filter(item => showComplete || item.blockers.length > 0) ?? [], [catalog, showComplete])
     const selected = catalog?.items.find(item => item.code === selectedCode) ?? visible[0] ?? null
     const decide = async (kind: ReviewKind, decision: 'approved' | 'rejected') => {
@@ -51,11 +60,16 @@ export default function PortfolioReviewPage() {
     const button = 'rounded-xl border border-white/20 px-4 py-2 text-sm disabled:opacity-40'
     return <main className="min-h-screen bg-[#0B0B10] p-6 text-cream"><div className="mx-auto max-w-6xl space-y-6">
         <header className="space-y-3"><a href="/admin" className={button}>Back to admin</a><h1 className="text-3xl font-bold">Pre-A1 independent review</h1><p className="text-cream/60">Review the exact authored content version. Approval records are append-only; a later decision supersedes the earlier one without deleting history.</p></header>
+        {!isLoaded && <p role="status" className="rounded-xl border border-white/10 p-4 text-cream/60">Loading your reviewer session…</p>}
+        {isLoaded && !isSignedIn && <ApiState error={new ApiError('unauthorized', 'Please sign in to review competencies.', 401)} />}
+        {isLoaded && isSignedIn && !catalog && !loadError && <p role="status" className="rounded-xl border border-white/10 p-4 text-cream/60">Loading all competency reviews…</p>}
+        {loadError && <ApiState error={loadError} onRetry={() => void load()} />}
         {catalog && <section className="grid gap-3 sm:grid-cols-4">{[[catalog.approvedSlots,'Approved slots'],[catalog.remainingSlots,'Remaining slots'],[catalog.totalSlots,'Total slots'],[catalog.publishableCompetencies,'Publishable competencies']].map(([value,label]) => <div key={label} className="rounded-xl border border-white/10 p-4"><p className="text-2xl font-bold text-glow">{value}</p><p className="text-xs text-cream/50">{label}</p></div>)}</section>}
         {message && <p role="status" className="rounded-xl border border-amber-300/30 p-3">{message}</p>}
         <label className="flex items-center gap-2 text-sm"><input type="checkbox" checked={showComplete} onChange={event => setShowComplete(event.target.checked)} /> Show competencies with both approvals</label>
         <div className="grid gap-6 lg:grid-cols-[260px_1fr]">
             <aside className="max-h-[75vh] overflow-y-auto rounded-xl border border-white/10 p-3">{visible.map(item => <button key={item.code} onClick={() => setSelectedCode(item.code)} className={`mb-1 w-full rounded-lg p-2 text-left text-xs ${selected?.code === item.code ? 'bg-glow/20 text-glow' : 'hover:bg-white/5'}`}><span className="font-bold">{item.code}</span><span className="float-right">{2-item.blockers.length}/2</span></button>)}</aside>
+            {catalog && visible.length === 0 && <p className="rounded-xl border border-white/10 p-5 text-cream/60">All competencies currently have both approvals. Enable “Show competencies with both approvals” to review them.</p>}
             {selected && <section className="space-y-6 rounded-xl border border-white/10 p-5">
                 <div><h2 className="text-xl font-bold">{selected.code}</h2><p className="break-all font-mono text-[10px] text-cream/40">Content hash: {selected.contentVersion}</p>{selected.blockers.map(blocker => <p key={blocker} className="text-sm text-amber-300">{blocker}</p>)}</div>
                 <div><h3 className="font-bold">Canonical realization</h3><p>{selected.realization.core.join(' · ')}</p><p className="text-sm text-cream/60">Accepted variants: {selected.realization.acceptedMeaningVariants.join(' · ')}</p></div>

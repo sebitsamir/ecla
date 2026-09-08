@@ -1,6 +1,6 @@
 'use client'
 
-import { API_URL } from '@/lib/apiClient'
+import { authFetch } from '@/lib/apiClient'
 
 /**
  * useSceneEngine — the scene runtime (Phases 8 + S2 + S3 + A + Phase 3 Evidence + Phase 5).
@@ -54,10 +54,9 @@ async function assessTranscriptionMatch(
     target: string,
 ): Promise<{ intelligible: boolean; score: number } | null> {
     try {
-        const token = await getToken()
-        const res = await fetch(`${API_URL}/api/v1/voice/assess`, {
+        const res = await authFetch(`/api/v1/voice/assess`, getToken, {
             method: 'POST',
-            headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+            headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ transcript, target }),
         })
         if (!res.ok) return null

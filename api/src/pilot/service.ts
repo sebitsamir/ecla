@@ -14,19 +14,30 @@ export class PilotService {
   }
 
   async invite(actor: string, slug: string, input: { userId: string; eligibilityInstrument: string }) {
-    const study = await this.db.pilotStudy.findUnique({ where: { slug } })
-    if (!study || study.status !== 'draft') throw new AppError('Pilot is not accepting invitations', 409)
-    const user = await this.db.user.findUnique({ where: { id: input.userId }, select: { id: true } })
-    if (!user) throw new AppError('Learner not found', 404)
-    return this.db.pilotParticipant.create({ data: { studyId: study.id, userId: user.id, participantCode: participantCode(), beginnerVerifiedBy: actor, eligibilityInstrument: input.eligibilityInstrument } })
+    return this.db.$transaction(async tx => {
+      const study = await tx.pilotStudy.findUnique({ where: { slug } })
+      if (!study || study.status !== 'draft') throw new AppError('Pilot is not accepting invitations', 409)
+      await tx.$queryRaw`SELECT id FROM "PilotStudy" WHERE id = ${study.id} FOR UPDATE`
+      const participantCount = await tx.pilotParticipant.count({ where: { studyId: study.id } })
+      if (participantCount >= study.targetMax) throw new AppError('Pilot invitation limit reached', 409)
+      const user = await tx.user.findUnique({ where: { id: input.userId }, select: { id: true } })
+      if (!user) throw new AppError('Learner not found', 404)
+      return tx.pilotParticipant.create({ data: { studyId: study.id, userId: user.id, participantCode: participantCode(), beginnerVerifiedBy: actor, eligibilityInstrument: input.eligibilityInstrument } })
+    })
   }
 
   async consent(userId: string, slug: string, consentVersion: string) {
-    const participant = await this.db.pilotParticipant.findFirst({ where: { userId, study: { slug } }, include: { study: true } })
-    if (!participant) throw new AppError('Pilot invitation not found', 404)
-    if (participant.status === 'withdrawn') throw new AppError('Pilot participation was withdrawn', 409)
-    if (consentVersion !== participant.study.consentVersion) throw new AppError('Consent text changed; review the current consent form', 409)
-    return this.db.pilotParticipant.update({ where: { id: participant.id }, data: { consentVersion, consentedAt: participant.consentedAt ?? this.clock(), status: 'active' }, select: { participantCode: true, status: true, consentedAt: true } })
+    return this.db.$transaction(async tx => {
+      const participant = await tx.pilotParticipant.findFirst({ where: { userId, study: { slug } }, include: { study: true } })
+      if (!participant) throw new AppError('Pilot invitation not found', 404)
+      await tx.$queryRaw`SELECT id FROM "PilotStudy" WHERE id = ${participant.studyId} FOR UPDATE`
+      if (participant.status === 'withdrawn') throw new AppError('Pilot participation was withdrawn', 409)
+      if (consentVersion !== participant.study.consentVersion) throw new AppError('Consent text changed; review the current consent form', 409)
+      if (participant.consentedAt) return { participantCode: participant.participantCode, status: participant.status, consentedAt: participant.consentedAt }
+      const consented = await tx.pilotParticipant.count({ where: { studyId: participant.studyId, consentedAt: { not: null } } })
+      if (consented >= participant.study.targetMax) throw new AppError('Pilot consented cohort is full', 409)
+      return tx.pilotParticipant.update({ where: { id: participant.id }, data: { consentVersion, consentedAt: this.clock(), status: 'active' }, select: { participantCode: true, status: true, consentedAt: true } })
+    })
   }
 
   async withdraw(userId: string, slug: string, reason?: string) {
@@ -41,7 +52,9 @@ export class PilotService {
       if (!study || study.status !== 'draft') throw new AppError('Pilot is not in draft status', 409)
       const consented = await tx.pilotParticipant.count({ where: { studyId: study.id, status: 'active', consentedAt: { not: null } } })
       if (consented < study.targetMin || consented > study.targetMax) throw new AppError(`Pilot requires ${study.targetMin}-${study.targetMax} consented participants`, 409)
-      const started = await tx.pilotStudy.update({ where: { id: study.id }, data: { status: 'running', startedAt: this.clock() } })
+      const claim = await tx.pilotStudy.updateMany({ where: { id: study.id, status: 'draft' }, data: { status: 'running', startedAt: this.clock() } })
+      if (claim.count !== 1) throw new AppError('Pilot was already started', 409)
+      const started = await tx.pilotStudy.findUniqueOrThrow({ where: { id: study.id } })
       await tx.pilotRevision.create({ data: { studyId: study.id, actor, decision: 'pilot_started', rationale: `${consented} consented participants met the locked protocol cohort requirement.`, affectedVersions: json({ protocolVersion: study.protocolVersion, consentVersion: study.consentVersion }) } })
       return started
     })
@@ -58,22 +71,22 @@ export class PilotService {
     return this.db.pilotPrediction.create({ data: { participantId, competencyCode: input.competencyCode, situationId: input.situationId, modelVersion: input.modelVersion, predictedMastery, evidenceCutoffAt: this.clock(), lockedBy: actor } })
   }
 
-  async measurement(actor: string, slug: string, participantId: string, input: { kind: string; week?: number; competencyCode?: string; situationId?: string; predictionId?: string; instrumentVersion: string; observedPerformance: number; assessorIndependent: boolean; evidenceReference: string; requestKey: string; notes?: string; observedAt: Date }) {
+  async measurement(actor: string, slug: string, participantId: string, input: { kind: string; week?: number; competencyCode?: string; situationId?: string; predictionId?: string; instrumentVersion: string; observedPerformance: number; evidenceReference: string; requestKey: string; notes?: string; observedAt: Date }) {
     const participant = await this.db.pilotParticipant.findFirst({ where: { id: participantId, study: { slug }, status: 'active', consentedAt: { not: null } } })
     if (!participant) throw new AppError('Active consented participant not found', 404)
     const replay = await this.db.pilotMeasurement.findUnique({ where: { participantId_requestKey: { participantId, requestKey: input.requestKey } } })
     if (replay) {
-      const same = replay.kind === input.kind && replay.instrumentVersion === input.instrumentVersion && replay.observedPerformance === input.observedPerformance && replay.evidenceReference === input.evidenceReference
+      const same = replay.assessorId === actor && replay.kind === input.kind && replay.week === (input.week ?? null) && replay.competencyCode === (input.competencyCode ?? null) && replay.situationId === (input.situationId ?? null) && replay.predictionId === (input.predictionId ?? null) && replay.instrumentVersion === input.instrumentVersion && replay.observedPerformance === input.observedPerformance && replay.evidenceReference === input.evidenceReference && replay.observedAt.getTime() === input.observedAt.getTime()
       if (!same) throw new AppError('Measurement request key belongs to another observation', 409)
       return replay
     }
-    if (['external_speaking', 'ultimate_situation'].includes(input.kind) && !input.assessorIndependent) throw new AppError('This observation requires an independent assessor', 400)
     const requiresPrediction = ['external_speaking', 'ultimate_situation'].includes(input.kind)
     const prediction = input.predictionId ? await this.db.pilotPrediction.findFirst({ where: { id: input.predictionId, participantId }, include: { measurement: true } }) : null
     if (requiresPrediction && !prediction) throw new AppError('A pre-registered ECLA prediction is required', 400)
     if (prediction?.measurement) throw new AppError('This prediction already has an observed outcome', 409)
+    if (prediction?.lockedBy === actor || participant.beginnerVerifiedBy === actor) throw new AppError('The outcome assessor must be independent from screening and prediction locking', 403)
     if (prediction && (input.situationId !== prediction.situationId || (input.competencyCode ?? null) !== prediction.competencyCode)) throw new AppError('Observation does not match the locked prediction', 409)
-    return this.db.pilotMeasurement.create({ data: { participantId, kind: input.kind, week: input.week, competencyCode: input.competencyCode, situationId: input.situationId, predictionId: prediction?.id, instrumentVersion: input.instrumentVersion, predictedMastery: prediction?.predictedMastery, observedPerformance: input.observedPerformance, assessorId: actor, assessorIndependent: input.assessorIndependent, evidenceReference: input.evidenceReference, requestKey: input.requestKey, notes: input.notes, observedAt: input.observedAt } })
+    return this.db.pilotMeasurement.create({ data: { participantId, kind: input.kind, week: input.week, competencyCode: input.competencyCode, situationId: input.situationId, predictionId: prediction?.id, instrumentVersion: input.instrumentVersion, predictedMastery: prediction?.predictedMastery, observedPerformance: input.observedPerformance, assessorId: actor, assessorIndependent: true, evidenceReference: input.evidenceReference, requestKey: input.requestKey, notes: input.notes, observedAt: input.observedAt } })
   }
 
   async interview(actor: string, slug: string, participantId: string, input: { week: number; instrumentVersion: string; codedThemes: Record<string, string | number | boolean>; summary: string; requestKey: string; conductedAt: Date }) {

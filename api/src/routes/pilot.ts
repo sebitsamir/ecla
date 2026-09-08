@@ -1,6 +1,6 @@
 import { Router, type Request } from 'express'
 import { z } from 'zod'
-import { getOrSyncUserFast, requireAdmin } from '../lib/auth'
+import { getOrSyncUserFast, requireAdmin, requirePilotAssessor } from '../lib/auth'
 import { AppError } from '../lib/errors'
 import { prisma } from '../lib/prisma'
 import { PilotService } from '../pilot/service'
@@ -63,11 +63,11 @@ router.post('/api/v1/admin/pilots/:slug/participants/:participantId/predictions'
 
 router.post('/api/v1/admin/pilots/:slug/participants/:participantId/measurements', async (req, res, next) => {
   try {
-    const actor = requireAdmin(req)
+    const actor = requirePilotAssessor(req)
     const body = parse(z.object({
       kind: z.enum(['baseline', 'weekly', 'post', 'delayed_retention', 'external_speaking', 'ultimate_situation']),
       week: z.number().int().min(0).max(12).optional(), competencyCode: z.string().trim().min(1).max(80).optional(), situationId: z.string().trim().min(1).max(100).optional(),
-      instrumentVersion: version, predictionId: z.uuid().optional(), observedPerformance: z.number().min(0).max(1), assessorIndependent: z.boolean(),
+      instrumentVersion: version, predictionId: z.uuid().optional(), observedPerformance: z.number().min(0).max(1),
       evidenceReference: z.string().trim().min(5).max(300), requestKey: z.uuid(), notes: z.string().trim().max(2000).optional(), observedAt: z.iso.datetime().transform(value => new Date(value)),
     }).strict(), req.body)
     res.status(201).json(await service.measurement(actor, slug(req), participantId(req), body))

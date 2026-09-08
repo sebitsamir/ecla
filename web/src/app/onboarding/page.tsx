@@ -1,6 +1,6 @@
 'use client'
 
-import { API_URL } from '@/lib/apiClient'
+import { authFetch } from '@/lib/apiClient'
 
 /**
  * /onboarding — New user setup flow (premium pass).
@@ -87,9 +87,7 @@ export default function OnboardingPage() {
                 return
             }
             try {
-                const token = await getToken()
-                const res = await fetch(`${API_URL}/api/v1/users/me`, {
-                    headers: { Authorization: `Bearer ${token}` }
+                const res = await authFetch(`/api/v1/users/me`, getToken, {
                 })
                 if (res.ok) {
                     const user = await res.json()
@@ -134,13 +132,10 @@ export default function OnboardingPage() {
         setSaving(true)
         setError('')
         try {
-            const token = await getToken()
-            if (!token) throw new Error('No auth token')
-            const res = await fetch(`${API_URL}/api/v1/onboarding/complete`, {
+            const res = await authFetch(`/api/v1/onboarding/complete`, getToken, {
                 method: 'POST',
                 headers: {
                     'Content-Type': 'application/json',
-                    Authorization: `Bearer ${token}`,
                 },
                 body: JSON.stringify({
                     motivation,

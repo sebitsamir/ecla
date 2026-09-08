@@ -1,6 +1,6 @@
 'use client'
 
-import { API_URL } from '@/lib/apiClient'
+import { authFetch } from '@/lib/apiClient'
 
 import { useEffect, useState } from 'react'
 import { useAuth } from '@clerk/nextjs'
@@ -16,9 +16,7 @@ export function useEquippedGlow(): GlowPalette {
         let cancelled = false
         async function load() {
             try {
-                const token = await getToken()
-                const res = await fetch(`${API_URL}/api/v1/user/cosmetics`, {
-                    headers: { Authorization: `Bearer ${token}` },
+                const res = await authFetch(`/api/v1/user/cosmetics`, getToken, {
                 })
                 if (!res.ok) return
                 const data = await res.json()

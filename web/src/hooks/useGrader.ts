@@ -1,6 +1,6 @@
 'use client'
 
-import { API_URL } from '@/lib/apiClient'
+import { authFetch } from '@/lib/apiClient'
 
 /**
  * useGrader — two-layer assessment (Constitution Arts. 16/18).
@@ -30,10 +30,9 @@ export function useGrader(getToken: () => Promise<string | null>) {
             // Layer 2 — function (only for open answers or near-misses).
             if (target.open || local.needsJudge) {
                 try {
-                    const token = await getToken()
-                    const res = await fetch(`${API_URL}/api/v1/lessons/grade`, {
+                    const res = await authFetch(`/api/v1/lessons/grade`, getToken, {
                         method: 'POST',
-                        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+                        headers: { 'Content-Type': 'application/json' },
                         body: JSON.stringify({
                             answer: text,
                             expected: target.expected.join(' / '),

@@ -22,7 +22,7 @@ import Link from 'next/link'
 import RelationshipsCard from '@/components/ecla/dashboard/RelationshipsCard'
 
 export default function DashboardPage() {
-  const { isLoaded, isSignedIn, getToken } = useAuthReady()
+  const { isLoaded, isSignedIn, userId, getToken } = useAuthReady()
   const { user } = useUser()
   const tick = useProgressTick()
   const [home, setHome] = useState<LearnerHome | null>(null)
@@ -34,7 +34,7 @@ export default function DashboardPage() {
 
   useEffect(() => {
     if (!isLoaded) return
-    if (!isSignedIn) return
+    if (!isSignedIn || !userId) return
 
     let cancelled = false
     ;(async () => {
@@ -42,7 +42,7 @@ export default function DashboardPage() {
       setError(null)
       try {
         if (tick > 0) invalidateHomeCache()
-        const data = await fetchHome(getToken, { force: tick > 0 })
+        const data = await fetchHome(getToken, { force: tick > 0, userId })
         if (!cancelled) setHome(data)
       } catch (e) {
         if (!cancelled) setError(e instanceof ApiError ? e : new ApiError('network', 'Could not load your dashboard.'))
@@ -52,7 +52,7 @@ export default function DashboardPage() {
     })()
 
     return () => { cancelled = true }
-  }, [isLoaded, isSignedIn, getToken, tick])
+  }, [isLoaded, isSignedIn, userId, getToken, tick])
 
   const summary = home?.summary
 

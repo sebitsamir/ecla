@@ -36,15 +36,18 @@ export type LearnerHome = {
     adaptation: AdaptationPlan
 }
 
-const CACHE_KEY = 'ecla:home'
+const CACHE_PREFIX = 'ecla:home:'
 const CACHE_TTL_MS = 30_000
+const pending = new Map<string, Promise<LearnerHome>>()
 
 type CacheEntry = { at: number; data: LearnerHome }
 
-function readCache(): LearnerHome | null {
+function cacheKey(userId: string) { return `${CACHE_PREFIX}${userId}` }
+
+function readCache(userId: string): LearnerHome | null {
     if (typeof window === 'undefined') return null
     try {
-        const raw = sessionStorage.getItem(CACHE_KEY)
+        const raw = sessionStorage.getItem(cacheKey(userId))
         if (!raw) return null
         const hit = JSON.parse(raw) as CacheEntry
         if (Date.now() - hit.at > CACHE_TTL_MS) return null
@@ -54,30 +57,36 @@ function readCache(): LearnerHome | null {
     }
 }
 
-function writeCache(data: LearnerHome) {
+function writeCache(userId: string, data: LearnerHome) {
     if (typeof window === 'undefined') return
     try {
-        sessionStorage.setItem(CACHE_KEY, JSON.stringify({ at: Date.now(), data }))
+        sessionStorage.setItem(cacheKey(userId), JSON.stringify({ at: Date.now(), data }))
     } catch { /* quota */ }
 }
 
-export function invalidateHomeCache() {
+export function invalidateHomeCache(userId?: string) {
     if (typeof window === 'undefined') return
-    sessionStorage.removeItem(CACHE_KEY)
+    if (userId) sessionStorage.removeItem(cacheKey(userId))
+    else for (let index = sessionStorage.length - 1; index >= 0; index -= 1) {
+        const key = sessionStorage.key(index)
+        if (key?.startsWith(CACHE_PREFIX)) sessionStorage.removeItem(key)
+    }
 }
 
 /** Single request for dashboard + course — cached 30s between navigations. */
 export async function fetchHome(
     getToken: () => Promise<string | null>,
-    { force = false } = {},
+    { force = false, userId }: { force?: boolean; userId: string },
 ): Promise<LearnerHome> {
     if (!force) {
-        const cached = readCache()
+        const cached = readCache(userId)
         if (cached) return cached
+        const active = pending.get(userId)
+        if (active) return active
     }
-    const data = await apiFetch<LearnerHome>('/api/v1/learner/home', getToken)
-    writeCache(data)
-    return data
+    const request = apiFetch<LearnerHome>('/api/v1/learner/home', getToken).then(data => { writeCache(userId, data); return data })
+    pending.set(userId, request)
+    try { return await request } finally { if (pending.get(userId) === request) pending.delete(userId) }
 }
 
 export async function fetchSummary(getToken: () => Promise<string | null>): Promise<LearnerSummary> {
