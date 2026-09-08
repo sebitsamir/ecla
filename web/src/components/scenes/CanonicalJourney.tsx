@@ -4,6 +4,7 @@ import { apiFetch } from '@/lib/apiClient'
 import { isSceneDelivery, type SceneDelivery } from '../../../../packages/contracts/scene'
 import { SceneRenderer } from './SceneRenderer'
 import { cachePublishedScene, cacheSceneCatalog, readPublishedScene, readSceneCatalog, type SceneCatalogEntry as Entry } from '@/lib/sceneCache'
+import { ArrowLeft, ArrowRight, RefreshCw, ShieldCheck } from 'lucide-react'
 export default function CanonicalJourney({ competencyId, getToken, onExit }: { competencyId: string; getToken: () => Promise<string | null>; onExit: () => void }) {
     const [scenes, setScenes] = useState<Entry[] | null>(null)
     const [delivery, setDelivery] = useState<SceneDelivery | null>(null)
@@ -35,16 +36,17 @@ export default function CanonicalJourney({ competencyId, getToken, onExit }: { c
         } catch (reason) { const cached = readPublishedScene(slug); if (cached) { setOffline(true); setDelivery(cached) } else setError(reason instanceof Error ? reason.message : 'Could not open scene') }
         finally { pending.current = false; setBusy(false) }
     }
-    if (delivery) return <main className="min-h-screen bg-[#0B0B10] p-6"><SceneRenderer key={delivery.revisionId} delivery={delivery} onExit={() => setDelivery(null)} /></main>
-    return <main className="min-h-screen bg-[#0B0B10] p-6 text-cream"><div className="mx-auto max-w-2xl space-y-5">
-        <h1 className="text-3xl font-bold">Published practice scenes</h1>
-        <p>These scenes come from reviewed, versioned server content. Practice does not award XP or mastery.</p>
-        {offline && <p role="status" className="rounded-xl border border-amber-200/20 p-3 text-sm text-amber-100">Offline practice copy. Responses are not evaluated or saved; reconnect before an assessment.</p>}
-        {error && <p role="alert">{error}</p>}
-        {scenes === null && !error && <p role="status">Loading…</p>}
-        {scenes?.length === 0 && <p role="status">No canonical scene has been published for this competency yet. Content must be migrated and reviewed before it appears here.</p>}
-        {scenes?.map(scene => <button key={scene.revisionId} disabled={busy} className="block w-full rounded-xl border border-white/20 p-4 text-left disabled:opacity-40" onClick={() => open(scene.slug)}>{scene.title}</button>)}
-        <button onClick={() => { setError(null); load().catch(reason => setError(reason.message)) }} className="rounded-xl border px-4 py-2">Refresh scenes</button>
-        <button onClick={onExit} className="ml-3 rounded-xl border px-4 py-2">Back to course</button>
+    if (delivery) return <SceneRenderer key={delivery.revisionId} delivery={delivery} onExit={() => setDelivery(null)} />
+    return <main className="min-h-dvh bg-[radial-gradient(circle_at_80%_0%,rgba(255,122,61,.12),transparent_28rem),linear-gradient(180deg,#111012,#09090a)] px-4 py-6 text-ivory sm:px-6 sm:py-10"><div className="mx-auto max-w-4xl">
+        <header className="flex items-center justify-between"><button onClick={onExit} className="ecla-control inline-flex min-h-11 items-center gap-2 rounded-full border border-line-strong bg-surface px-4 text-sm text-stone hover:text-ivory"><ArrowLeft className="size-4" />Course</button><span className="inline-flex items-center gap-2 text-xs text-stone"><ShieldCheck className="size-4 text-success" />Reviewed server content</span></header>
+        <div className="max-w-2xl pb-8 pt-14 sm:pt-20"><p className="text-xs font-semibold uppercase tracking-[.2em] text-ember-soft">Conversation practice</p><h1 className="font-display mt-3 text-4xl leading-tight sm:text-6xl">Step into the language.</h1><p className="mt-4 max-w-xl text-base leading-relaxed text-stone">Choose a reviewed scene and respond in context. These practice visits do not award XP or mastery.</p></div>
+        {offline && <p role="status" className="mb-5 rounded-control border border-warning/30 bg-warning/10 p-4 text-sm text-ivory">You are viewing an offline practice copy. Reconnect before an assessment.</p>}
+        {error && <div role="alert" className="mb-5 rounded-control border border-danger/40 bg-danger/10 p-4 text-danger-soft">{error}</div>}
+        {scenes === null && !error && <div role="status" className="grid gap-4 sm:grid-cols-2">{[0,1].map(item => <div key={item} className="ecla-skeleton h-40 rounded-experience" />)}</div>}
+        {scenes?.length === 0 && <div role="status" className="ecla-surface rounded-experience p-7 text-stone">No reviewed scene is published for this competency yet.</div>}
+        <div className="grid gap-4 sm:grid-cols-2">{scenes?.map((scene, index) => <button key={scene.revisionId} disabled={busy} className="ecla-control group relative min-h-44 overflow-hidden rounded-experience border border-line-strong bg-carbon p-6 text-left shadow-glow-md hover:-translate-y-0.5 hover:border-ember/50 disabled:opacity-40" onClick={() => open(scene.slug)}>
+            <div aria-hidden className="absolute inset-0 bg-[radial-gradient(circle_at_90%_10%,rgba(255,122,61,.18),transparent_45%)]" /><div className="relative flex h-full flex-col justify-between"><p className="text-[11px] font-semibold uppercase tracking-[.18em] text-ember-soft">Scene {String(index + 1).padStart(2,'0')}</p><div><h2 className="font-display text-2xl text-ivory">{scene.title}</h2><p className="mt-3 inline-flex items-center gap-2 text-sm font-semibold text-stone group-hover:text-ivory">Enter scene <ArrowRight className="size-4" /></p></div></div>
+        </button>)}</div>
+        <button onClick={() => { setError(null); load().catch(reason => setError(reason.message)) }} className="ecla-control mt-7 inline-flex min-h-11 items-center gap-2 rounded-full border border-line-strong px-4 text-sm text-stone hover:text-ivory"><RefreshCw className="size-4" />Refresh scenes</button>
     </div></main>
 }

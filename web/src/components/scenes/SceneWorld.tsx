@@ -1,23 +1,23 @@
+import Image from 'next/image'
 import { MapPin, Volume2 } from 'lucide-react'
-import { sceneMood, speakerIdentity } from '@/lib/scenePresentation'
-
-const moodClass = {
-    cafe: 'from-amber-500/25 via-orange-950/30 to-night-900',
-    street: 'from-sky-500/20 via-indigo-950/30 to-night-900',
-    classroom: 'from-violet-500/20 via-purple-950/30 to-night-900',
-    service: 'from-blue-500/20 via-slate-900/40 to-night-900',
-    home: 'from-emerald-500/15 via-teal-950/25 to-night-900',
-}
+import { sceneBackground, sceneMood, speakerIdentity } from '@/lib/scenePresentation'
 
 export function SceneWorld({ setting, speaker, title }: { setting: string; speaker?: string | null; title: string }) {
     const mood = sceneMood(setting)
     const person = speakerIdentity(speaker)
-    return <div className={`relative min-h-48 overflow-hidden rounded-3xl border border-white/10 bg-gradient-to-br ${moodClass[mood]} p-5 shadow-2xl sm:min-h-56 sm:p-7`}>
-        <div aria-hidden className="absolute -right-12 -top-16 h-44 w-44 rounded-full bg-glow/10 blur-3xl" />
-        <div aria-hidden className="absolute bottom-0 left-0 h-20 w-full bg-gradient-to-t from-black/30 to-transparent" />
-        <div className="relative flex h-full min-h-40 items-end justify-between gap-5">
-            <div className="max-w-sm pb-1"><p className="flex items-center gap-2 text-xs font-bold uppercase tracking-widest text-cream/55"><MapPin className="h-3.5 w-3.5" />{setting}</p><h1 className="font-display mt-2 text-2xl font-bold leading-tight text-cream sm:text-3xl">{title}</h1><p className="mt-3 flex items-center gap-2 text-xs text-cream/45"><Volume2 className="h-3.5 w-3.5" />Audio source is identified on every spoken line.</p></div>
-            <div className="shrink-0 text-center"><div className="scene-character mx-auto flex h-20 w-20 items-center justify-center rounded-full border border-glow/40 bg-night-900/80 text-3xl font-bold text-glow shadow-[0_0_32px_rgba(255,200,87,.18)] sm:h-28 sm:w-28 sm:text-4xl" aria-hidden>{person.initial}</div><p className="mt-2 max-w-28 truncate text-xs font-semibold text-cream/70">{person.name}</p></div>
+    return <div className="relative min-h-[23rem] overflow-hidden bg-obsidian sm:min-h-[30rem] lg:min-h-[36rem]">
+        <Image src={sceneBackground[mood]} alt="" fill priority sizes="100vw" className="object-cover" />
+        <div aria-hidden className="absolute inset-0 bg-[linear-gradient(180deg,rgba(9,9,10,.12)_0%,rgba(9,9,10,.22)_38%,rgba(9,9,10,.92)_100%)]" />
+        <div aria-hidden className="absolute inset-0 bg-[radial-gradient(circle_at_72%_34%,transparent_0%,rgba(9,9,10,.28)_68%,rgba(9,9,10,.58)_100%)]" />
+        <div className="relative flex min-h-[23rem] flex-col justify-between p-5 sm:min-h-[30rem] sm:p-8 lg:min-h-[36rem]">
+            <div className="flex items-start justify-between gap-4">
+                <p className="inline-flex max-w-[75%] items-center gap-2 rounded-full border border-white/15 bg-black/35 px-3 py-2 text-[11px] font-semibold uppercase tracking-[.16em] text-ivory/80 backdrop-blur-md"><MapPin className="size-3.5 shrink-0 text-ember-soft" /><span className="truncate">{setting}</span></p>
+                <p className="inline-flex items-center gap-2 rounded-full border border-white/15 bg-black/35 px-3 py-2 text-[11px] text-ivory/65 backdrop-blur-md"><Volume2 className="size-3.5" />Spanish</p>
+            </div>
+            <div className="flex items-end justify-between gap-5">
+                <div className="max-w-xl"><p className="mb-2 text-xs font-semibold uppercase tracking-[.18em] text-ember-soft">In this scene</p><h1 className="font-display text-3xl leading-[1.05] text-ivory drop-shadow-lg sm:text-5xl">{title}</h1></div>
+                <div className="shrink-0 text-center"><div className="scene-character mx-auto flex size-16 items-center justify-center rounded-full border border-ember-soft/50 bg-obsidian/75 text-2xl font-medium text-ember-soft shadow-[0_0_36px_rgba(255,122,61,.2)] backdrop-blur-md sm:size-20 sm:text-3xl" aria-hidden>{person.initial}</div><p className="mt-2 max-w-28 truncate text-xs font-semibold text-ivory/80">{person.name}</p></div>
+            </div>
         </div>
     </div>
 }
