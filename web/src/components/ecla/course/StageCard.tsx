@@ -56,12 +56,12 @@ export default function StageCard({ unit, index, defaultOpen = false, onSelect }
     const progress = total > 0 ? Math.round((complete / total) * 100) : 0
     const artwork = journeyUnitArtwork(unit.title, index)
 
-    return <li className="relative min-w-0 pl-11 sm:pl-14 xl:pl-16">
+    return <li className="relative max-w-full min-w-0 overflow-hidden pl-11 sm:pl-14 xl:pl-16">
         <div aria-hidden className="absolute bottom-[-1.5rem] left-[1.15rem] top-0 w-px bg-gradient-to-b from-ember/70 via-line-strong to-line sm:left-[1.4rem] xl:left-[1.55rem]" />
         <span aria-hidden className={`absolute left-0 top-7 z-10 flex size-9 items-center justify-center rounded-full border text-xs font-semibold shadow-[0_0_0_6px_#09090a] sm:top-8 sm:size-11 xl:size-12 xl:text-sm ${complete === total && total > 0 ? 'border-success/50 bg-success text-obsidian' : open ? 'border-ember bg-ember text-obsidian' : 'border-line-strong bg-carbon text-stone'}`}>{complete === total && total > 0 ? <Check className="size-4 xl:size-5" /> : index + 1}</span>
-        <button onClick={() => setOpen(value => !value)} aria-expanded={open} className={`ecla-control group relative w-full overflow-hidden rounded-experience border text-left shadow-glow-md ${open ? 'border-ember/40 bg-carbon' : 'border-line bg-carbon hover:border-line-strong'}`}>
+        <button onClick={() => setOpen(value => !value)} aria-expanded={open} className={`ecla-control group relative block max-w-full min-w-0 overflow-hidden rounded-experience border text-left shadow-glow-md ${open ? 'border-ember/40 bg-carbon' : 'border-line bg-carbon hover:border-line-strong'}`}>
             <span className="relative flex min-h-32 items-end sm:min-h-[8.5rem] xl:min-h-36">
-                <Image src={artwork.src} alt={artwork.alt} fill sizes="(max-width: 640px) calc(100vw - 4.5rem), (max-width: 1023px) calc(100vw - 6.5rem), (max-width: 1279px) calc(100vw - 27rem), 720px" className="object-cover object-center transition-transform duration-700 group-hover:scale-[1.025]" />
+                <Image src={artwork.src} alt={artwork.alt} fill sizes="(max-width: 640px) calc(100vw - 4.5rem), (max-width: 1279px) calc(100vw - 7rem), 720px" className="object-cover object-center transition-transform duration-700 group-hover:scale-[1.025]" />
                 <span aria-hidden className="absolute inset-0 bg-[linear-gradient(180deg,rgba(9,9,10,.08)_0%,rgba(9,9,10,.48)_42%,rgba(9,9,10,.96)_100%)]" />
                 <span className="relative flex min-w-0 flex-1 items-end gap-3 p-4 sm:p-4 xl:gap-4 xl:p-5">
                     <span className="min-w-0 flex-1"><span className="flex items-center gap-1.5 text-[9px] font-semibold uppercase tracking-[.16em] text-ember-soft sm:text-[10px]"><MapPin className="size-3 shrink-0" />Unit {String(index + 1).padStart(2, '0')}</span><span className="font-display mt-1.5 block line-clamp-2 text-lg leading-tight text-ivory sm:text-xl xl:text-2xl">{unit.title}</span>{unit.description && <span className="mt-1 hidden truncate text-xs text-ivory/65 sm:block">{unit.description}</span>}
@@ -71,7 +71,7 @@ export default function StageCard({ unit, index, defaultOpen = false, onSelect }
             </span>
         </button>
         <div className={`grid transition-[grid-template-rows] duration-500 [transition-timing-function:var(--ecla-ease)] ${open ? 'grid-rows-[1fr]' : 'grid-rows-[0fr]'}`}>
-            <div className="overflow-hidden"><ol className="space-y-2 py-3">
+            <div className="min-w-0 overflow-hidden"><ol className="min-w-0 space-y-2 py-3">
                 {list.map((competency, itemIndex) => {
                     const clickable = competency.status !== 'locked'
                     const sceneTitle = sceneTitleFor(competency.code, competency.title ?? competency.canDo)
