@@ -54,13 +54,14 @@ async function acquireToken(getToken: TokenGetter, skipCache = false): Promise<s
 export async function authFetch(path: string, getToken: TokenGetter, init?: RequestInit) {
     const request = async (skipCache = false) => {
         const token = await acquireToken(getToken, skipCache)
+        const headers = new Headers(init?.headers)
+        headers.set('Authorization', `Bearer ${token}`)
+        if (init?.body && !(init.body instanceof FormData) && !headers.has('Content-Type')) {
+            headers.set('Content-Type', 'application/json')
+        }
         return fetch(`${API_URL}${path}`, {
             ...init,
-            headers: {
-                ...(init?.headers ?? {}),
-                Authorization: `Bearer ${token}`,
-                ...(init?.body && !(init.body instanceof FormData) ? { 'Content-Type': 'application/json' } : {}),
-            },
+            headers,
         })
     }
 
