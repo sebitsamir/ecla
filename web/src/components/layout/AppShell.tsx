@@ -85,7 +85,7 @@ export default function AppShell({ children }: { children: ReactNode }) {
       <header className="sticky top-0 z-40 border-b border-line bg-obsidian/82 backdrop-blur-xl">
         <div className="mx-auto flex h-16 max-w-[1440px] items-center gap-6 px-4 sm:px-6 lg:px-10">
           <Brand />
-          <div className="hidden md:block"><PrimaryNavigation /></div>
+          <div className="hidden lg:block"><PrimaryNavigation /></div>
           <div ref={accountRef} className="relative ml-auto">
             <button onClick={() => setAccountOpen(value => !value)} aria-expanded={accountOpen} aria-haspopup="menu"
               className="ecla-control flex min-h-11 items-center gap-2 rounded-full border border-line bg-surface py-1 pl-1 pr-3 text-stone hover:border-line-strong hover:text-ivory">
@@ -106,8 +106,8 @@ export default function AppShell({ children }: { children: ReactNode }) {
           </div>
         </div>
       </header>
-      <div id="main-content" className="mx-auto min-w-0 max-w-[1320px] px-4 py-6 pb-24 sm:px-6 md:py-9 md:pb-10 lg:px-10">{children}</div>
-      <div className="safe-bottom fixed inset-x-0 bottom-0 z-40 border-t border-line bg-obsidian/94 px-1 pt-1 backdrop-blur-xl md:hidden"><PrimaryNavigation mobile /></div>
+      <div id="main-content" className="mx-auto min-w-0 max-w-[1320px] px-4 py-6 pb-24 sm:px-6 md:py-8 lg:px-8 lg:pb-10 xl:px-10">{children}</div>
+      <div className="safe-bottom fixed inset-x-0 bottom-0 z-40 border-t border-line bg-obsidian/94 px-1 pt-1 backdrop-blur-xl lg:hidden"><PrimaryNavigation mobile /></div>
     </main>
   )
 }

@@ -81,7 +81,7 @@ export default function CompetencyDetail({ competency }: { competency: Competenc
 
             <div className="mt-4">
                 <p className="mb-3 text-[11px] font-semibold uppercase tracking-[.16em] text-stone">Recorded evidence</p>
-                <ul className="grid grid-cols-2 gap-2">
+                <ul className="grid grid-cols-2 gap-2 lg:grid-cols-1 xl:grid-cols-2">
                     {EVIDENCE_DIMS.map(d => {
                         const v = ev[d.key as keyof typeof ev]
                         return (
