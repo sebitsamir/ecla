@@ -87,7 +87,7 @@ export default function CoursePage() {
             {!course ? (
                 <div className="ecla-surface rounded-experience p-8 text-stone">No published course is available yet.</div>
             ) : (
-                <div>
+                <div className="min-w-0 overflow-x-clip">
                     <section className="relative mb-8 min-h-[22rem] overflow-hidden rounded-experience border border-line shadow-[0_30px_100px_rgba(0,0,0,.42)] sm:min-h-[25rem] lg:mb-10 lg:min-h-[27rem] xl:min-h-[29rem]">
                         <Image src="/worlds/spanish-evening-v2.webp" alt="" fill priority sizes="(max-width: 1320px) 100vw, 1240px" className="object-cover" />
                         <div aria-hidden className="absolute inset-0 bg-[linear-gradient(90deg,rgba(9,9,10,.92)_0%,rgba(9,9,10,.66)_52%,rgba(9,9,10,.22)_100%)]" />
@@ -103,7 +103,7 @@ export default function CoursePage() {
                             </div>
                         </div>
                     </section>
-                <div className="grid min-w-0 gap-8 lg:grid-cols-[minmax(0,1fr)_18rem] lg:gap-7 xl:grid-cols-[minmax(0,1fr)_22.5rem] xl:gap-10">
+                <div className="grid min-w-0 grid-cols-[minmax(0,1fr)] gap-8 xl:grid-cols-[minmax(0,1fr)_22.5rem] xl:gap-10">
                     <div className="min-w-0">
                         <header className="mb-7"><p className="text-xs font-semibold uppercase tracking-[.2em] text-ember-soft">Your route</p><h2 className="font-display mt-2 text-3xl text-ivory sm:text-4xl">Follow the path at your pace.</h2><p className="mt-3 max-w-2xl text-sm leading-relaxed text-stone">Each unit opens from your recorded progress. Select an available step to enter its real-world scene.</p></header>
                         <ol className="space-y-6">
@@ -128,7 +128,7 @@ export default function CoursePage() {
                         </ol>
                     </div>
 
-                    <div className="min-w-0 space-y-5 lg:sticky lg:top-20 lg:self-start">
+                    <div className="grid min-w-0 grid-cols-[minmax(0,1fr)] gap-5 md:grid-cols-2 xl:sticky xl:top-20 xl:grid-cols-1 xl:self-start">
                         {summary?.nextAction && <NextActionCard action={summary.nextAction} />}
                         <CompetencyDetail competency={focus ? {
                             id: focus.id,

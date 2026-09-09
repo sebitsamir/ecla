@@ -57,23 +57,23 @@ export default function CompetencyDetail({ competency }: { competency: Competenc
     const href = competency.href ?? `/learn/${competency.id}?mode=STORY`
 
     return (
-        <section className="overflow-hidden rounded-experience border border-line bg-carbon shadow-glow-md">
+        <section className="min-w-0 overflow-hidden rounded-experience border border-line bg-carbon shadow-glow-md">
             <div className="ecla-thread" /><div className="p-5 sm:p-6">
-            <div className="flex items-center justify-between gap-3"><p className="text-[11px] font-semibold uppercase tracking-[.18em] text-ember-soft">Current capability</p><span className={`rounded-full border px-2.5 py-1 text-[10px] font-semibold uppercase tracking-wide ${mastered ? 'border-success/30 bg-success/10 text-success' : 'border-ember/30 bg-ember/10 text-ember-soft'}`}>{competency.status}</span></div>
-            <p className="font-display mt-5 text-2xl leading-snug text-ivory">
+            <div className="flex min-w-0 items-center justify-between gap-3"><p className="min-w-0 truncate text-[11px] font-semibold uppercase tracking-[.18em] text-ember-soft">Current capability</p><span className={`shrink-0 rounded-full border px-2.5 py-1 text-[10px] font-semibold uppercase tracking-wide ${mastered ? 'border-success/30 bg-success/10 text-success' : 'border-ember/30 bg-ember/10 text-ember-soft'}`}>{competency.status}</span></div>
+            <p className="font-display mt-5 break-words text-2xl leading-snug text-ivory">
                 {sceneTitle}
             </p>
-            <p className="mt-3 text-sm leading-relaxed text-stone">
+            <p className="mt-3 break-words text-sm leading-relaxed text-stone">
                 &ldquo;{competency.canDo ?? competency.code}&rdquo;
             </p>
-            <p className="mt-2 text-[10px] font-semibold uppercase tracking-[.14em] text-ash">{competency.code}</p>
+            <p className="mt-2 break-all text-[10px] font-semibold uppercase tracking-[.14em] text-ash">{competency.code}</p>
 
             {competency.patterns && competency.patterns.length > 0 && (
                 <div className="mt-4">
                     <p className="mb-2 text-[11px] font-semibold uppercase tracking-[.16em] text-stone">Language in this scene</p>
                     <ul className="space-y-2">
                         {competency.patterns.slice(0, 5).map(p => (
-                            <li key={p} className="flex items-start gap-2 text-sm text-ivory/85"><Circle className="mt-1 size-2 shrink-0 fill-ember text-ember" />{p}</li>
+                            <li key={p} className="flex min-w-0 items-start gap-2 break-words text-sm text-ivory/85"><Circle className="mt-1 size-2 shrink-0 fill-ember text-ember" /><span className="min-w-0">{p}</span></li>
                         ))}
                     </ul>
                 </div>
@@ -81,13 +81,13 @@ export default function CompetencyDetail({ competency }: { competency: Competenc
 
             <div className="mt-4">
                 <p className="mb-3 text-[11px] font-semibold uppercase tracking-[.16em] text-stone">Recorded evidence</p>
-                <ul className="grid grid-cols-2 gap-2 lg:grid-cols-1 xl:grid-cols-2">
+                <ul className="grid min-w-0 grid-cols-2 gap-2">
                     {EVIDENCE_DIMS.map(d => {
                         const v = ev[d.key as keyof typeof ev]
                         return (
-                            <li key={d.key} className="flex items-center justify-between rounded-control border border-line bg-obsidian/35 px-3 py-2.5 text-xs">
-                                <span className="text-stone">{d.label}</span>
-                                <span className={v != null && v >= 70 ? 'text-success' : 'text-ash'}>
+                            <li key={d.key} className="flex min-w-0 items-center justify-between gap-2 rounded-control border border-line bg-obsidian/35 px-3 py-2.5 text-xs">
+                                <span className="min-w-0 truncate text-stone">{d.label}</span>
+                                <span className={`shrink-0 ${v != null && v >= 70 ? 'text-success' : 'text-ash'}`}>
                                     {v != null && v >= 70 ? <CheckCircle2 className="size-4" aria-label={evidenceIcon(v, mastered && v >= 60)} /> : evidenceIcon(v, mastered && v != null && v >= 60)}
                                 </span>
                             </li>
