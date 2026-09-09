@@ -1,23 +1,31 @@
 import { clerkMiddleware } from '@clerk/nextjs/server'
 import { NextResponse } from 'next/server'
-
-const publicRoutes = ['/', '/sign-in', '/sign-up', '/api/v1/health']
+import { classifyAuthRoute } from '@/lib/authRouting'
 
 export default clerkMiddleware(async (auth, request) => {
     const { pathname } = new URL(request.url)
+    const routeKind = classifyAuthRoute(pathname)
+    let userId: string | null = null
 
-    const isPublic = publicRoutes.some(
-        (route) => pathname === route || pathname.startsWith(`${route}/`)
-    )
+    if (routeKind !== 'public') {
+        const authState = await auth()
+        userId = authState.userId
 
-    if (!isPublic) {
-        await auth.protect()
+        if (!authState.isAuthenticated || !userId) {
+            // Clerk intentionally answers unauthenticated non-document requests
+            // with 404. App Router client navigations can use that request shape,
+            // so page routes must recover through an explicit sign-in redirect.
+            if (routeKind === 'page') {
+                return authState.redirectToSignIn({ returnBackUrl: request.url })
+            }
+
+            // Preserve non-page semantics for API and tRPC requests.
+            await auth.protect()
+        }
     }
 
     // ADMIN ROUTE PROTECTION
     if (pathname.startsWith('/admin')) {
-        const { userId } = await auth()
-
         const admins = new Set([process.env.ADMIN_CLERK_ID, ...(process.env.ADMIN_CLERK_IDS ?? '').split(',')].map(value => value?.trim()).filter(Boolean))
         const portfolioReviewers = new Set([...admins, ...(process.env.PORTFOLIO_REVIEWER_CLERK_IDS ?? '').split(',').map(value => value.trim()).filter(Boolean)])
         const allowed = pathname.startsWith('/admin/portfolio') ? !!userId && portfolioReviewers.has(userId) : !!userId && admins.has(userId)
