@@ -1,5 +1,5 @@
 import Link from 'next/link'
-import { Cormorant_Garamond } from 'next/font/google'
+import Image from 'next/image'
 import {
   ArrowRight,
   BarChart2,
@@ -21,13 +21,6 @@ import MethodFlow from './MethodFlow'
 import ProductPreview from './ProductPreview'
 import ProgressPreview from './ProgressPreview'
 import SectionHeading from './SectionHeading'
-
-const editorial = Cormorant_Garamond({
-  subsets: ['latin'],
-  weight: ['500', '600', '700'],
-  variable: '--font-editorial',
-  display: 'swap',
-})
 
 const abilities = [
   {
@@ -69,28 +62,37 @@ const trust = [
 
 export default function LandingPage() {
   return (
-    <main className={`${editorial.variable} min-h-screen overflow-x-hidden bg-[#080A18] font-body text-cream selection:bg-glow/25 selection:text-cream`}>
-      <style>{`.font-editorial{font-family:var(--font-editorial),Georgia,'Times New Roman',serif}`}</style>
+    <main className="min-h-screen overflow-x-hidden bg-obsidian font-body text-ivory selection:bg-ember/25 selection:text-ivory">
       <LandingHeader />
 
-      <section className="relative border-b border-white/[0.06]">
-        <div className="mx-auto grid w-full max-w-[1240px] gap-14 px-5 pb-20 pt-16 sm:px-8 sm:pb-24 sm:pt-20 lg:grid-cols-[0.9fr_1.1fr] lg:items-center lg:gap-14 lg:px-10 lg:pb-28 lg:pt-24">
-          <div className="max-w-[610px]">
-            <p className="mb-5 text-[11px] font-extrabold uppercase tracking-[0.3em] text-glow sm:text-xs">
-              A more deliberate way to learn
+      <section className="relative isolate min-h-[calc(100svh-4rem)] overflow-hidden border-b border-line sm:min-h-[calc(100svh-4.5rem)]">
+        <Image
+          src="/worlds/spanish-evening-v2.webp"
+          alt="A learner overlooking a warmly lit Spanish city at sunset"
+          fill
+          priority
+          sizes="100vw"
+          className="-z-30 object-cover object-[62%_center]"
+        />
+        <div aria-hidden className="absolute inset-0 -z-20 bg-[linear-gradient(90deg,rgba(9,9,10,.96)_0%,rgba(9,9,10,.82)_42%,rgba(9,9,10,.38)_72%,rgba(9,9,10,.58)_100%)]" />
+        <div aria-hidden className="absolute inset-0 -z-20 bg-gradient-to-t from-obsidian via-transparent to-black/25" />
+        <div className="mx-auto grid min-h-[calc(100svh-4rem)] w-full max-w-[1320px] gap-12 px-5 py-14 sm:min-h-[calc(100svh-4.5rem)] sm:px-8 sm:py-20 lg:grid-cols-[minmax(0,.9fr)_minmax(28rem,1.1fr)] lg:items-center lg:gap-12 lg:px-10 xl:gap-20">
+          <div className="max-w-[650px]">
+            <p className="mb-5 text-[11px] font-semibold uppercase tracking-[0.3em] text-ember-soft sm:text-xs">
+              Speak · understand · use
             </p>
-            <h1 className="font-display text-5xl font-normal leading-[0.98] tracking-[-0.035em] text-cream sm:text-6xl lg:text-7xl xl:text-[5.5rem]">
-              Language learning <br/> built for <span className="text-glow">real fluency.</span>
+            <h1 className="font-display text-5xl font-normal leading-[0.96] tracking-[-0.035em] text-ivory sm:text-6xl lg:text-7xl xl:text-[5.5rem]">
+              Learn until you can <span className="text-ember-soft">actually use it.</span>
             </h1>
-            <p className="mt-7 max-w-xl text-base leading-7 text-cream/60 sm:text-lg sm:leading-8">
-              ECLA combines a structured curriculum, adaptive review, real-world practice, and measurable progress to help you understand, remember, and use a language with confidence.
+            <p className="mt-7 max-w-xl text-base leading-7 text-ivory/70 sm:text-lg sm:leading-8">
+              Ecla turns language into situations, memory, interaction, and real capability—so what you learn remains available when life asks for it.
             </p>
 
             <div className="mt-8 flex flex-col gap-3 sm:flex-row sm:items-center">
               <LandingAuthActions primaryOnly />
               <Link
                 href="#method"
-                className="inline-flex min-h-11 items-center justify-center gap-2 rounded-xl border border-white/[0.11] px-5 text-sm font-extrabold text-cream/[72%] transition hover:border-white/20 hover:bg-white/[0.025] hover:text-cream focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-glow/70 sm:min-h-[44px]"
+                className="ecla-control inline-flex min-h-11 items-center justify-center gap-2 rounded-control border border-white/20 bg-black/25 px-5 text-sm font-semibold text-ivory/80 backdrop-blur-sm hover:border-white/35 hover:text-ivory focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ember/70"
               >
                 See the method
                 <ArrowRight aria-hidden="true" className="h-4 w-4" />
@@ -99,14 +101,14 @@ export default function LandingPage() {
 
             <div className="mt-7 flex flex-wrap gap-x-5 gap-y-2">
               {trust.map((item) => (
-                <span key={item} className="inline-flex items-center gap-2 text-xs font-bold text-cream/[38%]">
-                  <CheckCircle aria-hidden="true" className="h-3.5 w-3.5 text-glow" />
+                <span key={item} className="inline-flex items-center gap-2 text-xs font-medium text-ivory/55">
+                  <CheckCircle aria-hidden="true" className="h-3.5 w-3.5 text-ember-soft" />
                   {item}
                 </span>
               ))}
             </div>
 
-            <p className="mt-5 text-xs leading-5 text-cream/30">
+            <p className="mt-5 text-xs leading-5 text-ivory/45">
               Built to expand across languages without changing the core learning system.
             </p>
           </div>
@@ -122,7 +124,7 @@ export default function LandingPage() {
               eyebrow="From first encounter to real use"
               title="A learning flow built to create usable ability."
             />
-            <p className="max-w-md text-sm leading-7 text-cream/[44%] lg:text-right">
+            <p className="max-w-md text-sm leading-7 text-ivory/[44%] lg:text-right">
               Each stage has a job. Exposure becomes understanding, understanding becomes retrieval, and retrieval becomes confident use.
             </p>
           </div>
@@ -139,10 +141,10 @@ export default function LandingPage() {
 
           <div className="mt-10 grid gap-px overflow-hidden rounded-[24px] border border-white/[0.08] bg-white/[0.08] sm:grid-cols-2 lg:grid-cols-4">
             {abilities.map(({ title, copy, Icon }) => (
-              <article key={title} className="bg-[#0A121C] p-6 sm:p-7">
-                <Icon aria-hidden="true" className="h-5 w-5 text-glow" />
-                <h3 className="mt-6 text-base font-extrabold text-cream">{title}</h3>
-                <p className="mt-3 text-sm leading-6 text-cream/[48%]">{copy}</p>
+              <article key={title} className="bg-ink p-6 sm:p-7">
+                <Icon aria-hidden="true" className="h-5 w-5 text-ember-soft" />
+                <h3 className="mt-6 text-base font-extrabold text-ivory">{title}</h3>
+                <p className="mt-3 text-sm leading-6 text-ivory/[48%]">{copy}</p>
               </article>
             ))}
           </div>
@@ -156,7 +158,7 @@ export default function LandingPage() {
               eyebrow="One curriculum. Multiple ways to learn."
               title="Different experiences. One connected learning system."
             />
-            <p className="max-w-md text-sm leading-7 text-cream/[44%] lg:text-right">
+            <p className="max-w-md text-sm leading-7 text-ivory/[44%] lg:text-right">
               Modes change how you practice without fragmenting your progress. What you learn remains connected to the same curriculum and mastery model.
             </p>
           </div>
@@ -174,13 +176,13 @@ export default function LandingPage() {
 
           <ol className="mt-12 grid gap-px overflow-hidden rounded-[24px] border border-white/[0.08] bg-white/[0.08] sm:grid-cols-2 lg:grid-cols-6">
             {system.map(({ title, copy, Icon }, index) => (
-              <li key={title} className="relative bg-[#0A121C] p-5 sm:p-6">
+              <li key={title} className="relative bg-ink p-5 sm:p-6">
                 <div className="flex items-center justify-between">
-                  <Icon aria-hidden="true" className="h-5 w-5 text-glow" />
-                  <span className="text-[10px] font-black tracking-[0.18em] text-cream/20">0{index + 1}</span>
+                  <Icon aria-hidden="true" className="h-5 w-5 text-ember-soft" />
+                  <span className="text-[10px] font-black tracking-[0.18em] text-ivory/20">0{index + 1}</span>
                 </div>
-                <h3 className="mt-8 text-sm font-extrabold text-cream">{title}</h3>
-                <p className="mt-2 text-xs leading-5 text-cream/[42%]">{copy}</p>
+                <h3 className="mt-8 text-sm font-extrabold text-ivory">{title}</h3>
+                <p className="mt-2 text-xs leading-5 text-ivory/[42%]">{copy}</p>
               </li>
             ))}
           </ol>
@@ -194,7 +196,7 @@ export default function LandingPage() {
               eyebrow="Progress that means something"
               title="Track what is becoming usable, not only what is completed."
             />
-            <p className="max-w-md text-sm leading-7 text-cream/[44%] lg:text-right">
+            <p className="max-w-md text-sm leading-7 text-ivory/[44%] lg:text-right">
               ECLA is built to reason about learning evidence across understanding, retrieval, production, interaction, and retention.
             </p>
           </div>
@@ -210,17 +212,17 @@ export default function LandingPage() {
             description="ECLA begins with one language, but the curriculum architecture, practice system, review model, and progress framework are built as reusable foundations for a broader language platform."
           />
 
-          <div className="rounded-[24px] border border-white/[0.08] bg-[#0A121C] p-6 sm:p-8">
+          <div className="rounded-[24px] border border-white/[0.08] bg-ink p-6 sm:p-8">
             <div className="grid gap-6 sm:grid-cols-2">
               <div>
-                <Target aria-hidden="true" className="h-5 w-5 text-glow" />
-                <p className="mt-5 text-xs font-extrabold uppercase tracking-[0.18em] text-cream/[35%]">Current launch</p>
-                <p className="mt-2 font-editorial text-3xl font-semibold tracking-[-0.03em] text-cream">Spanish first</p>
+                <Target aria-hidden="true" className="h-5 w-5 text-ember-soft" />
+                <p className="mt-5 text-xs font-extrabold uppercase tracking-[0.18em] text-ivory/[35%]">Current launch</p>
+                <p className="mt-2 font-display text-3xl font-semibold tracking-[-0.03em] text-ivory">Spanish first</p>
               </div>
               <div>
-                <Shield aria-hidden="true" className="h-5 w-5 text-glow" />
-                <p className="mt-5 text-xs font-extrabold uppercase tracking-[0.18em] text-cream/[35%]">Platform direction</p>
-                <p className="mt-2 font-editorial text-3xl font-semibold tracking-[-0.03em] text-cream">Language-agnostic core</p>
+                <Shield aria-hidden="true" className="h-5 w-5 text-ember-soft" />
+                <p className="mt-5 text-xs font-extrabold uppercase tracking-[0.18em] text-ivory/[35%]">Platform direction</p>
+                <p className="mt-2 font-display text-3xl font-semibold tracking-[-0.03em] text-ivory">Language-agnostic core</p>
               </div>
             </div>
           </div>
@@ -229,14 +231,14 @@ export default function LandingPage() {
 
       <section className="py-20 sm:py-24 lg:py-28">
         <div className="mx-auto w-full max-w-[1240px] px-5 sm:px-8 lg:px-10">
-          <div className="relative overflow-hidden rounded-[28px] border border-glow/20 bg-[#0A121C] px-6 py-10 sm:px-10 sm:py-12 lg:flex lg:items-center lg:justify-between lg:gap-12 lg:px-14 lg:py-14">
-            <div className="absolute inset-x-0 top-0 h-px bg-gradient-to-r from-transparent via-glow/80 to-transparent" aria-hidden="true" />
+          <div className="relative overflow-hidden rounded-[28px] border border-ember/20 bg-ink px-6 py-10 sm:px-10 sm:py-12 lg:flex lg:items-center lg:justify-between lg:gap-12 lg:px-14 lg:py-14">
+            <div className="absolute inset-x-0 top-0 h-px bg-gradient-to-r from-transparent via-ember/80 to-transparent" aria-hidden="true" />
             <div className="max-w-3xl">
-              <p className="text-[11px] font-extrabold uppercase tracking-[0.28em] text-glow sm:text-xs">Begin with a better system</p>
-              <h2 className="mt-4 font-editorial text-[2.7rem] font-semibold leading-[0.95] tracking-[-0.04em] text-cream sm:text-5xl lg:text-[3.6rem]">
+              <p className="text-[11px] font-extrabold uppercase tracking-[0.28em] text-ember-soft sm:text-xs">Begin with a better system</p>
+              <h2 className="mt-4 font-display text-[2.7rem] font-semibold leading-[0.95] tracking-[-0.04em] text-ivory sm:text-5xl lg:text-[3.6rem]">
                 Build language ability that lasts beyond the lesson.
               </h2>
-              <p className="mt-5 max-w-2xl text-sm leading-7 text-cream/[48%] sm:text-base">
+              <p className="mt-5 max-w-2xl text-sm leading-7 text-ivory/[48%] sm:text-base">
                 Start the structured learning journey and let every session contribute to what you can actually do.
               </p>
             </div>
