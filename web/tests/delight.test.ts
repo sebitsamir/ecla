@@ -22,4 +22,8 @@ test('onboarding does not use a client-scored placement quiz', () => {
     assert.doesNotMatch(source, /placementQuiz|quizScore|calculateLevel/)
     assert.doesNotMatch(source, /currentLevel:/)
     assert.match(source, /Evidence-based Pre-A1 start/)
+    assert.match(source, /user\.onboardingCompleted/)
+    assert.doesNotMatch(source, /user\.onboardingComplete\b/)
+    assert.doesNotMatch(source, /Learning style|MODES\.map|How do you learn best/)
+    assert.match(source, /There is no mode to manage before you begin/)
 })
