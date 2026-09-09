@@ -3,10 +3,9 @@
 import { authFetch } from '@/lib/apiClient'
 
 import { useEffect, useRef, useState } from 'react'
+import Image from 'next/image'
 import { useAuth } from '@clerk/nextjs'
 import { PhoneOff, Loader2, AudioLines, Volume2 } from 'lucide-react'
-import Firefly from '@/components/Firefly'
-import { useEquippedGlow } from '@/lib/useEquippedGlow'
 import { speak, cancelSpeech } from '@/lib/speech'
 import { useHandsFreeVoice } from '@/lib/useHandsFreeVoice'
 
@@ -31,7 +30,6 @@ function Bars({ tone }: { tone: 'coral' | 'glow' }) {
 
 export default function VoiceCall({ onEnd }: { onEnd: (lines: CallLine[]) => void }) {
     const { getToken } = useAuth()
-    const glowColors = useEquippedGlow()
 
     const [phase, setPhase] = useState<'boot' | 'user' | 'ecla' | 'thinking' | 'error'>('boot')
     const [lines, setLines] = useState<CallLine[]>([])
@@ -269,7 +267,10 @@ export default function VoiceCall({ onEnd }: { onEnd: (lines: CallLine[]) => voi
         'Listening'
 
     return (
-        <div className="fixed inset-0 z-[60] flex h-dvh flex-col bg-night-950/95 backdrop-blur-md font-body">
+        <div className="fixed inset-0 z-[60] flex h-dvh min-w-0 flex-col overflow-hidden bg-obsidian font-body text-ivory">
+            <Image src="/worlds/spanish-cafe-scene-v1.webp" alt="" fill priority sizes="100vw" className="object-cover object-center" />
+            <div aria-hidden className="absolute inset-0 bg-[linear-gradient(180deg,rgba(9,9,10,.48)_0%,rgba(9,9,10,.2)_36%,rgba(9,9,10,.9)_78%,#09090a_100%)]" />
+            <div aria-hidden className={`absolute inset-0 transition-colors duration-500 ${listening ? 'bg-black/5' : phase === 'thinking' ? 'bg-black/30' : 'bg-transparent'}`} />
             <style>{`
                 @keyframes vc-bar { 0%,100% { transform: scaleY(.25) } 50% { transform: scaleY(1) } }
                 .vc-bar { width: 3px; height: 16px; border-radius: 2px; animation: vc-bar .9s ease-in-out infinite; }
@@ -279,72 +280,49 @@ export default function VoiceCall({ onEnd }: { onEnd: (lines: CallLine[]) => voi
                 .vc-scroll::-webkit-scrollbar { display: none; }
             `}</style>
 
-            {/* Header */}
-            <div className="z-10 mx-auto w-full max-w-3xl px-4 py-4 flex items-center justify-between">
-                <div className="flex items-center gap-2">
-                    <span className="h-2 w-2 rounded-full bg-leaf animate-pulse" />
-                    <p className="text-sm font-bold text-cream/80">Voice mode · Spanish</p>
+            <header className="safe-top relative z-10 mx-auto flex w-full max-w-6xl items-center justify-between gap-4 px-4 py-4 sm:px-6">
+                <div className="min-w-0">
+                    <p className="flex items-center gap-2 text-[10px] font-semibold uppercase tracking-[.18em] text-ember-soft"><span className="size-1.5 rounded-full bg-success" />Live conversation</p>
+                    <h1 className="mt-1 truncate text-sm font-medium text-ivory">Spanish with Ecla</h1>
                 </div>
                 <button
                     onClick={() => onEnd(linesRef.current)}
-                    className="flex items-center gap-2 rounded-full border border-coral/40 bg-coral/10 px-4 py-1.5 text-xs font-bold text-coral hover:bg-coral/20 transition-all"
+                    className="ecla-control flex min-h-11 shrink-0 items-center gap-2 rounded-full border border-white/20 bg-black/35 px-4 text-xs font-semibold text-ivory backdrop-blur-md hover:border-danger-soft/50 hover:text-danger-soft"
                 >
-                    <PhoneOff className="w-3.5 h-3.5" />
+                    <PhoneOff className="size-4" />
                     <span>End</span>
                 </button>
-            </div>
+            </header>
 
-            {/* Stage */}
-            <div className="flex flex-col items-center justify-center gap-5 py-4">
-                <div className="relative flex items-center justify-center">
-                    <div className="absolute h-72 w-72 rounded-full" style={{ background: 'radial-gradient(circle, rgba(255,200,87,0.08), transparent 65%)' }} />
+            <main className="relative z-10 flex min-h-0 flex-1 flex-col justify-end">
+                <div className="flex flex-col items-center px-4 pb-4 sm:pb-6">
+                    <button onClick={interrupt} disabled={phase === 'error'} aria-label={phase === 'ecla' || phase === 'thinking' ? 'Interrupt Ecla and speak' : status} className="ecla-control relative flex size-20 items-center justify-center rounded-full border border-white/25 bg-black/45 text-ivory shadow-[0_0_60px_rgba(255,122,61,.22)] backdrop-blur-md sm:size-24">
                     {(listening || phase === 'ecla') && (
                         <>
-                            <span className={`vc-ring absolute h-52 w-52 rounded-full border-2 ${ringTone}`} />
-                            <span className={`vc-ring absolute h-52 w-52 rounded-full border-2 ${ringTone}`} style={{ animationDelay: '1.2s' }} />
+                                <span className={`vc-ring pointer-events-none absolute inset-0 rounded-full border ${ringTone}`} />
+                                <span className={`vc-ring pointer-events-none absolute inset-0 rounded-full border ${ringTone}`} style={{ animationDelay: '1.2s' }} />
                         </>
                     )}
-                    <button
-                        onClick={interrupt}
-                        title={phase === 'ecla' ? 'Interrupt' : undefined}
-                        className="relative"
-                    >
-                        <Firefly
-                            mood={phase === 'thinking' ? 'thinking' : phase === 'ecla' ? 'excited' : 'idle'}
-                            size={170}
-                            glow={glowColors}
-                        />
+                        {phase === 'thinking' || state === 'processing' ? <Loader2 className="size-7 animate-spin text-ember-soft" /> : phase === 'ecla' ? <Volume2 className="size-7 text-ember-soft" /> : <AudioLines className="size-7" />}
                     </button>
-                </div>
 
-                {/* Status pill */}
-                <div className="flex items-center gap-2.5 rounded-full border border-white/10 bg-night-800/70 px-4 py-2">
-                    {phase === 'thinking' || state === 'processing' ? (
-                        <Loader2 className="w-3.5 h-3.5 animate-spin text-cream/60" />
-                    ) : phase === 'ecla' ? (
-                        <Volume2 className="w-3.5 h-3.5 text-glow" />
-                    ) : (
-                        <AudioLines className="w-3.5 h-3.5 text-coral" />
-                    )}
-                    <span className="text-xs font-bold text-cream/70">{status}</span>
+                    <div className="mt-3 flex min-h-10 items-center gap-2.5 rounded-full border border-white/15 bg-black/50 px-4 backdrop-blur-md" role="status">
+                    <span className="text-xs font-medium text-ivory">{status}</span>
                     {state === 'hearing' && <Bars tone="coral" />}
                     {phase === 'ecla' && <Bars tone="glow" />}
                 </div>
-            </div>
 
-            {/* Transcript */}
-            <div className="flex-1 min-h-0 px-6 pb-3">
                 <div
                     ref={scrollRef}
-                    className="vc-scroll mx-auto flex h-full max-w-lg flex-col gap-2 overflow-y-auto pr-1"
+                        className="vc-scroll mt-4 flex max-h-[32dvh] w-full max-w-xl flex-col gap-2 overflow-y-auto rounded-surface border border-white/10 bg-black/40 p-3 backdrop-blur-md sm:max-h-[28dvh] sm:p-4"
                 >
                     {lines.map((l, i) => (
                         l.text ? (
                             <div key={i} className={`flex ${l.role === 'user' ? 'justify-end' : 'justify-start'}`}>
-                                <div className={`max-w-[85%] rounded-2xl px-3.5 py-2 text-sm leading-relaxed ${
+                                    <div className={`max-w-[88%] break-words rounded-surface px-3.5 py-2 text-sm leading-6 ${
                                     l.role === 'user'
-                                        ? 'rounded-br-md bg-glow font-semibold text-night-900'
-                                        : 'rounded-bl-md bg-night-800/80 text-cream/90 border border-white/5'
+                                            ? 'rounded-br-sm bg-ember font-medium text-obsidian'
+                                            : 'rounded-bl-sm border border-line bg-carbon/90 text-ivory'
                                 }`}>
                                     {l.text}
                                 </div>
@@ -355,21 +333,19 @@ export default function VoiceCall({ onEnd }: { onEnd: (lines: CallLine[]) => voi
                     {/* live words */}
                     {listening && liveText && (
                         <div className="flex justify-end">
-                            <div className="flex max-w-[85%] items-end gap-2 rounded-2xl rounded-br-md bg-glow px-3.5 py-2 text-sm font-semibold text-night-900">
+                                <div className="flex max-w-[88%] items-end gap-2 break-words rounded-surface rounded-br-sm bg-ember px-3.5 py-2 text-sm font-medium leading-6 text-obsidian">
                                 <span>{liveText}</span>
-                                <span className="mb-1 h-1.5 w-1.5 animate-pulse rounded-full bg-night-900/60" />
+                                    <span className="mb-1 size-1.5 shrink-0 animate-pulse rounded-full bg-obsidian/60" />
                             </div>
                         </div>
                     )}
                 </div>
+                    <p className="mt-3 text-center text-[10px] leading-4 text-ivory/55">
+                        {phase === 'ecla' || phase === 'thinking' ? 'Tap the voice control to interrupt.' : 'Speak naturally. Ecla will respond when you pause.'}
+                    </p>
+                    <p className="safe-bottom mt-1 pb-2 text-center text-[9px] leading-4 text-ivory/40">Voice mode uses your browser’s speech recognition. Ecla receives the resulting transcript.</p>
             </div>
-
-            {/* ── Footer ─ */}
-            <div className="pb-6 pt-2 flex justify-center">
-                <p className="text-[11px] text-cream/40 font-semibold">
-                    Just talk — tap Ecla to interrupt
-                </p>
-            </div>
+            </main>
         </div>
     )
 }
