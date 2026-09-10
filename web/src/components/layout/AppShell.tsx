@@ -6,7 +6,7 @@ import Image from 'next/image'
 import { usePathname } from 'next/navigation'
 import { useClerk, useUser } from '@clerk/nextjs'
 import { BookOpen, Home, LogOut, MessageCircle, Repeat2, Route, TrendingUp, X } from 'lucide-react'
-import { LogoMark } from '@/components/BrandLogo'
+import { Logo } from '@/components/BrandLogo'
 import { IconButton } from '@/components/ui'
 
 const PRIMARY_NAV = [
@@ -28,8 +28,7 @@ function isCurrent(pathname: string, href: string) {
 function Brand() {
   return (
     <Link href="/dashboard" className="ecla-control inline-flex min-h-11 items-center gap-2 rounded-control px-1 text-ivory" aria-label="Ecla home">
-      <LogoMark size={30} />
-      <span className="font-display text-2xl leading-none">Ecla</span>
+      <Logo height={32} className="h-8 w-auto" />
     </Link>
   )
 }
@@ -47,7 +46,7 @@ function PrimaryNavigation({ mobile = false }: { mobile?: boolean }) {
               : `ecla-control relative flex min-h-14 items-center px-3 text-xs font-medium ${active ? 'text-ivory' : 'text-stone hover:text-ivory'}`}>
             <Icon className={mobile ? 'size-5' : 'hidden'} aria-hidden />
             <span>{label}</span>
-            {!mobile && active ? <span className="absolute inset-x-3 bottom-0 h-px bg-ember shadow-[0_0_12px_rgba(255,122,61,.7)]" /> : null}
+            {!mobile && active ? <span className="absolute inset-x-3 bottom-0 h-px bg-ember shadow-[0_0_12px_rgba(230,162,60,.7)]" /> : null}
           </Link>
         )
       })}

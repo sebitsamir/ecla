@@ -222,7 +222,7 @@ function ChatPageContent() {
                             <div className="grid min-h-full min-w-0 overflow-hidden rounded-surface border border-line bg-carbon md:grid-cols-[minmax(0,.9fr)_minmax(19rem,1.1fr)]">
                                 <div className="relative min-h-48 overflow-hidden md:min-h-[27rem]">
                                     <Image src="/worlds/spanish-cafe-scene-v1.webp" alt="" fill priority sizes="(max-width: 767px) 100vw, 42vw" className="object-cover" />
-                                    <div aria-hidden className="absolute inset-0 bg-gradient-to-t from-carbon via-transparent to-black/10 md:bg-gradient-to-r md:from-transparent md:to-carbon/70" />
+                                    <div aria-hidden className="absolute inset-0 bg-obsidian/35" />
                                 </div>
                                 <div className="flex min-w-0 flex-col justify-center p-5 sm:p-7 md:p-8">
                                     <p className="text-xs font-semibold uppercase tracking-[.18em] text-ember-soft">A real conversation</p>

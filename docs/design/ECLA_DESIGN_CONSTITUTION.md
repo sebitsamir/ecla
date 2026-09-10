@@ -73,6 +73,16 @@ This creates attachment without manipulative dark patterns.
 
 # 4. Signature Identity
 
+## 4.0 Logo
+
+The canonical ECLA identity uses the supplied custom three-stroke symbol and custom uppercase wordmark.
+
+- Dark: Warm Ivory symbol and wordmark on ECLA Ink, with one amber detail inside the A.
+- Light: ECLA Ink symbol and wordmark on Ivory Day, with the same amber detail.
+- Use flat color only.
+- Never recreate the wordmark with Instrument Serif or another product font.
+- Never add metallic effects, gradients, glow, bevels, 3D depth, or substitute mascots.
+
 ## 4.1 Visual Motif — The Language Thread
 
 Ecla's signature motif is **the Language Thread**.
@@ -106,20 +116,34 @@ The Language Thread should become recognizable as Ecla's visual fingerprint.
 
 ## Core
 
-Obsidian — #09090A  
-Ink — #101012  
-Carbon — #17171A  
-Slate — #25252A  
-Warm Ivory — #F4F0E8  
-Soft Stone — #B8B2A8  
-Muted Ash — #7E7A73
+- ECLA Ink — #08111A
+- Night Surface — #0F1720
+- Raised Surface — #17212B
+- Hairline Border — #263440
+- Warm Ivory — #F7F2E8
+- Mist — #AAB3BD
+Slate — #8E99A6
 
 ## Signature Light
 
-Ember — #FF7A3D  
-Soft Ember — #FFB26F  
-Deep Ember — #9E3D1C  
-Glow Mist — rgba(255,122,61,0.16)
+- ECLA Amber — #E6A23C
+- Amber Light — #F0BF67
+Amber Deep — #B9751D
+
+Amber is rare: use it for the primary action, active progress, and small identity details. Do not use it on every icon, border, or heading. Amber controls always use ECLA Ink text.
+
+## Ivory Day
+
+- Canvas — #F6F2E8
+- Surface — #FFFDFC
+- Raised Surface — #EEE9DF
+- Soft Surface — #E8E2D7
+- Border — #D7D0C5
+- Primary Ink — #0B1620
+- Secondary Text — #5F6B76
+Muted Text — #77818A
+
+The public landing page is dark-first. The learning product may offer System, Light, and Dark after the theme preference is implemented completely. Do not expose a theme control before the product surfaces support it.
 
 ## Semantic
 
@@ -170,6 +194,7 @@ Ecla should feel editorial, not decorative.
 Large text should breathe.
 Small text should be crisp.
 Hierarchy must be obvious without excessive weight changes.
+Instrument Serif remains normal weight. Size, spacing, and line-height create its hierarchy.
 
 ---
 

@@ -7,7 +7,7 @@ import { useAuth } from '@clerk/nextjs'
 import { COSMETICS, CosmeticId, DEFAULT_GLOW, GlowPalette } from '@/lib/cosmetics'
 
 
-/* Returns the equipped glow palette so every screen's firefly wears the user's choice */
+/* Returns the learner's equipped accent palette. */
 export function useEquippedGlow(): GlowPalette {
     const { getToken } = useAuth()
     const [glow, setGlow] = useState<GlowPalette>(DEFAULT_GLOW)

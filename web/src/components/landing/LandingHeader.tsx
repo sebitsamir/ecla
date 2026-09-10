@@ -21,7 +21,7 @@ export default function LandingHeader() {
     <header className="sticky top-0 z-50 border-b border-white/[0.06] bg-obsidian/[92%] backdrop-blur-xl supports-[backdrop-filter]:bg-obsidian/80">
       <div className="relative mx-auto flex h-16 w-full max-w-[1240px] items-center px-5 sm:h-[72px] sm:px-8 lg:px-10">
         <Link href="/" aria-label="ECLA home" className="shrink-0" onClick={() => setOpen(false)}>
-          <Logo className="text-[1.35rem] sm:text-[1.55rem]" fireflySize={24} />
+          <Logo className="h-7 w-auto sm:h-8" height={30} />
         </Link>
 
         <nav aria-label="Primary navigation" className="mx-auto hidden items-center gap-7 lg:flex">

@@ -50,7 +50,7 @@ export default function ProgressPreview() {
         <div className="relative mx-auto mt-8 aspect-square max-w-[310px]">
           <div className="absolute left-1/2 top-1/2 grid h-28 w-28 -translate-x-1/2 -translate-y-1/2 place-items-center rounded-full border border-ember/[35%] bg-ember/[0.05] text-center">
             <div>
-              <span className="block font-display text-2xl font-semibold text-ivory">Real ability</span>
+              <span className="block font-display text-2xl font-normal text-ivory">Real ability</span>
               <span className="mt-1 block text-[10px] font-bold uppercase tracking-[0.18em] text-ember-soft">the outcome</span>
             </div>
           </div>

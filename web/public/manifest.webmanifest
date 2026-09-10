@@ -4,7 +4,7 @@
   "description": "Practice Spanish for real situations.",
   "start_url": "/dashboard",
   "display": "standalone",
-  "background_color": "#0B0B10",
-  "theme_color": "#0B0B10",
-  "icons": [{ "src": "/favicon.svg", "sizes": "any", "type": "image/svg+xml" }]
+  "background_color": "#08111A",
+  "theme_color": "#08111A",
+  "icons": [{ "src": "/brand/ecla-app-icon.png", "sizes": "512x512", "type": "image/png" }]
 }

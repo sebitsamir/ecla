@@ -58,7 +58,7 @@ export default function PortfolioReviewPage() {
         finally { setBusy(false) }
     }
     const button = 'rounded-xl border border-white/20 px-4 py-2 text-sm disabled:opacity-40'
-    return <main className="min-h-screen bg-[#0B0B10] p-6 text-cream"><div className="mx-auto max-w-6xl space-y-6">
+    return <main className="min-h-screen bg-obsidian p-6 text-cream"><div className="mx-auto max-w-6xl space-y-6">
         <header className="space-y-3"><a href="/admin" className={button}>Back to admin</a><h1 className="text-3xl font-bold">Pre-A1 independent review</h1><p className="text-cream/60">Review the exact authored content version. Approval records are append-only; a later decision supersedes the earlier one without deleting history.</p></header>
         {!isLoaded && <p role="status" className="rounded-xl border border-white/10 p-4 text-cream/60">Loading your reviewer session…</p>}
         {isLoaded && !isSignedIn && <ApiState error={new ApiError('unauthorized', 'Please sign in to review competencies.', 401)} />}

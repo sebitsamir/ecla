@@ -61,6 +61,7 @@ export async function authFetch(path: string, getToken: TokenGetter, init?: Requ
         }
         return fetch(`${API_URL}${path}`, {
             ...init,
+            cache: init?.cache ?? 'no-store',
             headers,
         })
     }

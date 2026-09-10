@@ -25,7 +25,7 @@ export default function ProductPreview() {
         <section className="rounded-[22px] border border-white/[0.09] bg-carbon p-4 shadow-[0_30px_80px_rgba(0,0,0,0.22)] sm:p-5">
           <div className="flex items-start justify-between gap-3 border-b border-white/[0.07] pb-4">
             <div>
-              <p className="font-display text-xl font-semibold tracking-[-0.02em] text-ivory">Foundation course</p>
+              <p className="font-display text-xl font-normal tracking-[-0.02em] text-ivory">Foundation course</p>
               <p className="mt-1 text-xs font-semibold text-ivory/40">Structured progression</p>
             </div>
             <span className="rounded-full border border-ember/20 bg-ember/[0.06] px-2.5 py-1 text-[10px] font-extrabold uppercase tracking-[0.18em] text-ember-soft">
@@ -86,7 +86,7 @@ export default function ProductPreview() {
                   sizes="(max-width: 639px) 100vw, 132px"
                   className="object-cover"
                 />
-                <div className="absolute inset-0 bg-gradient-to-t from-black/25 to-transparent" aria-hidden="true" />
+                <div className="absolute inset-0 bg-obsidian/25" aria-hidden="true" />
               </div>
 
               <div className="flex min-w-0 flex-col justify-center">

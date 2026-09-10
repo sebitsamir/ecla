@@ -12,25 +12,25 @@ const ATMOSPHERES: Record<HomePeriod, HomeAtmosphere> = {
     period: 'morning',
     greeting: 'Good morning',
     src: '/worlds/spanish-morning-v1.webp',
-    overlay: 'linear-gradient(90deg,rgba(9,9,10,.76) 0%,rgba(9,9,10,.52) 38%,rgba(9,9,10,.08) 72%,rgba(9,9,10,.12) 100%)',
+    overlay: 'rgba(8,17,26,.28)',
   },
   day: {
     period: 'day',
     greeting: 'Good afternoon',
     src: '/worlds/spanish-day-v1.webp',
-    overlay: 'linear-gradient(90deg,rgba(9,9,10,.76) 0%,rgba(9,9,10,.50) 38%,rgba(9,9,10,.06) 72%,rgba(9,9,10,.10) 100%)',
+    overlay: 'rgba(8,17,26,.26)',
   },
   evening: {
     period: 'evening',
     greeting: 'Good evening',
     src: '/worlds/spanish-evening-v2.webp',
-    overlay: 'linear-gradient(90deg,rgba(9,9,10,.78) 0%,rgba(9,9,10,.58) 38%,rgba(9,9,10,.12) 72%,rgba(9,9,10,.22) 100%)',
+    overlay: 'rgba(8,17,26,.34)',
   },
   night: {
     period: 'night',
     greeting: 'Welcome back',
     src: '/worlds/spanish-night-v1.webp',
-    overlay: 'linear-gradient(90deg,rgba(9,9,10,.82) 0%,rgba(9,9,10,.60) 38%,rgba(9,9,10,.12) 72%,rgba(9,9,10,.20) 100%)',
+    overlay: 'rgba(8,17,26,.42)',
   },
 }
 

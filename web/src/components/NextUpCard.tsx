@@ -89,10 +89,10 @@ export default function NextUpCard() {
     const ModeIcon = modeConfig.icon
 
     return (
-        <div className="rounded-2xl border border-glow/20 bg-gradient-to-br from-night-800/80 to-night-900/80 p-5">
+        <div className="rounded-2xl border border-glow/20 bg-ink p-5">
             <div className="flex items-center gap-2 mb-3">
                 <Target className="h-5 w-5 text-glow" />
-                <h3 className="font-display text-lg font-bold text-cream">Next up</h3>
+                <h3 className="font-display text-lg font-normal text-cream">Next up</h3>
             </div>
 
             <div className="mb-4">

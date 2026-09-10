@@ -34,7 +34,7 @@ export default function SceneAuthorPage() {
     }
     const current = rows.find(row => row.publication)?.id ?? null
     const button = 'rounded-xl border border-white/20 px-4 py-2 disabled:opacity-40'
-    return <main className="min-h-screen bg-[#0B0B10] p-6 text-cream"><div className="mx-auto max-w-4xl space-y-6">
+    return <main className="min-h-screen bg-obsidian p-6 text-cream"><div className="mx-auto max-w-4xl space-y-6">
         <a href="/admin" className={button}>Back to admin</a>
         <h1 className="text-3xl font-bold">Canonical scene authoring</h1>
         <p>Admin access is enforced by the API. Drafts are immutable. Editorial review here is not educator validation or permission to award mastery.</p>

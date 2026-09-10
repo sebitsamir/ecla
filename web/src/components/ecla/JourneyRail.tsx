@@ -30,7 +30,7 @@ export default function JourneyRail({ current, feedback }: {
                 {/* Vertical progress line — fills with green as you advance */}
                 <div className="absolute left-[19px] top-3 bottom-3 w-px bg-white/10" aria-hidden>
                     <div
-                        className="w-full bg-gradient-to-b from-leaf to-leaf/80 transition-all duration-700 ease-out"
+                        className="w-full bg-success transition-all duration-700 ease-out"
                         style={{ height: `${progressPct}%` }}
                     />
                 </div>
@@ -58,7 +58,7 @@ export default function JourneyRail({ current, feedback }: {
                                         ? 'bg-leaf text-night-900 shadow-[0_0_12px_rgba(34,197,94,0.4)]'
                                         : active
                                             ? 'bg-violet-600 text-white shadow-[0_0_12px_rgba(139,92,246,0.5)]'
-                                            : 'bg-[#0B0B10] border border-white/15 text-cream/40'
+                                            : 'border border-line bg-obsidian text-cream/40'
                                 }`}>
                                     {done ? <Check className="h-3.5 w-3.5" strokeWidth={3} /> : i + 1}
                                     {active && (

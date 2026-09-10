@@ -1,5 +1,5 @@
 export const eclaTokens = {
-  color: { obsidian: '#09090A', ink: '#101012', carbon: '#17171A', slate: '#25252A', ivory: '#F4F0E8', stone: '#B8B2A8', ash: '#7E7A73', ember: '#FF7A3D', emberSoft: '#FFB26F', emberDeep: '#9E3D1C' },
+  color: { obsidian: '#08111A', ink: '#0F1720', carbon: '#17212B', slate: '#263440', ivory: '#F7F2E8', stone: '#AAB3BD', ash: '#8E99A6', ember: '#E6A23C', emberSoft: '#F0BF67', emberDeep: '#B9751D' },
   space: { 1: '0.25rem', 2: '0.5rem', 3: '0.75rem', 4: '1rem', 6: '1.5rem', 8: '2rem', 12: '3rem', 16: '4rem', 24: '6rem', 32: '8rem' },
   radius: { control: '0.875rem', surface: '1.125rem', experience: '1.75rem', round: '999px' },
   motion: { micro: '120ms', ui: '220ms', experience: '520ms', reflective: '1000ms', ease: 'cubic-bezier(0.22, 1, 0.36, 1)', exit: 'cubic-bezier(0.4, 0, 1, 1)' },

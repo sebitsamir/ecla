@@ -93,7 +93,7 @@ function MasteryTrack({ level }: { level?: string | null }) {
                 {LEVELS.map((state, index) => (
                     <span key={state} className="contents">
                         {index > 0 ? <span className={`h-px min-w-2 flex-1 ${index <= active ? 'bg-success/70' : 'bg-line-strong'}`} /> : null}
-                        <span className={`size-2.5 shrink-0 rounded-full border ${index < active ? 'border-success bg-success' : index === active ? 'border-ember-soft bg-ember shadow-[0_0_12px_rgba(255,122,61,.55)]' : 'border-line-strong bg-slate'}`} />
+                        <span className={`size-2.5 shrink-0 rounded-full border ${index < active ? 'border-success bg-success' : index === active ? 'border-ember-soft bg-ember shadow-[0_0_12px_rgba(230,162,60,.55)]' : 'border-line-strong bg-slate'}`} />
                     </span>
                 ))}
             </div>
@@ -199,13 +199,13 @@ export default function ProgressPage() {
                         <p className="mt-4 max-w-2xl text-sm leading-6 text-stone sm:text-base">A record of Spanish capabilities supported by assessed performance, transfer, and retention.</p>
                     </header>
 
-                    <section className="relative overflow-hidden rounded-experience border border-line bg-[radial-gradient(circle_at_75%_20%,rgba(255,122,61,.11),transparent_24rem),linear-gradient(145deg,#17171a,#101012)] p-5 shadow-glow-md sm:p-8 lg:p-10">
+                    <section className="relative overflow-hidden rounded-experience border border-line bg-obsidian/70 p-5 shadow-glow-md sm:p-8 lg:p-10">
                         <div aria-hidden className="ecla-thread absolute inset-x-0 top-0" />
                         <div className="grid min-w-0 gap-8 lg:grid-cols-[minmax(0,1fr)_minmax(18rem,.72fr)] lg:items-end">
                             <div className="min-w-0">
                                 <p className="text-xs uppercase tracking-[.18em] text-stone">Pre-A1 capability record</p>
                                 <div className="mt-5 flex min-w-0 items-end gap-3"><strong className="font-display text-6xl font-normal leading-none text-ivory sm:text-7xl">{demonstrated}</strong><span className="pb-1 text-sm text-stone">of {total}<br />demonstrated</span></div>
-                                <div className="mt-6 h-1.5 overflow-hidden rounded-full bg-white/[.07]" aria-label={`${progress}% of capabilities demonstrated`}><div className="h-full rounded-full bg-gradient-to-r from-ember to-ember-soft" style={{ width: `${progress}%` }} /></div>
+                                <div className="mt-6 h-1.5 overflow-hidden rounded-full bg-white/[.07]" aria-label={`${progress}% of capabilities demonstrated`}><div className="h-full rounded-full bg-ember" style={{ width: `${progress}%` }} /></div>
                                 <p className="mt-3 text-xs text-ash">Demonstrated means transferred or retained in the learner record.</p>
                             </div>
                             <dl className="grid min-w-0 grid-cols-3 divide-x divide-line border-y border-line py-5 text-center">

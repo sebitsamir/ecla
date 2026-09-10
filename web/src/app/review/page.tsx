@@ -111,7 +111,7 @@ export default function ReviewPage() {
                             <section className="mt-8 grid min-w-0 overflow-hidden rounded-experience border border-line bg-carbon shadow-glow-md md:grid-cols-[minmax(0,1.1fr)_minmax(19rem,.9fr)]">
                                 <div className="relative min-h-64 overflow-hidden md:min-h-[25rem]">
                                     <Image src={context.image} alt="" fill priority sizes="(max-width: 767px) 100vw, 55vw" className="object-cover" />
-                                    <div aria-hidden className="absolute inset-0 bg-gradient-to-t from-carbon via-carbon/20 to-black/10 md:bg-gradient-to-r md:from-transparent md:via-transparent md:to-carbon/70" />
+                                    <div aria-hidden className="absolute inset-0 bg-obsidian/35" />
                                     <div className="absolute inset-x-0 bottom-0 p-5 md:hidden">
                                         <p className="inline-flex items-center gap-1.5 rounded-full border border-white/15 bg-black/45 px-3 py-1.5 text-xs text-ivory/80 backdrop-blur-md"><MapPin className="size-3.5 text-ember-soft" />{context.place}</p>
                                     </div>

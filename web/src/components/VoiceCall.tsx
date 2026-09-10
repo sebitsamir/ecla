@@ -269,7 +269,7 @@ export default function VoiceCall({ onEnd }: { onEnd: (lines: CallLine[]) => voi
     return (
         <div className="fixed inset-0 z-[60] flex h-dvh min-w-0 flex-col overflow-hidden bg-obsidian font-body text-ivory">
             <Image src="/worlds/spanish-cafe-scene-v1.webp" alt="" fill priority sizes="100vw" className="object-cover object-center" />
-            <div aria-hidden className="absolute inset-0 bg-[linear-gradient(180deg,rgba(9,9,10,.48)_0%,rgba(9,9,10,.2)_36%,rgba(9,9,10,.9)_78%,#09090a_100%)]" />
+            <div aria-hidden className="absolute inset-0 bg-obsidian/38" />
             <div aria-hidden className={`absolute inset-0 transition-colors duration-500 ${listening ? 'bg-black/5' : phase === 'thinking' ? 'bg-black/30' : 'bg-transparent'}`} />
             <style>{`
                 @keyframes vc-bar { 0%,100% { transform: scaleY(.25) } 50% { transform: scaleY(1) } }
@@ -296,7 +296,7 @@ export default function VoiceCall({ onEnd }: { onEnd: (lines: CallLine[]) => voi
 
             <main className="relative z-10 flex min-h-0 flex-1 flex-col justify-end">
                 <div className="flex flex-col items-center px-4 pb-4 sm:pb-6">
-                    <button onClick={interrupt} disabled={phase === 'error'} aria-label={phase === 'ecla' || phase === 'thinking' ? 'Interrupt Ecla and speak' : status} className="ecla-control relative flex size-20 items-center justify-center rounded-full border border-white/25 bg-black/45 text-ivory shadow-[0_0_60px_rgba(255,122,61,.22)] backdrop-blur-md sm:size-24">
+                    <button onClick={interrupt} disabled={phase === 'error'} aria-label={phase === 'ecla' || phase === 'thinking' ? 'Interrupt Ecla and speak' : status} className="ecla-control relative flex size-20 items-center justify-center rounded-full border border-white/25 bg-black/45 text-ivory shadow-[0_0_60px_rgba(230,162,60,.22)] backdrop-blur-md sm:size-24">
                     {(listening || phase === 'ecla') && (
                         <>
                                 <span className={`vc-ring pointer-events-none absolute inset-0 rounded-full border ${ringTone}`} />

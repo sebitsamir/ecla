@@ -99,7 +99,7 @@ export default function GoldenJourney({ getToken, onExit }: Props) {
                 <p className="mt-4 leading-relaxed text-stone">Practice in three places, then respond in a new setting. Retention opens after a successful transfer and a full day without more greeting practice.</p></div>
                 {!catalog.scenes.length && <p role="status">Golden scenes have not been installed in this database yet. Apply the Phase 1 migration and golden seed before using this pilot.</p>}
                 <div className="grid gap-4 md:grid-cols-3">{catalog.scenes.map((scene, index) => <article key={scene.id} className="relative flex min-h-60 flex-col overflow-hidden rounded-experience border border-line bg-carbon p-6 shadow-glow-md">
-                    <div aria-hidden className="absolute inset-0 bg-[radial-gradient(circle_at_100%_0%,rgba(255,122,61,.18),transparent_50%)]" /><div className="relative flex h-full flex-col">
+                    <div className="relative flex h-full flex-col">
                     <p className="text-[11px] font-semibold uppercase tracking-[.18em] text-ember-soft">{scene.purpose} · {String(index + 1).padStart(2,'0')}{scene.completed ? ' · completed' : ''}</p>
                     <h2 className="font-display mt-8 text-2xl">{scene.title}</h2><p className="mt-2 text-sm text-stone">{scene.setting}</p>
                     {scene.reason && <p className="text-sm text-amber-200">{scene.reason}</p>}

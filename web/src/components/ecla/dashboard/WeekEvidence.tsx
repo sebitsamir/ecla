@@ -61,7 +61,7 @@ export default function WeekEvidence({ week }: { week?: any }) {
                     >
                         {stats.map(s => (
                             <div key={s.l} className="rounded-xl border border-white/5 bg-white/[0.03] px-2 py-2.5 text-center">
-                                <p className="font-display text-lg font-bold text-cream">{s.v}</p>
+                                <p className="font-display text-lg font-normal text-cream">{s.v}</p>
                                 <p className="truncate text-[9px] font-semibold uppercase tracking-widest text-cream/40">{s.l}</p>
                             </div>
                         ))}
