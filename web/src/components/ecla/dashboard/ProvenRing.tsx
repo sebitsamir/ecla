@@ -25,7 +25,7 @@ export default function ProvenRing({ demonstrated, total, stageLabel }: {
                     />
                 </svg>
                 <div className="absolute inset-0 flex flex-col items-center justify-center">
-                    <p className="font-display text-3xl font-bold text-cream">{demonstrated}</p>
+                    <p className="font-display text-3xl font-normal text-cream">{demonstrated}</p>
                     <p className="text-[10px] font-semibold uppercase tracking-widest text-cream/40">of {total}</p>
                 </div>
             </div>

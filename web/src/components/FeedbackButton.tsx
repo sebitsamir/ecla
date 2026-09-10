@@ -67,7 +67,7 @@ export default function FeedbackButton() {
                         onClick={(e: MouseEvent<HTMLDivElement>) => e.stopPropagation()}
                     >
                         <div className="flex items-center justify-between border-b border-white/5 p-5">
-                            <h3 className="font-display text-lg font-bold text-cream">Send Feedback</h3>
+                            <h3 className="font-display text-lg font-normal text-cream">Send Feedback</h3>
                             <button
                                 onClick={() => setIsOpen(false)}
                                 className="rounded-lg p-1.5 text-cream/50 transition-colors hover:bg-night-700 hover:text-cream"

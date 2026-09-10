@@ -15,7 +15,7 @@ export function SceneRenderer({ delivery, preview = false, onExit }: { delivery:
     return <section className="relative min-h-dvh overflow-hidden bg-obsidian text-ivory">
         <div className="absolute inset-x-0 top-0 z-20 flex items-center gap-4 p-4 sm:p-6">
             <button onClick={onExit} aria-label={preview ? 'Close preview' : 'Back to scenes'} className="ecla-control flex size-11 shrink-0 items-center justify-center rounded-full border border-white/15 bg-black/40 backdrop-blur-md"><ArrowLeft className="size-5" /></button>
-            <div className="h-1.5 flex-1 overflow-hidden rounded-full bg-white/15"><div className="h-full rounded-full bg-gradient-to-r from-ember-soft to-ember transition-[width] duration-500" style={{ width: `${Math.min(100, ((sequence + (step ? 0 : 1)) / total) * 100)}%` }} /></div>
+            <div className="h-1.5 flex-1 overflow-hidden rounded-full bg-white/15"><div className="h-full rounded-full bg-ember transition-[width] duration-500" style={{ width: `${Math.min(100, ((sequence + (step ? 0 : 1)) / total) * 100)}%` }} /></div>
             <p className="min-w-10 text-right text-xs font-semibold tabular-nums">{Math.min(sequence + 1, total)} / {total}</p>
         </div>
         <SceneWorld setting={delivery.document.setting} speaker={step?.speaker} title={delivery.document.title} />

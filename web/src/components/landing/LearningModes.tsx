@@ -61,13 +61,13 @@ export default function LearningModes() {
               sizes="(max-width: 639px) 100vw, (max-width: 1023px) 50vw, 20vw"
               className="object-cover transition duration-500 group-hover:scale-[1.025] motion-reduce:transform-none motion-reduce:transition-none"
             />
-            <div className="absolute inset-0 bg-gradient-to-t from-ink/50 via-transparent to-transparent" aria-hidden="true" />
+            <div className="absolute inset-0 bg-obsidian/28" aria-hidden="true" />
           </div>
           <div className="p-4 sm:p-5">
             <div className="flex items-center justify-between gap-3">
               <div className="flex items-center gap-2.5">
                 <Icon aria-hidden="true" className="h-4 w-4 text-ember-soft" />
-                <h3 className="font-display text-[1.35rem] font-semibold leading-none tracking-[-0.02em] text-ivory">{name}</h3>
+                <h3 className="font-display text-[1.35rem] font-normal leading-none tracking-[-0.02em] text-ivory">{name}</h3>
               </div>
             </div>
             <p className="mt-3 text-xs leading-5 text-ivory/[48%]">{description}</p>

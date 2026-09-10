@@ -188,7 +188,7 @@ router.post('/api/v1/user/mode', async (req: Request, res: Response, next: NextF
 /**
  * POST /api/v1/user/cosmetics/equip
  * 
- * Equips a cosmetic (Firefly glow color).
+ * Equips a learner accent cosmetic.
  * User must have unlocked the cosmetic first.
  * 
  * Request body:

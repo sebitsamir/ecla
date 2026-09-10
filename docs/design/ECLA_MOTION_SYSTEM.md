@@ -182,7 +182,7 @@ Allowed:
 - slow light drift
 - barely perceptible scene depth
 - environmental movement
-- subtle gradient temperature shifts
+- subtle solid-color temperature shifts
 
 Disallowed:
 - floating random bubbles

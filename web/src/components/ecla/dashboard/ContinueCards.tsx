@@ -60,7 +60,7 @@ export default function ContinueCards({ units }: { units?: ContinueUnit[] | null
                             <ArrowRight className="h-4 w-4 text-cream/30 transition-all group-hover:translate-x-0.5 group-hover:text-glow" />
                         </div>
 
-                        <p className="font-display truncate text-sm font-bold text-cream">
+                        <p className="font-display truncate text-sm font-normal text-cream">
                             {u.title ?? `Unit ${i + 1}`}
                         </p>
 

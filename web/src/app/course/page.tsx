@@ -90,8 +90,7 @@ export default function CoursePage() {
                 <div className="min-w-0 overflow-x-clip">
                     <section className="relative mb-8 min-h-[22rem] overflow-hidden rounded-experience border border-line shadow-[0_30px_100px_rgba(0,0,0,.42)] sm:min-h-[25rem] lg:mb-10 lg:min-h-[27rem] xl:min-h-[29rem]">
                         <Image src="/worlds/spanish-evening-v2.webp" alt="" fill priority sizes="(max-width: 1320px) 100vw, 1240px" className="object-cover" />
-                        <div aria-hidden className="absolute inset-0 bg-[linear-gradient(90deg,rgba(9,9,10,.92)_0%,rgba(9,9,10,.66)_52%,rgba(9,9,10,.22)_100%)]" />
-                        <div aria-hidden className="absolute inset-0 bg-gradient-to-t from-obsidian/75 via-transparent to-black/20" />
+                        <div aria-hidden className="absolute inset-0 bg-obsidian/38" />
                         <div className="relative flex min-h-[22rem] max-w-3xl flex-col justify-end p-5 sm:min-h-[25rem] sm:p-8 lg:min-h-[27rem] lg:p-9 xl:min-h-[29rem] xl:p-10">
                             <p className="flex items-center gap-2 text-xs font-semibold uppercase tracking-[.2em] text-ember-soft"><Compass className="size-4" />Spanish · {String(course.level).replace(/_/g, '-')}</p>
                             <h1 className="font-display mt-3 text-4xl leading-[1.02] text-ivory sm:text-5xl lg:text-6xl">{course.title}</h1>

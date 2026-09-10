@@ -16,10 +16,10 @@ export default function Moon({
     className = ''
 }: MoonProps) {
     const sizes = {
-        sm: { moon: 40, halo: 80 },
-        md: { moon: 60, halo: 120 },
-        lg: { moon: 100, halo: 200 },
-        xl: { moon: 140, halo: 280 },
+        sm: 40,
+        md: 60,
+        lg: 100,
+        xl: 140,
     }
 
     const positions = {
@@ -29,7 +29,7 @@ export default function Moon({
         'bottom-left': 'fixed -left-8 bottom-16',
     }
 
-    const { moon, halo } = sizes[size]
+    const moon = sizes[size]
     const pos = positions[position]
 
     // Crater positions and sizes for texture
@@ -43,44 +43,13 @@ export default function Moon({
 
     return (
         <div className={`pointer-events-none ${pos} ${className}`} aria-hidden="true">
-            {/* Outer halo glow */}
-            <div
-                className="absolute rounded-full opacity-30"
-                style={{
-                    width: halo,
-                    height: halo,
-                    background: 'radial-gradient(circle, rgba(255,249,224,0.4) 0%, transparent 70%)',
-                    filter: 'blur(20px)',
-                    top: '50%',
-                    left: '50%',
-                    transform: 'translate(-50%, -50%)',
-                }}
-            />
-
-            {/* Moon body */}
             <svg
                 width={moon}
                 height={moon}
                 viewBox="0 0 100 100"
                 className="relative"
             >
-                {/* Base moon gradient */}
-                <defs>
-                    <radialGradient id="moonGradient" cx="40%" cy="40%" r="60%">
-                        <stop offset="0%" stopColor="#FFF9E0" />
-                        <stop offset="40%" stopColor="#FFE29A" />
-                        <stop offset="100%" stopColor="#E8C574" />
-                    </radialGradient>
-
-                    {/* Crater gradient for depth */}
-                    <radialGradient id="craterGradient" cx="50%" cy="50%" r="50%">
-                        <stop offset="0%" stopColor="#D4A857" />
-                        <stop offset="100%" stopColor="#C49B4A" />
-                    </radialGradient>
-                </defs>
-
-                {/* Moon sphere */}
-                <circle cx="50" cy="50" r="50" fill="url(#moonGradient)" />
+                <circle cx="50" cy="50" r="50" fill="#F7F2E8" />
 
                 {/* Craters for texture */}
                 {craters.map((crater, i) => (
@@ -89,8 +58,8 @@ export default function Moon({
                         cx={crater.cx}
                         cy={crater.cy}
                         r={crater.r}
-                        fill="url(#craterGradient)"
-                        opacity="0.3"
+                        fill="#E6A23C"
+                        opacity="0.22"
                     />
                 ))}
 

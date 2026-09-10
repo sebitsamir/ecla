@@ -53,7 +53,7 @@ export default function SceneExperience({ scene, tools, mastery, getToken, onCom
     const { isMuted, toggleMute } = useSceneAudio(scene.environment, engine.stage, engine.feedback)
 
     const drawer =
-        'fixed inset-x-0 top-14 bottom-0 z-40 overflow-y-auto bg-[#0B0B10]/95 p-4 backdrop-blur'
+        'fixed inset-x-0 top-14 bottom-0 z-40 overflow-y-auto bg-obsidian/95 p-4 backdrop-blur'
 
     return (
         <>

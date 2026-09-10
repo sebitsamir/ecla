@@ -45,8 +45,8 @@ export default function HomeExperience({ home, fallbackName }: { home: LearnerHo
     <div className="space-y-12 pb-4 sm:space-y-16">
       <section className="relative isolate min-h-[500px] overflow-hidden rounded-experience border border-line bg-ink shadow-[0_32px_100px_rgba(0,0,0,.42)] sm:min-h-[540px]">
         <Image src={atmosphere.src} alt="" fill priority sizes="(max-width: 768px) 100vw, 1320px" className="object-cover object-[66%_center]" />
-        <div className="absolute inset-0" style={{ backgroundImage: atmosphere.overlay }} />
-        <div className="absolute inset-0 bg-[linear-gradient(180deg,rgba(9,9,10,.16)_0%,rgba(9,9,10,.08)_34%,rgba(9,9,10,.78)_66%,#09090a_100%)] sm:hidden" />
+        <div className="absolute inset-0" style={{ background: atmosphere.overlay }} />
+        <div className="absolute inset-0 bg-obsidian/10 sm:hidden" />
         <div className="absolute inset-x-0 bottom-0 h-px ecla-thread opacity-80" />
 
         <div className="relative flex min-h-[500px] flex-col p-5 sm:min-h-[540px] sm:p-8 lg:p-10">
@@ -80,10 +80,13 @@ export default function HomeExperience({ home, fallbackName }: { home: LearnerHo
             </div>
 
             <Link href="/progress" aria-label={`View progress: ${summary.demonstrated} of ${summary.total} capabilities demonstrated`}
-              className="ecla-surface ecla-control hidden size-32 shrink-0 place-content-center rounded-full text-center hover:border-line-strong lg:grid"
-              style={{ background: `radial-gradient(circle closest-side,var(--ecla-carbon) 78%,transparent 80% 99%),conic-gradient(var(--ecla-ember-soft) ${pct}%,rgba(244,240,232,.1) 0)` }}>
-              <span className="font-display text-3xl text-ivory">{pct}%</span>
-              <span className="mt-1 block text-[9px] uppercase tracking-[.16em] text-stone">{summary.demonstrated}/{summary.total} proven</span>
+              className="ecla-surface ecla-control relative hidden size-32 shrink-0 place-content-center overflow-hidden rounded-full text-center hover:border-line-strong lg:grid">
+              <svg aria-hidden className="absolute inset-2 -rotate-90" viewBox="0 0 100 100">
+                <circle cx="50" cy="50" r="46" fill="none" stroke="var(--ecla-line-strong)" strokeWidth="3" />
+                <circle cx="50" cy="50" r="46" fill="none" stroke="var(--ecla-ember)" strokeWidth="3" strokeLinecap="round" pathLength="100" strokeDasharray={`${pct} 100`} />
+              </svg>
+              <span className="relative font-display text-3xl text-ivory">{pct}%</span>
+              <span className="relative mt-1 block text-[9px] uppercase tracking-[.16em] text-stone">{summary.demonstrated}/{summary.total} proven</span>
             </Link>
           </div>
         </div>
@@ -115,8 +118,8 @@ export default function HomeExperience({ home, fallbackName }: { home: LearnerHo
       </section>
 
       {reviewCount > 0 ? (
-        <section className="relative overflow-hidden rounded-experience border border-ember/20 bg-[linear-gradient(120deg,rgba(255,122,61,.11),rgba(23,23,26,.72)_55%)] p-6 sm:p-8">
-          <div className="absolute left-0 top-1/2 h-px w-24 -translate-y-1/2 bg-gradient-to-r from-ember to-transparent" />
+        <section className="relative overflow-hidden rounded-experience border border-ember/20 bg-carbon p-6 sm:p-8">
+          <div className="absolute left-0 top-1/2 h-px w-24 -translate-y-1/2 bg-ember" />
           <div className="relative flex flex-col gap-5 sm:flex-row sm:items-center sm:justify-between">
             <div><p className="text-[10px] font-semibold uppercase tracking-[.2em] text-ember-soft">A memory is ready</p><h2 className="mt-2 font-display text-2xl text-ivory sm:text-3xl">{reviewCount === 1 ? 'One capability needs a return.' : `${reviewCount} capabilities are ready to return.`}</h2><p className="mt-2 max-w-xl text-sm leading-6 text-stone">A short encounter now helps the language stay available when you need it.</p></div>
             <Link href={firstReviewHref(home)} className="ecla-control inline-flex min-h-12 shrink-0 items-center justify-center gap-2 rounded-full border border-line-strong bg-surface px-5 text-sm font-semibold text-ivory hover:bg-surface-raised">Practice now <ArrowRight className="size-4" /></Link>

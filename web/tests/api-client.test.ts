@@ -7,9 +7,11 @@ test('waits for Clerk to expose the first session token', async () => {
     const originalFetch = globalThis.fetch
     let tokenCalls = 0
     let authorization = ''
+    let cacheMode: RequestCache | undefined
 
     globalThis.fetch = async (_input, init) => {
         authorization = new Headers(init?.headers).get('Authorization') ?? ''
+        cacheMode = init?.cache
         return Response.json({ ready: true })
     }
 
@@ -22,6 +24,7 @@ test('waits for Clerk to expose the first session token', async () => {
         assert.deepEqual(result, { ready: true })
         assert.equal(tokenCalls, 2)
         assert.equal(authorization, 'Bearer session-token')
+        assert.equal(cacheMode, 'no-store')
     } finally {
         globalThis.fetch = originalFetch
     }

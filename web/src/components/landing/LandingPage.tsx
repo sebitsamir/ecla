@@ -74,8 +74,7 @@ export default function LandingPage() {
           sizes="100vw"
           className="-z-30 object-cover object-[62%_center]"
         />
-        <div aria-hidden className="absolute inset-0 -z-20 bg-[linear-gradient(90deg,rgba(9,9,10,.96)_0%,rgba(9,9,10,.82)_42%,rgba(9,9,10,.38)_72%,rgba(9,9,10,.58)_100%)]" />
-        <div aria-hidden className="absolute inset-0 -z-20 bg-gradient-to-t from-obsidian via-transparent to-black/25" />
+        <div aria-hidden className="absolute inset-0 -z-20 bg-obsidian/45" />
         <div className="mx-auto grid min-h-[calc(100svh-4rem)] w-full max-w-[1320px] gap-12 px-5 py-14 sm:min-h-[calc(100svh-4.5rem)] sm:px-8 sm:py-20 lg:grid-cols-[minmax(0,.9fr)_minmax(28rem,1.1fr)] lg:items-center lg:gap-12 lg:px-10 xl:gap-20">
           <div className="max-w-[650px]">
             <p className="mb-5 text-[11px] font-semibold uppercase tracking-[0.3em] text-ember-soft sm:text-xs">
@@ -84,7 +83,7 @@ export default function LandingPage() {
             <h1 className="font-display text-5xl font-normal leading-[0.96] tracking-[-0.035em] text-ivory sm:text-6xl lg:text-7xl xl:text-[5.5rem]">
               Learn until you can <span className="text-ember-soft">actually use it.</span>
             </h1>
-            <p className="mt-7 max-w-xl text-base leading-7 text-ivory/70 sm:text-lg sm:leading-8">
+            <p className="mt-7 max-w-xl text-base leading-7 text-ivory/85 sm:text-lg sm:leading-8">
               Ecla turns language into situations, memory, interaction, and real capability—so what you learn remains available when life asks for it.
             </p>
 
@@ -217,12 +216,12 @@ export default function LandingPage() {
               <div>
                 <Target aria-hidden="true" className="h-5 w-5 text-ember-soft" />
                 <p className="mt-5 text-xs font-extrabold uppercase tracking-[0.18em] text-ivory/[35%]">Current launch</p>
-                <p className="mt-2 font-display text-3xl font-semibold tracking-[-0.03em] text-ivory">Spanish first</p>
+                <p className="mt-2 font-display text-3xl font-normal tracking-[-0.03em] text-ivory">Spanish first</p>
               </div>
               <div>
                 <Shield aria-hidden="true" className="h-5 w-5 text-ember-soft" />
                 <p className="mt-5 text-xs font-extrabold uppercase tracking-[0.18em] text-ivory/[35%]">Platform direction</p>
-                <p className="mt-2 font-display text-3xl font-semibold tracking-[-0.03em] text-ivory">Language-agnostic core</p>
+                <p className="mt-2 font-display text-3xl font-normal tracking-[-0.03em] text-ivory">Language-agnostic core</p>
               </div>
             </div>
           </div>
@@ -232,10 +231,10 @@ export default function LandingPage() {
       <section className="py-20 sm:py-24 lg:py-28">
         <div className="mx-auto w-full max-w-[1240px] px-5 sm:px-8 lg:px-10">
           <div className="relative overflow-hidden rounded-[28px] border border-ember/20 bg-ink px-6 py-10 sm:px-10 sm:py-12 lg:flex lg:items-center lg:justify-between lg:gap-12 lg:px-14 lg:py-14">
-            <div className="absolute inset-x-0 top-0 h-px bg-gradient-to-r from-transparent via-ember/80 to-transparent" aria-hidden="true" />
+            <div className="absolute inset-x-0 top-0 h-px bg-ember/80" aria-hidden="true" />
             <div className="max-w-3xl">
               <p className="text-[11px] font-extrabold uppercase tracking-[0.28em] text-ember-soft sm:text-xs">Begin with a better system</p>
-              <h2 className="mt-4 font-display text-[2.7rem] font-semibold leading-[0.95] tracking-[-0.04em] text-ivory sm:text-5xl lg:text-[3.6rem]">
+              <h2 className="mt-4 font-display text-[2.7rem] font-normal leading-[0.95] tracking-[-0.04em] text-ivory sm:text-5xl lg:text-[3.6rem]">
                 Build language ability that lasts beyond the lesson.
               </h2>
               <p className="mt-5 max-w-2xl text-sm leading-7 text-ivory/[48%] sm:text-base">

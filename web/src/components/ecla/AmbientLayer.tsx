@@ -30,8 +30,8 @@ export default function AmbientLayer({ environment, timeOfDay }: {
             {environment === 'street' && (
                 <>
                     {/* Passing light streaks — traffic, headlights */}
-                    <span className="absolute top-1/3 -left-1/4 h-px w-1/3 bg-gradient-to-r from-transparent via-white/25 to-transparent animate-streak" />
-                    <span className="absolute top-2/3 -left-1/3 h-px w-1/4 bg-gradient-to-r from-transparent via-white/15 to-transparent animate-streak [animation-delay:3s]" />
+                    <span className="absolute top-1/3 -left-1/4 h-px w-1/3 bg-white/25 animate-streak" />
+                    <span className="absolute top-2/3 -left-1/3 h-px w-1/4 bg-white/15 animate-streak [animation-delay:3s]" />
                     {night && <span className="absolute inset-0 bg-indigo-900/20" />}
                 </>
             )}

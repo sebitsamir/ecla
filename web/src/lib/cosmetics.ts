@@ -11,7 +11,7 @@ export const COSMETICS: Record<CosmeticId, {
 }> = {
     gold: {
         id: 'gold', name: 'Classic Gold', desc: 'Where every light begins.', unlockText: null,
-        colors: { core: '#FFF6CF', mid: '#FFD876', deep: '#F09D2E', halo: '#FFC857' },
+        colors: { core: '#F7F2E8', mid: '#F0BF67', deep: '#B9751D', halo: '#E6A23C' },
     },
     coral: {
         id: 'coral', name: 'Ember Coral', desc: 'A warm, steady flame.', unlockText: 'Reach a 3-day streak',

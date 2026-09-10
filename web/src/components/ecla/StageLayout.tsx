@@ -82,7 +82,7 @@ export default function StageLayout({
                         <p className="mb-2 text-[11px] font-bold uppercase tracking-widest text-glow">
                             Scene complete
                         </p>
-                        <h2 className="font-display text-3xl font-bold text-cream">
+                        <h2 className="font-display text-3xl font-normal text-cream">
                             {scene.title}
                         </h2>
                     </div>
@@ -93,7 +93,7 @@ export default function StageLayout({
                             Practice results — not a verified assessment
                         </p>
                         <div className="mb-5 flex items-end justify-center gap-2">
-                            <span className="font-display text-5xl font-bold text-cream">
+                            <span className="font-display text-5xl font-normal text-cream">
                                 {score}
                             </span>
                             <span className="mb-1 text-xl text-cream/40">%</span>
@@ -104,7 +104,7 @@ export default function StageLayout({
                         {/* Score bar */}
                         <div className="mt-4 h-1.5 w-full overflow-hidden rounded-full bg-white/5">
                             <div
-                                className="h-full rounded-full bg-gradient-to-r from-glow via-leaf to-leaf transition-all duration-1000 ease-out"
+                                className="h-full rounded-full bg-success transition-all duration-1000 ease-out"
                                 style={{ width: `${score}%` }}
                             />
                         </div>
@@ -174,7 +174,7 @@ export default function StageLayout({
                 <div className={`relative ${isEncounter ? 'h-[45vh] min-h-[320px] sm:h-[60vh] sm:min-h-[420px]' : ''}`}>
                     <SceneBackdrop {...bd} />
                     {isEncounter && (
-                        <div className="absolute inset-0 bg-gradient-to-b from-transparent via-transparent to-[#0B0B10]" />
+                        <div className="absolute inset-0 bg-obsidian/35" />
                     )}
                     {stage === 'TRANSFER' && showNewContext && (
                         <div className="animate-context-flash absolute left-1/2 top-6 -translate-x-1/2">

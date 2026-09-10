@@ -6,7 +6,7 @@ import FeedbackButton from '@/components/FeedbackButton'; // <--- ADD THIS
 import ServiceWorkerRegistration from '@/components/ServiceWorkerRegistration'
 import "./globals.css";
 
-const instrumentserif = Instrument_Serif({ subsets: ['latin'], variable: '--font-ecla-display', weight: ['400'] })
+const instrumentSerif = Instrument_Serif({ subsets: ['latin'], variable: '--font-ecla-display', weight: ['400'], display: 'swap' })
 const geist = Geist({ subsets: ['latin'], variable: '--font-ecla-body', display: 'swap' })
 
 export const viewport = {
@@ -14,9 +14,9 @@ export const viewport = {
   initialScale: 1,
 }
 export const metadata: Metadata = {
-  title: 'Ecla',
-  description: 'One curriculum. Four ways to learn.',
-  icons: [{ url: '/favicon.svg', type: 'image/svg+xml' }],
+  title: 'ECLA',
+  description: 'A more human way to learn languages.',
+  icons: [{ url: '/brand/ecla-app-icon.png', type: 'image/png', sizes: '512x512' }],
   manifest: '/manifest.webmanifest',
 };
 
@@ -27,7 +27,7 @@ export default function RootLayout({
 }) {
   return (
     <html lang="en">
-      <body className={`${instrumentserif.variable} ${geist.variable}`}>
+      <body className={`${instrumentSerif.variable} ${geist.variable}`}>
         <ClerkProvider dynamic>
           <PostHogProvider>
             {children}

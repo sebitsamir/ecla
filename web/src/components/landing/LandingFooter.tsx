@@ -15,7 +15,7 @@ export default function LandingFooter() {
       <div className="mx-auto flex w-full max-w-[1240px] flex-col gap-8 px-5 py-10 sm:px-8 lg:flex-row lg:items-end lg:justify-between lg:px-10 lg:py-12">
         <div>
           <Link href="/" aria-label="ECLA home">
-            <Logo className="text-[1.4rem]" fireflySize={22} />
+            <Logo className="h-7 w-auto" height={28} />
           </Link>
           <p className="mt-3 max-w-xs text-xs leading-5 text-ivory/[35%]">
             Curriculum-driven language learning designed around what you can actually understand, remember, and use.

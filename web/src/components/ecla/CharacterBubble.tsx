@@ -54,7 +54,7 @@ export default function CharacterBubble({ character, text, mine = false, gloss, 
                             isError ? 'grayscale opacity-50 border-amber-500/50' : ''
                         }`}
                     />
-                    <span className="absolute bottom-0 right-0 h-2.5 w-2.5 rounded-full bg-leaf border-2 border-[#0B0B10]" />
+                    <span className="absolute bottom-0 right-0 h-2.5 w-2.5 rounded-full border-2 border-obsidian bg-leaf" />
                 </div>
             )}
             <div className={`relative max-w-[75%] rounded-2xl px-4 py-3 text-sm leading-relaxed shadow-xl flex flex-col gap-1 transition-all duration-300 ${

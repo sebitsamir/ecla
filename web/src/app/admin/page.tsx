@@ -86,7 +86,7 @@ export default function AdminPage() {
                         <ArrowLeft className="h-5 w-5" />
                     </button>
                     <div>
-                        <div className="mb-3 flex flex-wrap gap-3"><a href="/admin/portfolio" className="rounded-xl border border-white/20 px-4 py-2 text-sm">Pre-A1 review</a><a href="/admin/assessment" className="rounded-xl border border-white/20 px-4 py-2 text-sm">Assessment review</a><a href="/admin/scenes" className="rounded-xl border border-white/20 px-4 py-2 text-sm">Canonical scenes</a></div><h1 className="font-display text-2xl font-bold text-cream">Content authoring</h1>
+                        <div className="mb-3 flex flex-wrap gap-3"><a href="/admin/portfolio" className="rounded-xl border border-white/20 px-4 py-2 text-sm">Pre-A1 review</a><a href="/admin/assessment" className="rounded-xl border border-white/20 px-4 py-2 text-sm">Assessment review</a><a href="/admin/scenes" className="rounded-xl border border-white/20 px-4 py-2 text-sm">Canonical scenes</a></div><h1 className="font-display text-2xl font-normal text-cream">Content authoring</h1>
                         <p className="text-sm text-cream/50">Competency metadata · validation gate · seed phases for depth</p>
                     </div>
                 </header>
@@ -159,7 +159,7 @@ export default function AdminPage() {
                                                 value={form[field]}
                                                 onChange={e => setForm(f => ({ ...f, [field]: e.target.value }))}
                                                 rows={field === 'canDo' ? 2 : 1}
-                                                className="mt-1 w-full rounded-xl border border-white/10 bg-[#0B0B10] px-3 py-2 text-sm text-cream"
+                                                className="mt-1 w-full rounded-xl border border-line bg-obsidian px-3 py-2 text-sm text-cream"
                                             />
                                         </div>
                                     ))}

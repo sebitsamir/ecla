@@ -8,7 +8,7 @@ import {
     Heart, Plane, ShieldCheck, Sparkles, Target, TrendingUp,
 } from 'lucide-react'
 import posthog from 'posthog-js'
-import { LogoMark } from '@/components/BrandLogo'
+import { Logo } from '@/components/BrandLogo'
 import ApiState from '@/components/ApiState'
 import { useAuthReady } from '@/hooks/useAuthReady'
 import { apiFetch, ApiError } from '@/lib/apiClient'
@@ -139,10 +139,10 @@ export default function OnboardingPage() {
     return (
         <main className="relative min-h-dvh overflow-x-hidden bg-obsidian text-ivory">
             <Image src={STEP_IMAGES[step - 1]} alt="" fill priority sizes="100vw" className="fixed object-cover" />
-            <div aria-hidden className="fixed inset-0 bg-[linear-gradient(180deg,rgba(9,9,10,.38),rgba(9,9,10,.88)_62%,#09090a)] lg:bg-[linear-gradient(90deg,rgba(9,9,10,.3),rgba(9,9,10,.62)_46%,rgba(9,9,10,.97)_68%)]" />
+            <div aria-hidden className="fixed inset-0 bg-obsidian/42" />
 
             <header className="safe-top relative z-10 mx-auto flex max-w-[1440px] items-center justify-between px-4 py-4 sm:px-6 lg:px-10">
-                <div className="flex items-center gap-2"><LogoMark size={30} /><span className="font-display text-2xl">Ecla</span></div>
+                <Logo height={32} className="h-8 w-auto" />
                 <p className="text-xs text-ivory/65">Step {step} of 4</p>
             </header>
 
@@ -154,7 +154,7 @@ export default function OnboardingPage() {
                 </section>
 
                 <section className="min-w-0 overflow-hidden rounded-experience border border-white/15 bg-ink/92 shadow-[0_28px_100px_rgba(0,0,0,.5)] backdrop-blur-xl">
-                    <div className="h-1 bg-white/[.08]"><div className="h-full bg-gradient-to-r from-ember to-ember-soft transition-[width] duration-500" style={{ width: `${step * 25}%` }} /></div>
+                    <div className="h-1 bg-white/[.08]"><div className="h-full bg-ember transition-[width] duration-500" style={{ width: `${step * 25}%` }} /></div>
                     <div key={step} className="animate-fade-up p-5 sm:p-7 lg:p-8">
                         {step === 1 ? (
                             <div>

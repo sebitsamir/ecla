@@ -12,7 +12,7 @@ const quiet = 'ecla-control inline-flex min-h-11 items-center justify-center gap
 
 function ProgressLine({ current, total }: { current: number; total: number }) {
     const width = Math.max(0, Math.min(100, (current / Math.max(total, 1)) * 100))
-    return <div className="h-1 overflow-hidden rounded-full bg-white/10" aria-label={`Scene ${current} of ${total}`}><div className="h-full rounded-full bg-gradient-to-r from-ember to-ember-soft transition-[width] duration-500" style={{ width: `${width}%` }} /></div>
+    return <div className="h-1 overflow-hidden rounded-full bg-white/10" aria-label={`Scene ${current} of ${total}`}><div className="h-full rounded-full bg-ember transition-[width] duration-500" style={{ width: `${width}%` }} /></div>
 }
 
 export default function AssessmentRunner({ kind, competencyId, getToken, onExit }: Props) {
@@ -74,7 +74,7 @@ export default function AssessmentRunner({ kind, competencyId, getToken, onExit 
         return (
             <main className="relative min-h-dvh overflow-hidden bg-obsidian text-ivory">
                 <div aria-hidden className={`absolute inset-0 bg-cover bg-center ${mission ? "bg-[url('/worlds/journey/unit-everyday-survival.webp')]" : "bg-[url('/worlds/spanish-night-v1.webp')]"}`} />
-                <div aria-hidden className="absolute inset-0 bg-[linear-gradient(90deg,rgba(9,9,10,.96)_0%,rgba(9,9,10,.78)_48%,rgba(9,9,10,.35)_100%),linear-gradient(0deg,rgba(9,9,10,.9),transparent_55%)]" />
+                <div aria-hidden className="absolute inset-0 bg-obsidian/38" />
                 <div className="relative mx-auto flex min-h-dvh w-full max-w-[1440px] flex-col px-5 py-5 sm:px-8 sm:py-7 lg:px-12">
                     <button className={quiet} onClick={onExit}><ArrowLeft className="size-4" />Back to journey</button>
                     <section className="my-auto max-w-2xl py-14 sm:py-20">
@@ -108,7 +108,7 @@ export default function AssessmentRunner({ kind, competencyId, getToken, onExit 
 
     return (
         <main className="relative min-h-dvh overflow-hidden bg-obsidian text-ivory">
-            <div aria-hidden className="fixed inset-0 bg-[radial-gradient(circle_at_72%_12%,rgba(255,122,61,.13),transparent_30rem),linear-gradient(145deg,#101114,#09090a_62%)]" />
+            <div aria-hidden className="fixed inset-0 bg-obsidian/70" />
             <div className="relative mx-auto flex min-h-dvh w-full max-w-[1440px] flex-col px-4 py-4 sm:px-7 sm:py-6 lg:px-10">
                 <header className="grid min-w-0 grid-cols-[auto_minmax(0,1fr)_auto] items-center gap-3 border-b border-line pb-4 sm:gap-5">
                     <button className="ecla-control flex size-11 shrink-0 items-center justify-center rounded-full border border-line-strong bg-black/20" aria-label="Exit assessment" onClick={onExit}><ArrowLeft className="size-4" /></button>
@@ -163,7 +163,7 @@ function Conversation({ session, answer, setAnswer, consent, setConsent, busy, e
                 </div>
                 <div className="mt-4 grid min-w-0 gap-3 border-t border-line pt-4 md:grid-cols-[minmax(0,1fr)_auto] md:items-center">
                     <div className="min-w-0">
-                        <label className="flex min-h-11 cursor-pointer items-start gap-3 text-xs leading-5 text-stone"><input className="mt-1 accent-[#ff7a3d]" type="checkbox" checked={consent} onChange={event => setConsent(event.target.checked)} disabled={mic.state !== 'idle'} /><span>I consent to transcription-provider processing. Temporary server audio is deleted; only my confirmed transcript is stored.</span></label>
+                        <label className="flex min-h-11 cursor-pointer items-start gap-3 text-xs leading-5 text-stone"><input className="mt-1 accent-ember" type="checkbox" checked={consent} onChange={event => setConsent(event.target.checked)} disabled={mic.state !== 'idle'} /><span>I consent to transcription-provider processing. Temporary server audio is deleted; only my confirmed transcript is stored.</span></label>
                         {mic.recordingUrl ? <audio className="mt-2 h-9 w-full max-w-sm" controls src={mic.recordingUrl} aria-label="Recording playback" /> : null}
                         {mic.error ? <p role="status" className="mt-2 text-xs text-warning">Voice is unavailable. You can continue by typing.</p> : null}
                     </div>

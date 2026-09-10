@@ -33,7 +33,6 @@ export default function NextActionCard({ action }: { action: NextAction }) {
 
     return (
         <section className="relative flex h-full min-w-0 flex-col overflow-hidden rounded-experience border border-ember/30 bg-carbon p-5 shadow-glow-md sm:p-6">
-            <div aria-hidden className="absolute inset-0 bg-[radial-gradient(circle_at_100%_0%,rgba(255,122,61,.18),transparent_55%)]" />
             <div className="relative flex h-full flex-col">
             <p className="text-[11px] font-semibold uppercase tracking-[.18em] text-ember-soft">
                 {action?.kind === 'review' ? 'Due today' : 'Your next step'}
