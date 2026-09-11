@@ -27,10 +27,11 @@
  */
 
 import { Router, Request, Response, NextFunction } from 'express'
+import { clerkClient } from '@clerk/express'
 import { prisma } from '../lib/prisma'
-import { getOrSyncUserFast, requireAuth } from '../lib/auth'
+import { getOrSyncUserFast, invalidateUserCache, requireAuth } from '../lib/auth'
 import { AppError } from '../lib/errors'
-import { onboardingSchema, modeSchema } from '../lib/schemas'
+import { learnerPreferencesSchema, onboardingSchema, modeSchema, profileSchema } from '../lib/schemas'
 
 const router = Router()
 
@@ -63,7 +64,8 @@ router.get('/api/v1/users/me', async (req: Request, res: Response, next: NextFun
         res.json({
             id: user.id,
             email: user.email,
-            name: user.name,
+            name: user.displayName,
+            displayName: user.displayName,
             onboardingCompleted: user.onboardingCompleted,
             motivation: user.motivation,
             preferredMode: user.preferredMode,
@@ -72,6 +74,43 @@ router.get('/api/v1/users/me', async (req: Request, res: Response, next: NextFun
             unlockedCosmetics: user.unlockedCosmetics ?? ['gold'],
             equippedCosmetic: user.equippedCosmetic ?? 'gold',
         })
+    } catch (error) {
+        next(error)
+    }
+})
+
+/** Update the learner's public profile in Clerk and the local account record. */
+router.patch('/api/v1/users/me', async (req: Request, res: Response, next: NextFunction) => {
+    try {
+        const parsed = profileSchema.safeParse(req.body)
+        if (!parsed.success) throw new AppError('Enter a valid first and last name', 400)
+
+        const clerkId = requireAuth(req)
+        const existing = await getOrSyncUserFast(req)
+        const { firstName, lastName } = parsed.data
+        const displayName = [firstName, lastName].filter(Boolean).join(' ')
+
+        await clerkClient.users.updateUser(clerkId, { firstName, lastName: lastName || undefined })
+        const user = await prisma.user.update({
+            where: { id: existing.id },
+            data: { displayName },
+        })
+        invalidateUserCache(clerkId)
+        res.json({ success: true, displayName: user.displayName })
+    } catch (error) {
+        next(error)
+    }
+})
+
+/** Update preferences that shape the learner's adaptive plan. */
+router.patch('/api/v1/users/me/preferences', async (req: Request, res: Response, next: NextFunction) => {
+    try {
+        const parsed = learnerPreferencesSchema.safeParse(req.body)
+        if (!parsed.success) throw new AppError('Choose a valid learning goal and daily pace', 400)
+        const user = await getOrSyncUserFast(req)
+        const updated = await prisma.user.update({ where: { id: user.id }, data: parsed.data })
+        invalidateUserCache(user.clerkId)
+        res.json({ success: true, motivation: updated.motivation, dailyGoalXp: updated.dailyGoalXp })
     } catch (error) {
         next(error)
     }

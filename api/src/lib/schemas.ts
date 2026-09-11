@@ -17,6 +17,20 @@ export const modeSchema = z.object({
     mode: z.enum(['STORY', 'DRILL', 'IMMERSION', 'PROFESSIONAL']),
 })
 
+export const profileSchema = z.object({
+    firstName: z.string().trim().min(1).max(80),
+    lastName: z.string().trim().max(80),
+}).strict()
+
+export const learnerPreferencesSchema = z.object({
+    motivation: z.enum(['TRAVEL', 'HERITAGE', 'CAREER', 'FUN']).nullable(),
+    dailyGoalXp: z.union([z.literal(20), z.literal(50), z.literal(100)]),
+}).strict()
+
+export const deleteAccountSchema = z.object({
+    confirmation: z.literal('DELETE MY ACCOUNT'),
+}).strict()
+
 export const flashcardReviewSchema = z.object({
     vocabId: z.string(),
     quality: z.number().int().min(0).max(5),

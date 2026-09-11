@@ -43,7 +43,7 @@ export default function HomeExperience({ home, fallbackName }: { home: LearnerHo
 
   return (
     <div className="space-y-12 pb-4 sm:space-y-16">
-      <section className="relative isolate min-h-[500px] overflow-hidden rounded-experience border border-line bg-ink shadow-[0_32px_100px_rgba(0,0,0,.42)] sm:min-h-[540px]">
+      <section className="ecla-dark-scene relative isolate min-h-[500px] overflow-hidden rounded-experience border border-line bg-ink shadow-[0_32px_100px_rgba(0,0,0,.42)] sm:min-h-[540px]">
         <Image src={atmosphere.src} alt="" fill priority sizes="(max-width: 768px) 100vw, 1320px" className="object-cover object-[66%_center]" />
         <div className="absolute inset-0" style={{ background: atmosphere.overlay }} />
         <div className="absolute inset-0 bg-obsidian/10 sm:hidden" />
