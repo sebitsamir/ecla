@@ -25,3 +25,12 @@ export async function deleteLearningData(db: PrismaClient, user: User) {
         await tx.user.update({ where: { id: user.id }, data: { motivation: null, preferredMode: 'DRILL', dailyGoalXp: 50, xpTotal: 0, unlockedCosmetics: ['gold'], equippedCosmetic: 'gold', streakDays: 0, lastActiveAt: null, displayName: null, onboardingCompleted: false, currentLevel: null } })
     })
 }
+
+/** Remove the application account and every record that is not covered by a relation cascade. */
+export async function deleteAccountData(db: PrismaClient, user: User) {
+    await db.$transaction(async tx => {
+        await tx.characterMemory.deleteMany({ where: { userId: user.id } })
+        await tx.learnerEvent.deleteMany({ where: { userId: user.id } })
+        await tx.user.delete({ where: { id: user.id } })
+    })
+}

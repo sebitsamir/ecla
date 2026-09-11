@@ -5,9 +5,10 @@ import Link from 'next/link'
 import Image from 'next/image'
 import { usePathname } from 'next/navigation'
 import { useClerk, useUser } from '@clerk/nextjs'
-import { BookOpen, Home, LogOut, MessageCircle, Repeat2, Route, TrendingUp, X } from 'lucide-react'
+import { BookOpen, Home, LogOut, MessageCircle, Repeat2, Route, Settings, TrendingUp, X } from 'lucide-react'
 import { Logo } from '@/components/BrandLogo'
 import { IconButton } from '@/components/ui'
+import { useTheme } from '@/components/ThemeProvider'
 
 const PRIMARY_NAV = [
   { href: '/dashboard', label: 'Home', icon: Home },
@@ -25,10 +26,10 @@ function isCurrent(pathname: string, href: string) {
   return pathname === href || (href === '/course' && pathname.startsWith('/learn/'))
 }
 
-function Brand() {
+function Brand({ tone }: { tone: 'dark' | 'light' }) {
   return (
     <Link href="/dashboard" className="ecla-control inline-flex min-h-11 items-center gap-2 rounded-control px-1 text-ivory" aria-label="Ecla home">
-      <Logo height={32} className="h-8 w-auto" />
+      <Logo height={32} className="h-8 w-auto" tone={tone} />
     </Link>
   )
 }
@@ -57,6 +58,7 @@ function PrimaryNavigation({ mobile = false }: { mobile?: boolean }) {
 export default function AppShell({ children }: { children: ReactNode }) {
   const { user } = useUser()
   const { signOut } = useClerk()
+  const { resolvedTheme } = useTheme()
   const [accountOpen, setAccountOpen] = useState(false)
   const accountRef = useRef<HTMLDivElement>(null)
   const name = user?.firstName ?? user?.username ?? 'Learner'
@@ -83,7 +85,7 @@ export default function AppShell({ children }: { children: ReactNode }) {
       <a href="#main-content" className="fixed left-3 top-3 z-[70] -translate-y-20 rounded-control bg-ember px-4 py-2 text-sm font-semibold text-obsidian transition-transform focus:translate-y-0">Skip to content</a>
       <header className="sticky top-0 z-40 border-b border-line bg-obsidian/82 backdrop-blur-xl">
         <div className="mx-auto flex h-16 max-w-[1440px] items-center gap-6 px-4 sm:px-6 lg:px-10">
-          <Brand />
+          <Brand tone={resolvedTheme} />
           <div className="hidden xl:block"><PrimaryNavigation /></div>
           <div ref={accountRef} className="relative ml-auto">
             <button onClick={() => setAccountOpen(value => !value)} aria-expanded={accountOpen} aria-haspopup="menu"
@@ -98,6 +100,7 @@ export default function AppShell({ children }: { children: ReactNode }) {
                   <IconButton label="Close account menu" onClick={() => setAccountOpen(false)} className="size-9 border-transparent bg-transparent"><X className="size-4" /></IconButton>
                 </div>
                 <div className="my-1 h-px bg-line" />
+                <Link role="menuitem" href="/profile" onClick={() => setAccountOpen(false)} className="ecla-control flex min-h-11 items-center gap-3 rounded-control px-3 text-sm text-stone hover:bg-white/[0.05] hover:text-ivory"><Settings className="size-4" />Profile &amp; settings</Link>
                 {SECONDARY_NAV.map(({ href, label, icon: Icon }) => <Link role="menuitem" key={href} href={href} onClick={() => setAccountOpen(false)} className="ecla-control flex min-h-11 items-center gap-3 rounded-control px-3 text-sm text-stone hover:bg-white/[0.05] hover:text-ivory"><Icon className="size-4" />{label}</Link>)}
                 <button role="menuitem" onClick={() => signOut()} className="ecla-control flex min-h-11 w-full items-center gap-3 rounded-control px-3 text-sm text-stone hover:bg-white/[0.05] hover:text-ivory"><LogOut className="size-4" />Sign out</button>
               </div>

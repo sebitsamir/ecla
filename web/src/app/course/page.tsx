@@ -88,7 +88,7 @@ export default function CoursePage() {
                 <div className="ecla-surface rounded-experience p-8 text-stone">No published course is available yet.</div>
             ) : (
                 <div className="min-w-0 overflow-x-clip">
-                    <section className="relative mb-8 min-h-[22rem] overflow-hidden rounded-experience border border-line shadow-[0_30px_100px_rgba(0,0,0,.42)] sm:min-h-[25rem] lg:mb-10 lg:min-h-[27rem] xl:min-h-[29rem]">
+                    <section className="ecla-dark-scene relative mb-8 min-h-[22rem] overflow-hidden rounded-experience border border-line shadow-[0_30px_100px_rgba(0,0,0,.42)] sm:min-h-[25rem] lg:mb-10 lg:min-h-[27rem] xl:min-h-[29rem]">
                         <Image src="/worlds/spanish-evening-v2.webp" alt="" fill priority sizes="(max-width: 1320px) 100vw, 1240px" className="object-cover" />
                         <div aria-hidden className="absolute inset-0 bg-obsidian/38" />
                         <div className="relative flex min-h-[22rem] max-w-3xl flex-col justify-end p-5 sm:min-h-[25rem] sm:p-8 lg:min-h-[27rem] lg:p-9 xl:min-h-[29rem] xl:p-10">
