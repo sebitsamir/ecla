@@ -88,24 +88,25 @@ export default function CoursePage() {
                 <div className="ecla-surface rounded-experience p-8 text-stone">No published course is available yet.</div>
             ) : (
                 <div className="min-w-0 overflow-x-clip">
-                    <section className="ecla-dark-scene relative mb-8 min-h-[22rem] overflow-hidden rounded-experience border border-line shadow-[0_30px_100px_rgba(0,0,0,.42)] sm:min-h-[25rem] lg:mb-10 lg:min-h-[27rem] xl:min-h-[29rem]">
+                    <section className="ecla-dark-scene ecla-reveal relative mb-7 min-h-64 overflow-hidden rounded-[22px] border border-line shadow-[0_24px_70px_rgba(0,0,0,.35)] sm:min-h-80 sm:rounded-experience lg:mb-9 lg:min-h-96">
                         <Image src="/worlds/spanish-evening-v2.webp" alt="" fill priority sizes="(max-width: 1320px) 100vw, 1240px" className="object-cover" />
                         <div aria-hidden className="absolute inset-0 bg-obsidian/38" />
-                        <div className="relative flex min-h-[22rem] max-w-3xl flex-col justify-end p-5 sm:min-h-[25rem] sm:p-8 lg:min-h-[27rem] lg:p-9 xl:min-h-[29rem] xl:p-10">
+                        <div className="relative flex min-h-64 max-w-3xl flex-col justify-end p-4 sm:min-h-80 sm:p-7 lg:min-h-96 lg:p-9">
                             <p className="flex items-center gap-2 text-xs font-semibold uppercase tracking-[.2em] text-ember-soft"><Compass className="size-4" />Spanish · {String(course.level).replace(/_/g, '-')}</p>
-                            <h1 className="font-display mt-3 text-4xl leading-[1.02] text-ivory sm:text-5xl lg:text-6xl">{course.title}</h1>
-                            <p className="mt-4 max-w-xl text-base leading-relaxed text-ivory/75">{course.units.length} units · {all.length} capabilities · one connected journey through real situations.</p>
-                            <div className="mt-6 grid max-w-2xl grid-cols-3 gap-2 sm:mt-7 sm:gap-3">
+                            <h1 className="font-display mt-2 text-4xl leading-[1.02] text-ivory sm:text-5xl lg:text-6xl">{course.title}</h1>
+                            <p className="mt-3 max-w-xl text-sm leading-6 text-ivory/75 sm:text-base">{course.units.length} units · {all.length} capabilities · one connected journey.</p>
+                            <div className="mt-4 grid max-w-2xl grid-cols-3 gap-2 sm:mt-6 sm:gap-3">
                                 <div className="min-w-0 rounded-control border border-white/15 bg-black/35 p-2.5 backdrop-blur-md sm:p-3 lg:p-4"><p className="flex min-w-0 items-center gap-1 text-[9px] uppercase tracking-wide text-ivory/55 sm:gap-1.5 sm:text-[10px]"><Check className="size-3 shrink-0 text-success" /><span className="truncate">Demonstrated</span></p><p className="font-display mt-1 text-2xl lg:text-3xl">{mastered}</p></div>
                                 <div className="min-w-0 rounded-control border border-white/15 bg-black/35 p-2.5 backdrop-blur-md sm:p-3 lg:p-4"><p className="flex min-w-0 items-center gap-1 text-[9px] uppercase tracking-wide text-ivory/55 sm:gap-1.5 sm:text-[10px]"><Sparkles className="size-3 shrink-0 text-ember-soft" /><span className="truncate">Developing</span></p><p className="font-display mt-1 text-2xl lg:text-3xl">{developing}</p></div>
                                 <div className="min-w-0 rounded-control border border-white/15 bg-black/35 p-2.5 backdrop-blur-md sm:p-3 lg:p-4"><p className="flex min-w-0 items-center gap-1 text-[9px] uppercase tracking-wide text-ivory/55 sm:gap-1.5 sm:text-[10px]"><Lock className="size-3 shrink-0 text-stone" /><span className="truncate">Available</span></p><p className="font-display mt-1 text-2xl lg:text-3xl">{available}</p></div>
                             </div>
                         </div>
                     </section>
-                <div className="grid min-w-0 grid-cols-[minmax(0,1fr)] gap-8 xl:grid-cols-[minmax(0,1fr)_22.5rem] xl:gap-10">
+                {summary?.nextAction ? <div className="mb-7 xl:hidden"><NextActionCard action={summary.nextAction} /></div> : null}
+                <div className="grid min-w-0 grid-cols-[minmax(0,1fr)] gap-8 xl:grid-cols-[minmax(0,1fr)_21rem] xl:gap-9">
                     <div className="min-w-0">
-                        <header className="mb-7"><p className="text-xs font-semibold uppercase tracking-[.2em] text-ember-soft">Your route</p><h2 className="font-display mt-2 text-3xl text-ivory sm:text-4xl">Follow the path at your pace.</h2><p className="mt-3 max-w-2xl text-sm leading-relaxed text-stone">Each unit opens from your recorded progress. Select an available step to enter its real-world scene.</p></header>
-                        <ol className="space-y-6">
+                        <header className="mb-5"><p className="text-xs font-semibold uppercase tracking-[.2em] text-ember-soft">Your route</p><h2 className="font-display mt-2 text-3xl text-ivory sm:text-4xl">Follow the path at your pace.</h2><p className="mt-3 max-w-2xl text-sm leading-6 text-stone">Open a unit, then choose an available scene.</p></header>
+                        <ol className="space-y-4 sm:space-y-5">
                             {course.units.map((u, i) => (
                                 <StageCard
                                     key={u.id}
@@ -127,7 +128,7 @@ export default function CoursePage() {
                         </ol>
                     </div>
 
-                    <div className="grid min-w-0 grid-cols-[minmax(0,1fr)] gap-5 md:grid-cols-2 xl:sticky xl:top-20 xl:grid-cols-1 xl:self-start">
+                    <div className="hidden min-w-0 gap-5 xl:sticky xl:top-20 xl:grid xl:grid-cols-1 xl:self-start">
                         {summary?.nextAction && <NextActionCard action={summary.nextAction} />}
                         <CompetencyDetail competency={focus ? {
                             id: focus.id,

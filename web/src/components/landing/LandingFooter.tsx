@@ -2,20 +2,19 @@ import Link from 'next/link'
 import { Logo } from '@/components/BrandLogo'
 
 const links = [
-  { href: '#method', label: 'Method' },
-  { href: '#curriculum', label: 'Curriculum' },
+  { href: '#method', label: 'How it works' },
+  { href: '#learning', label: 'Learning' },
   { href: '#progress', label: 'Progress' },
-  { href: '#system', label: 'System' },
-  { href: '#about', label: 'About' },
 ]
 
 export default function LandingFooter() {
   return (
     <footer className="border-t border-white/[0.06]">
-      <div className="mx-auto flex w-full max-w-[1240px] flex-col gap-8 px-5 py-10 sm:px-8 lg:flex-row lg:items-end lg:justify-between lg:px-10 lg:py-12">
+      <div className="mx-auto flex w-full max-w-[1200px] flex-col gap-8 px-4 py-8 sm:px-6 lg:flex-row lg:items-end lg:justify-between lg:px-8 lg:py-10">
         <div>
           <Link href="/" aria-label="ECLA home">
-            <Logo className="h-7 w-auto" height={28} />
+            <Logo className="ecla-logo-for-dark h-7 w-auto" height={28} tone="dark" />
+            <Logo className="ecla-logo-for-light h-7 w-auto" height={28} tone="light" />
           </Link>
           <p className="mt-3 max-w-xs text-xs leading-5 text-ivory/[35%]">
             Curriculum-driven language learning designed around what you can actually understand, remember, and use.

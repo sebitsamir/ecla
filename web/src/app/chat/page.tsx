@@ -205,7 +205,7 @@ function ChatPageContent() {
 
     return (
         <AppShell>
-            <section className="mx-auto flex h-[calc(100dvh-10.5rem)] min-h-[28rem] min-w-0 max-w-5xl flex-col overflow-hidden rounded-experience border border-line bg-ink shadow-glow-md xl:h-[calc(100dvh-8rem)] xl:max-h-[58rem]">
+            <section className="mx-auto flex h-[calc(100dvh-9.5rem)] min-h-[28rem] min-w-0 max-w-4xl flex-col overflow-hidden rounded-[22px] border border-line bg-ink shadow-glow-md sm:rounded-experience xl:h-[calc(100dvh-8rem)] xl:max-h-[52rem]">
                 <header className="flex min-w-0 items-center justify-between gap-4 border-b border-line px-4 py-3 sm:px-6">
                     <div className="min-w-0"><p className="text-[10px] font-semibold uppercase tracking-[.18em] text-ember-soft">Conversation</p><h1 className="mt-0.5 truncate text-sm font-medium text-ivory">Talk with Ecla</h1></div>
                     <div className="flex shrink-0 items-center gap-2">
@@ -217,20 +217,20 @@ function ChatPageContent() {
                 </header>
 
                 <div ref={scrollRef} className="min-h-0 flex-1 overflow-y-auto overscroll-contain">
-                    <div className="mx-auto flex min-h-full max-w-3xl flex-col px-4 py-6 sm:px-6 sm:py-8">
+                    <div className="mx-auto flex min-h-full max-w-3xl flex-col px-3 py-3 sm:px-6 sm:py-6">
                         {messages.length === 0 && !thinking ? (
                             <div className="grid min-h-full min-w-0 overflow-hidden rounded-surface border border-line bg-carbon md:grid-cols-[minmax(0,.9fr)_minmax(19rem,1.1fr)]">
-                                <div className="relative min-h-48 overflow-hidden md:min-h-[27rem]">
+                                <div className="ecla-dark-scene relative min-h-36 overflow-hidden sm:min-h-48 md:min-h-[24rem]">
                                     <Image src="/worlds/spanish-cafe-scene-v1.webp" alt="" fill priority sizes="(max-width: 767px) 100vw, 42vw" className="object-cover" />
                                     <div aria-hidden className="absolute inset-0 bg-obsidian/35" />
                                 </div>
-                                <div className="flex min-w-0 flex-col justify-center p-5 sm:p-7 md:p-8">
+                                <div className="flex min-w-0 flex-col justify-center p-4 sm:p-6 md:p-7">
                                     <p className="text-xs font-semibold uppercase tracking-[.18em] text-ember-soft">A real conversation</p>
-                                    <h2 className="font-display mt-3 text-3xl leading-tight text-ivory sm:text-4xl">Say what you mean.</h2>
+                                    <h2 className="font-display mt-2 text-2xl leading-tight text-ivory sm:text-4xl">Say what you mean.</h2>
                                     <p className="mt-4 break-words text-sm leading-6 text-stone">{chatContext?.currentCompetency ? `Ecla will keep the conversation near your current capability: ${chatContext.currentCompetency.canDo}` : 'Ecla keeps the conversation close to your current learning level and helps when you need it.'}</p>
                                     {chatContext?.weakDimensions?.length ? <p className="mt-3 text-xs leading-5 text-ash">Current focus: {chatContext.weakDimensions.join(', ')}</p> : null}
-                                    <div className="mt-6 flex flex-wrap gap-2">
-                                        {SUGGESTIONS.map(suggestion => <button key={suggestion} onClick={() => send(suggestion)} className="ecla-control min-h-11 rounded-full border border-line-strong bg-white/[.03] px-4 text-left text-xs text-stone hover:border-ember/35 hover:text-ivory">{suggestion}</button>)}
+                                    <div className="mt-4 flex flex-wrap gap-2 sm:mt-6">
+                                        {SUGGESTIONS.map(suggestion => <button key={suggestion} onClick={() => send(suggestion)} className="ecla-control min-h-11 rounded-full border border-line-strong bg-white/[.03] px-3 text-left text-xs text-stone hover:border-ember/35 hover:text-ivory sm:px-4">{suggestion}</button>)}
                                     </div>
                                 </div>
                             </div>
@@ -257,7 +257,7 @@ function ChatPageContent() {
                             <button onClick={recording ? stopRecording : startRecording} disabled={thinking} aria-label={recording ? 'Stop recording and transcribe' : 'Dictate a message'} className={`ecla-control flex size-11 shrink-0 items-center justify-center rounded-full ${recording ? 'animate-mic-pulse bg-danger text-ivory' : 'text-stone hover:bg-white/[.05] hover:text-ivory'}`}>{recording ? <span className="size-3 rounded-sm bg-current" /> : <Mic className="size-4" />}</button>
                             <button onClick={() => send(input)} disabled={thinking || !input.trim()} aria-label="Send message" className="ecla-control flex size-11 shrink-0 items-center justify-center rounded-full bg-ember text-obsidian hover:bg-ember-soft"><ArrowUp className="size-4" /></button>
                         </div>
-                        <p className="mt-2 flex items-center justify-center gap-1.5 text-center text-[10px] leading-4 text-ash"><ShieldCheck className="size-3 shrink-0" />Voice recordings are transcribed temporarily and deleted. Typed conversation is always available.</p>
+                        <p className="mt-2 flex items-center justify-center gap-1.5 text-center text-[10px] leading-4 text-ash"><ShieldCheck className="size-3 shrink-0" />Voice transcripts are temporary and deleted.</p>
                     </div>
                 </footer>
 

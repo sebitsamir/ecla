@@ -44,7 +44,7 @@ function reviewHeading(count: number) {
 
 function ReviewLoading() {
     return (
-        <div role="status" aria-label="Finding what needs practice" className="mx-auto max-w-5xl space-y-7 py-3 sm:py-6">
+        <div role="status" aria-label="Finding what needs practice" className="mx-auto max-w-4xl space-y-6 py-2 sm:py-5">
             <div className="space-y-3">
                 <Skeleton className="h-4 w-32" />
                 <Skeleton className="h-12 max-w-xl sm:h-16" />
@@ -98,32 +98,32 @@ export default function ReviewPage() {
                     <p className="mt-4 text-center text-xs text-ash">Your learning history is safe.</p>
                 </div>
             ) : first ? (
-                <div className="mx-auto min-w-0 max-w-5xl py-3 sm:py-6">
+                <div className="mx-auto min-w-0 max-w-4xl py-2 sm:py-5">
                     <header className="max-w-2xl">
                         <p className="flex items-center gap-2 text-xs font-semibold uppercase tracking-[.2em] text-ember-soft"><RotateCcw className="size-4" />Spaced review</p>
-                        <h1 className="font-display mt-3 text-4xl leading-[1.04] text-ivory sm:text-5xl lg:text-6xl">{reviewHeading(due.length)}</h1>
+                        <h1 className="font-display mt-3 text-[2.5rem] leading-[1.04] text-ivory sm:text-5xl lg:text-6xl">{reviewHeading(due.length)}</h1>
                         <p className="mt-4 max-w-xl text-sm leading-6 text-stone sm:text-base">Return to a familiar moment while the language is still within reach.</p>
                     </header>
 
                     {(() => {
                         const context = reviewContext(first)
                         return (
-                            <section className="mt-8 grid min-w-0 overflow-hidden rounded-experience border border-line bg-carbon shadow-glow-md md:grid-cols-[minmax(0,1.1fr)_minmax(19rem,.9fr)]">
-                                <div className="relative min-h-64 overflow-hidden md:min-h-[25rem]">
+                            <section className="ecla-reveal mt-7 grid min-w-0 overflow-hidden rounded-[22px] border border-line bg-carbon shadow-glow-md sm:rounded-experience md:grid-cols-[minmax(0,1.05fr)_minmax(18rem,.95fr)]">
+                                <div className="ecla-dark-scene relative min-h-52 overflow-hidden sm:min-h-60 md:min-h-[22rem]">
                                     <Image src={context.image} alt="" fill priority sizes="(max-width: 767px) 100vw, 55vw" className="object-cover" />
                                     <div aria-hidden className="absolute inset-0 bg-obsidian/35" />
                                     <div className="absolute inset-x-0 bottom-0 p-5 md:hidden">
                                         <p className="inline-flex items-center gap-1.5 rounded-full border border-white/15 bg-black/45 px-3 py-1.5 text-xs text-ivory/80 backdrop-blur-md"><MapPin className="size-3.5 text-ember-soft" />{context.place}</p>
                                     </div>
                                 </div>
-                                <div className="flex min-w-0 flex-col justify-center p-5 sm:p-7 md:p-8 lg:p-10">
+                                <div className="flex min-w-0 flex-col justify-center p-4 sm:p-6 md:p-7">
                                     <p className="text-[11px] font-semibold uppercase tracking-[.2em] text-ember-soft">Begin here</p>
-                                    <h2 className="font-display mt-3 break-words text-3xl leading-tight text-ivory">{first.title}</h2>
+                                    <h2 className="font-display mt-2 break-words text-2xl leading-tight text-ivory sm:text-3xl">{first.title}</h2>
                                     <p className="mt-4 break-words text-base leading-7 text-ivory/75">{first.canDo}</p>
                                     <div className="mt-5 hidden items-center gap-4 text-xs text-stone md:flex">
                                         <span>{context.character.name}</span><span aria-hidden className="size-1 rounded-full bg-ember" /><span className="inline-flex min-w-0 items-center gap-1.5"><MapPin className="size-3.5 shrink-0" /><span className="break-words">{context.place}</span></span>
                                     </div>
-                                    <Link href={reviewHref(first)} className="ecla-control mt-7 flex min-h-12 w-full items-center justify-center gap-2 rounded-control bg-ember px-5 text-sm font-semibold text-obsidian hover:bg-ember-soft sm:w-fit">
+                                    <Link href={reviewHref(first)} className="ecla-control mt-5 flex min-h-12 w-full items-center justify-center gap-2 rounded-control bg-ember px-5 text-sm font-semibold text-obsidian hover:bg-ember-soft sm:w-fit">
                                         Start review <ArrowRight className="size-4" />
                                     </Link>
                                 </div>

@@ -192,14 +192,14 @@ export default function ProgressPage() {
                     <Link href="/course" className="ecla-control mt-7 inline-flex min-h-12 items-center justify-center gap-2 rounded-control bg-ember px-6 text-sm font-semibold text-obsidian hover:bg-ember-soft">Start your first scene <ArrowRight className="size-4" /></Link>
                 </section>
             ) : (
-                <div className="min-w-0 space-y-12 py-3 sm:space-y-14 sm:py-6">
+                <div className="mx-auto min-w-0 max-w-6xl space-y-9 py-2 sm:space-y-12 sm:py-5">
                     <header className="max-w-3xl">
                         <p className="flex items-center gap-2 text-xs font-semibold uppercase tracking-[.2em] text-ember-soft"><ShieldCheck className="size-4" />Evidence, not streaks</p>
-                        <h1 className="font-display mt-3 text-4xl leading-[1.02] text-ivory sm:text-6xl lg:text-7xl">What you can actually do</h1>
+                        <h1 className="font-display mt-3 text-[2.5rem] leading-[1.02] text-ivory sm:text-6xl lg:text-7xl">What you can actually do</h1>
                         <p className="mt-4 max-w-2xl text-sm leading-6 text-stone sm:text-base">A record of Spanish capabilities supported by assessed performance, transfer, and retention.</p>
                     </header>
 
-                    <section className="relative overflow-hidden rounded-experience border border-line bg-obsidian/70 p-5 shadow-glow-md sm:p-8 lg:p-10">
+                    <section className="ecla-reveal relative overflow-hidden rounded-[22px] border border-line bg-obsidian/70 p-4 shadow-glow-md sm:rounded-experience sm:p-7 lg:p-8">
                         <div aria-hidden className="ecla-thread absolute inset-x-0 top-0" />
                         <div className="grid min-w-0 gap-8 lg:grid-cols-[minmax(0,1fr)_minmax(18rem,.72fr)] lg:items-end">
                             <div className="min-w-0">
@@ -216,7 +216,7 @@ export default function ProgressPage() {
                         </div>
                     </section>
 
-                    <div className="grid min-w-0 gap-10 lg:grid-cols-[minmax(0,1.15fr)_minmax(19rem,.85fr)] lg:gap-12">
+                    <div className="grid min-w-0 gap-8 lg:grid-cols-[minmax(0,1.15fr)_minmax(18rem,.85fr)] lg:gap-10">
                         <section className="min-w-0">
                             <p className="text-xs font-semibold uppercase tracking-[.18em] text-success">Capabilities you can rely on</p>
                             <h2 className="font-display mt-2 text-3xl text-ivory sm:text-4xl">Language that has travelled with you.</h2>
@@ -269,7 +269,7 @@ export default function ProgressPage() {
                                 const assessed = formatDate(item.lastAssessedAt)
                                 const review = formatDate(item.nextReviewAt)
                                 return (
-                                    <li key={item.competencyId ?? item.competencyCode ?? index} className="min-w-0 rounded-surface border border-line bg-carbon/70 p-5 sm:p-6">
+                                    <li key={item.competencyId ?? item.competencyCode ?? index} className="ecla-lift min-w-0 rounded-surface border border-line bg-carbon/70 p-4 sm:p-5">
                                         <div className="flex min-w-0 flex-wrap items-start justify-between gap-3"><div className="min-w-0 flex-1"><p className="break-all text-[10px] uppercase tracking-[.12em] text-ash">{item.competencyCode}</p><h3 className="mt-2 break-words text-sm font-medium leading-6 text-ivory sm:text-base">{item.canDo ?? item.competencyTitle}</h3></div><StatusPill level={item.level} /></div>
                                         <MasteryTrack level={item.level} />
                                         <DimensionEvidence dimensions={item.dimensions} />

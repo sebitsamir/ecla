@@ -72,6 +72,24 @@
   --ecla-line-strong: #344654;
   --ecla-surface: rgba(15,23,32,.94);
   --ecla-surface-raised: rgba(23,33,43,.96);
+  --color-obsidian: #08111a;
+  --color-ink: #0f1720;
+  --color-carbon: #17212b;
+  --color-slate: #263440;
+  --color-ivory: #f7f2e8;
+  --color-stone: #aab3bd;
+  --color-ash: #8e99a6;
+  --color-ember: #e6a23c;
+  --color-ember-soft: #f0bf67;
+  --color-ember-deep: #b9751d;
+  --color-success: #4fae8d;
+  --color-warning: #e0a64c;
+  --color-danger: #d9685b;
+  --color-info: #648ed6;
+  --color-line: rgba(170,179,189,.24);
+  --color-line-strong: rgba(170,179,189,.42);
+  --color-surface: rgba(15,23,32,.94);
+  --color-surface-raised: rgba(23,33,43,.96);
 }
 
 @theme {
@@ -139,6 +157,10 @@ button,input,textarea,select { font: inherit; }
 .ecla-control { transition: color 160ms var(--ecla-ease), background-color 160ms var(--ecla-ease), border-color 160ms var(--ecla-ease), transform 120ms var(--ecla-ease); }
 .ecla-control:active:not(:disabled) { transform: scale(.98); }
 .ecla-control:disabled { cursor: not-allowed; opacity: .46; }
+.ecla-logo-for-light { display:none; }
+:root[data-theme="light"] .ecla-logo-for-dark { display:none; }
+:root[data-theme="light"] .ecla-logo-for-light { display:block; }
+.ecla-reveal { animation:ecla-fade-up 460ms var(--ecla-ease) both; animation-delay:var(--ecla-delay,0ms); }
 .ecla-surface { border: 1px solid var(--ecla-line); background: var(--ecla-surface); box-shadow: var(--ecla-shadow); backdrop-filter: blur(20px); }
 .ecla-thread { height: 1px; background: var(--ecla-ember); }
 .ecla-skeleton { position: relative; overflow: hidden; background: rgba(170,179,189,.08); }
@@ -170,6 +192,10 @@ button,input,textarea,select { font: inherit; }
 .animate-mic-pulse { animation:ecla-mic-pulse 1.8s ease-out infinite; }
 .animate-flash-green,.animate-flash-amber { animation:ecla-fade-in 320ms var(--ecla-ease); }
 .scene-character { animation:scene-presence 6s ease-in-out infinite; }
+@media (hover:hover) and (pointer:fine) {
+  .ecla-lift { transition:transform 180ms var(--ecla-ease),border-color 180ms var(--ecla-ease),box-shadow 180ms var(--ecla-ease); }
+  .ecla-lift:hover { transform:translateY(-3px); box-shadow:0 16px 34px rgba(8,17,26,.2); }
+}
 @media (max-width:390px) { .scene-mobile-compact { padding-inline:.75rem; } }
 @media (prefers-reduced-motion:reduce) {
   *,*::before,*::after { scroll-behavior:auto!important; animation-duration:.01ms!important; animation-iteration-count:1!important; transition-duration:.01ms!important; }

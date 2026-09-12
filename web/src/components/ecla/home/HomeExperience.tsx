@@ -2,7 +2,8 @@
 
 import Image from 'next/image'
 import Link from 'next/link'
-import { ArrowRight, BookOpen, Check, MessageCircle, Repeat2, Route, ShieldCheck } from 'lucide-react'
+import type { CSSProperties } from 'react'
+import { ArrowRight, BookOpen, Check, MessageCircle, Repeat2, ShieldCheck } from 'lucide-react'
 import type { LearnerHome } from '@/lib/summary'
 import type { CourseCompetency } from '@/components/ecla/course/StageCard'
 import { homeAtmosphereFor } from '@/lib/homeAtmosphere'
@@ -29,6 +30,12 @@ const MODES = [
   { label: 'Conversation', description: 'Talk with Ecla.', icon: MessageCircle, href: '/chat' },
 ] as const
 
+function nextReason(kind?: string, fallback?: string) {
+  if (kind === 'review') return 'A quick return now will help this stay ready when you need it.'
+  if (kind === 'gateway') return 'You are ready to use this ability in a fresh situation.'
+  return fallback || 'Continue with the next scene in your journey.'
+}
+
 export default function HomeExperience({ home, fallbackName }: { home: LearnerHome; fallbackName?: string | null }) {
   const { summary } = home
   const course = home.courses[0]
@@ -42,25 +49,25 @@ export default function HomeExperience({ home, fallbackName }: { home: LearnerHo
   const atmosphere = homeAtmosphereFor(new Date())
 
   return (
-    <div className="space-y-12 pb-4 sm:space-y-16">
-      <section className="ecla-dark-scene relative isolate min-h-[500px] overflow-hidden rounded-experience border border-line bg-ink shadow-[0_32px_100px_rgba(0,0,0,.42)] sm:min-h-[540px]">
-        <Image src={atmosphere.src} alt="" fill priority sizes="(max-width: 768px) 100vw, 1320px" className="object-cover object-[66%_center]" />
+    <div className="space-y-9 pb-2 sm:space-y-12">
+      <section className="ecla-dark-scene ecla-reveal relative isolate min-h-[430px] overflow-hidden rounded-[22px] border border-line bg-ink shadow-[0_24px_70px_rgba(0,0,0,.35)] sm:min-h-[480px] sm:rounded-experience lg:min-h-[510px]">
+        <Image src={atmosphere.src} alt="" fill priority sizes="(max-width: 768px) 100vw, 1200px" className="object-cover object-[66%_center]" />
         <div className="absolute inset-0" style={{ background: atmosphere.overlay }} />
         <div className="absolute inset-0 bg-obsidian/10 sm:hidden" />
         <div className="absolute inset-x-0 bottom-0 h-px ecla-thread opacity-80" />
 
-        <div className="relative flex min-h-[500px] flex-col p-5 sm:min-h-[540px] sm:p-8 lg:p-10">
+        <div className="relative flex min-h-[430px] flex-col p-4 sm:min-h-[480px] sm:p-7 lg:min-h-[510px] lg:p-9">
           <div className="max-w-xl animate-fade-up">
             <p className="text-xs font-medium tracking-[0.16em] text-ember-soft">{atmosphere.greeting}, {name}.</p>
-            <h1 className="mt-3 font-display text-[clamp(2.65rem,6.4vw,5.15rem)] leading-[.9] tracking-[-.035em] text-ivory">
+            <h1 className="mt-3 font-display text-[clamp(2.35rem,6vw,4.75rem)] leading-[.94] tracking-[-.035em] text-ivory">
               {course?.title ? <>{course.title}<br /><span className="text-stone">is waiting.</span></> : <>Your language<br /><span className="text-stone">is waiting.</span></>}
             </h1>
             <p className="mt-5 max-w-md text-sm leading-6 text-stone sm:text-base">
-              {next?.reason || 'Continue from the capability Ecla has selected for you.'}
+              {nextReason(next?.kind, next?.reason)}
             </p>
           </div>
 
-          <div className="mt-auto grid items-end gap-4 pt-16 lg:grid-cols-[minmax(0,1fr)_auto]">
+          <div className="mt-auto grid items-end gap-4 pt-10 sm:pt-12 lg:grid-cols-[minmax(0,1fr)_auto]">
             <div className="ecla-surface max-w-3xl rounded-surface p-4 sm:p-5">
               <p className="text-[10px] font-semibold uppercase tracking-[.2em] text-ember-soft">
                 {next?.kind === 'review' ? 'Ready to strengthen' : next?.kind === 'gateway' ? 'Ready to prove' : 'Continue your journey'}
@@ -86,13 +93,13 @@ export default function HomeExperience({ home, fallbackName }: { home: LearnerHo
                 <circle cx="50" cy="50" r="46" fill="none" stroke="var(--ecla-ember)" strokeWidth="3" strokeLinecap="round" pathLength="100" strokeDasharray={`${pct} 100`} />
               </svg>
               <span className="relative font-display text-3xl text-ivory">{pct}%</span>
-              <span className="relative mt-1 block text-[9px] uppercase tracking-[.16em] text-stone">{summary.demonstrated}/{summary.total} proven</span>
+              <span className="relative mt-1 block text-[9px] uppercase tracking-[.16em] text-stone">{summary.demonstrated}/{summary.total} demonstrated</span>
             </Link>
           </div>
         </div>
       </section>
 
-      <section aria-labelledby="capabilities-heading" className="grid gap-8 lg:grid-cols-[1.3fr_.7fr] lg:gap-16">
+      <section aria-labelledby="capabilities-heading" className="ecla-reveal grid gap-7 lg:grid-cols-[1.3fr_.7fr] lg:gap-12" style={{ '--ecla-delay': '70ms' } as CSSProperties}>
         <div>
           <p className="text-[10px] font-semibold uppercase tracking-[.2em] text-ember-soft">Your language is changing</p>
           <h2 id="capabilities-heading" className="mt-3 font-display text-3xl text-ivory sm:text-4xl">What you can do now</h2>
@@ -118,9 +125,8 @@ export default function HomeExperience({ home, fallbackName }: { home: LearnerHo
       </section>
 
       {reviewCount > 0 ? (
-        <section className="relative overflow-hidden rounded-experience border border-ember/20 bg-carbon p-6 sm:p-8">
-          <div className="absolute left-0 top-1/2 h-px w-24 -translate-y-1/2 bg-ember" />
-          <div className="relative flex flex-col gap-5 sm:flex-row sm:items-center sm:justify-between">
+        <section className="ecla-reveal relative overflow-hidden rounded-surface border border-ember/20 bg-carbon p-4 sm:p-6" style={{ '--ecla-delay': '120ms' } as CSSProperties}>
+          <div className="relative flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
             <div><p className="text-[10px] font-semibold uppercase tracking-[.2em] text-ember-soft">A memory is ready</p><h2 className="mt-2 font-display text-2xl text-ivory sm:text-3xl">{reviewCount === 1 ? 'One capability needs a return.' : `${reviewCount} capabilities are ready to return.`}</h2><p className="mt-2 max-w-xl text-sm leading-6 text-stone">A short encounter now helps the language stay available when you need it.</p></div>
             <Link href={firstReviewHref(home)} className="ecla-control inline-flex min-h-12 shrink-0 items-center justify-center gap-2 rounded-full border border-line-strong bg-surface px-5 text-sm font-semibold text-ivory hover:bg-surface-raised">Practice now <ArrowRight className="size-4" /></Link>
           </div>
@@ -129,20 +135,15 @@ export default function HomeExperience({ home, fallbackName }: { home: LearnerHo
         <section className="border-y border-line py-6"><p className="text-sm text-stone">Nothing needs review yet. Keep learning; Ecla will bring language back when your memory needs the challenge.</p></section>
       )}
 
-      <section aria-labelledby="modes-heading">
+      <section aria-labelledby="modes-heading" className="ecla-reveal" style={{ '--ecla-delay': '170ms' } as CSSProperties}>
         <div className="flex items-end justify-between gap-4"><div><p className="text-[10px] font-semibold uppercase tracking-[.2em] text-ash">Choose the kind of moment</p><h2 id="modes-heading" className="mt-2 font-display text-3xl text-ivory">Ways to learn</h2></div><Link href="/course" className="hidden text-xs text-ember-soft hover:text-ivory sm:block">Explore the journey</Link></div>
-        <div className="mt-6 grid border-y border-line sm:grid-cols-2 lg:grid-cols-4">
+        <div className="mt-5 grid grid-cols-2 border-y border-line lg:grid-cols-4">
           {MODES.map(({ label, description, icon: Icon, href }, index) => (
-            <Link key={label} href={href === 'next' ? nextHref : href} className={`ecla-control group flex min-h-36 flex-col justify-between p-5 hover:bg-white/[.035] ${index ? 'border-t border-line sm:border-l sm:border-t-0' : ''} ${index === 2 ? 'sm:border-t lg:border-t-0' : ''}`}>
-              <Icon className="size-5 text-ember-soft" strokeWidth={1.5} /><div><h3 className="font-display text-xl text-ivory">{label}</h3><p className="mt-1 text-xs leading-5 text-ash">{description}</p></div>
+            <Link key={label} href={href === 'next' ? nextHref : href} className={`ecla-control ecla-lift group flex min-h-28 flex-col justify-between p-4 hover:bg-white/[.035] sm:min-h-32 sm:p-5 ${index % 2 ? 'border-l border-line' : ''} ${index > 1 ? 'border-t border-line lg:border-t-0' : ''} ${index > 0 && index < 2 ? 'lg:border-l' : ''}`}>
+              <Icon className="size-5 text-ember-soft" strokeWidth={1.5} /><div><h3 className="font-display text-lg text-ivory sm:text-xl">{label}</h3><p className="mt-1 text-xs leading-4 text-ash sm:leading-5">{description}</p></div>
             </Link>
           ))}
         </div>
-      </section>
-
-      <section className="flex flex-col gap-5 border-t border-line pt-8 sm:flex-row sm:items-center sm:justify-between">
-        <div><p className="text-[10px] font-semibold uppercase tracking-[.2em] text-ash">Current world</p><p className="mt-2 font-display text-2xl text-ivory">{course?.title || 'Your course'}</p><p className="mt-1 text-xs text-stone">{course?.units.length ?? summary.units.length} curriculum areas available in your journey.</p></div>
-        <Link href="/course" className="ecla-control inline-flex min-h-12 items-center justify-center gap-2 rounded-full border border-line bg-surface px-5 text-sm font-semibold text-ivory hover:border-line-strong">Open journey <Route className="size-4" /></Link>
       </section>
     </div>
   )
