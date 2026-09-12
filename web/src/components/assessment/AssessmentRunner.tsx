@@ -3,6 +3,7 @@
 import { useRef, useState } from 'react'
 import { ArrowLeft, ArrowRight, Check, CircleAlert, Clock3, Headphones, Keyboard, Mic, RotateCcw, ShieldCheck, Sparkles } from 'lucide-react'
 import { apiFetch, ApiError } from '@/lib/apiClient'
+import { Logo } from '@/components/BrandLogo'
 import { useMic } from '@/hooks/useMic'
 import { isAssessmentSession, type AssessmentSession } from '../../../../packages/contracts/assessment'
 
@@ -76,7 +77,10 @@ export default function AssessmentRunner({ kind, competencyId, getToken, onExit 
                 <div aria-hidden className={`absolute inset-0 bg-cover bg-center ${mission ? "bg-[url('/worlds/journey/unit-everyday-survival.webp')]" : "bg-[url('/worlds/spanish-night-v1.webp')]"}`} />
                 <div aria-hidden className="absolute inset-0 bg-obsidian/38" />
                 <div className="relative mx-auto flex min-h-dvh w-full max-w-[1440px] flex-col px-5 py-5 sm:px-8 sm:py-7 lg:px-12">
-                    <button className={quiet} onClick={onExit}><ArrowLeft className="size-4" />Back to journey</button>
+                    <header className="flex items-center justify-between gap-4">
+                        <Logo height={32} className="h-8 w-auto" tone="dark" />
+                        <button className={quiet} onClick={onExit}><ArrowLeft className="size-4" />Back to journey</button>
+                    </header>
                     <section className="my-auto max-w-2xl py-14 sm:py-20">
                         <p className="flex items-center gap-2 text-xs font-semibold uppercase tracking-[.24em] text-ember-soft"><Sparkles className="size-4" />{mission ? 'Mission' : 'Pre-A1 Gateway'}</p>
                         <h1 className="font-display mt-4 text-5xl leading-[.98] text-ivory sm:text-7xl">{mission ? 'Take your Spanish into real life.' : 'Show what you can do.'}</h1>

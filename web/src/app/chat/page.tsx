@@ -1,9 +1,8 @@
 'use client'
 
 import { Suspense, useEffect, useRef, useState, type KeyboardEvent } from 'react'
-import Image from 'next/image'
 import { useSearchParams } from 'next/navigation'
-import { ArrowUp, AudioLines, Mic, ShieldCheck, Volume2, VolumeX } from 'lucide-react'
+import { ArrowUp, AudioLines, Mic, Volume2, VolumeX } from 'lucide-react'
 import AppShell from '@/components/layout/AppShell'
 import ApiState from '@/components/ApiState'
 import VoiceCall, { type CallLine } from '@/components/VoiceCall'
@@ -207,30 +206,24 @@ function ChatPageContent() {
         <AppShell>
             <section className="mx-auto flex h-[calc(100dvh-9.5rem)] min-h-[28rem] min-w-0 max-w-4xl flex-col overflow-hidden rounded-[22px] border border-line bg-ink shadow-glow-md sm:rounded-experience xl:h-[calc(100dvh-8rem)] xl:max-h-[52rem]">
                 <header className="flex min-w-0 items-center justify-between gap-4 border-b border-line px-4 py-3 sm:px-6">
-                    <div className="min-w-0"><p className="text-[10px] font-semibold uppercase tracking-[.18em] text-ember-soft">Conversation</p><h1 className="mt-0.5 truncate text-sm font-medium text-ivory">Talk with Ecla</h1></div>
+                    <div className="min-w-0"><h1 className="truncate text-sm font-semibold text-ivory">Ecla conversation</h1><p className="mt-0.5 truncate text-xs text-ash">Spanish · adapts to your current level</p></div>
                     <div className="flex shrink-0 items-center gap-2">
                         <button onClick={toggleVoiceReplies} aria-pressed={voiceMode} aria-label={voiceMode ? 'Turn voice replies off' : 'Turn voice replies on'} className={`ecla-control flex min-h-11 items-center gap-2 rounded-control border px-3 text-xs ${voiceMode ? 'border-ember/30 bg-ember/10 text-ember-soft' : 'border-line bg-surface text-stone hover:text-ivory'}`}>
                             {voiceMode ? <Volume2 className="size-4" /> : <VolumeX className="size-4" />}<span className="hidden sm:inline">Voice replies</span>
                         </button>
-                        <button onClick={() => setShowCall(true)} className="ecla-control flex min-h-11 items-center gap-2 rounded-control bg-ember px-3.5 text-xs font-semibold text-obsidian hover:bg-ember-soft"><AudioLines className="size-4" /><span className="hidden sm:inline">Start voice</span></button>
                     </div>
                 </header>
 
                 <div ref={scrollRef} className="min-h-0 flex-1 overflow-y-auto overscroll-contain">
                     <div className="mx-auto flex min-h-full max-w-3xl flex-col px-3 py-3 sm:px-6 sm:py-6">
                         {messages.length === 0 && !thinking ? (
-                            <div className="grid min-h-full min-w-0 overflow-hidden rounded-surface border border-line bg-carbon md:grid-cols-[minmax(0,.9fr)_minmax(19rem,1.1fr)]">
-                                <div className="ecla-dark-scene relative min-h-36 overflow-hidden sm:min-h-48 md:min-h-[24rem]">
-                                    <Image src="/worlds/spanish-cafe-scene-v1.webp" alt="" fill priority sizes="(max-width: 767px) 100vw, 42vw" className="object-cover" />
-                                    <div aria-hidden className="absolute inset-0 bg-obsidian/35" />
-                                </div>
-                                <div className="flex min-w-0 flex-col justify-center p-4 sm:p-6 md:p-7">
-                                    <p className="text-xs font-semibold uppercase tracking-[.18em] text-ember-soft">A real conversation</p>
-                                    <h2 className="font-display mt-2 text-2xl leading-tight text-ivory sm:text-4xl">Say what you mean.</h2>
-                                    <p className="mt-4 break-words text-sm leading-6 text-stone">{chatContext?.currentCompetency ? `Ecla will keep the conversation near your current capability: ${chatContext.currentCompetency.canDo}` : 'Ecla keeps the conversation close to your current learning level and helps when you need it.'}</p>
-                                    {chatContext?.weakDimensions?.length ? <p className="mt-3 text-xs leading-5 text-ash">Current focus: {chatContext.weakDimensions.join(', ')}</p> : null}
-                                    <div className="mt-4 flex flex-wrap gap-2 sm:mt-6">
-                                        {SUGGESTIONS.map(suggestion => <button key={suggestion} onClick={() => send(suggestion)} className="ecla-control min-h-11 rounded-full border border-line-strong bg-white/[.03] px-3 text-left text-xs text-stone hover:border-ember/35 hover:text-ivory sm:px-4">{suggestion}</button>)}
+                            <div className="flex min-h-full items-center justify-center py-8 sm:py-12">
+                                <div className="w-full max-w-xl text-center">
+                                    <span className="mx-auto flex size-14 items-center justify-center rounded-full border border-ember/30 bg-ember/10 text-ember-soft"><AudioLines className="size-6" /></span>
+                                    <h2 className="font-display mt-5 text-3xl leading-tight text-ivory sm:text-4xl">What would you like to say?</h2>
+                                    <p className="mx-auto mt-3 max-w-md text-sm leading-6 text-stone">{chatContext?.currentCompetency ? chatContext.currentCompetency.canDo : 'Speak naturally, ask a question, or practice a short Spanish exchange.'}</p>
+                                    <div className="mt-6 flex flex-wrap justify-center gap-2">
+                                        {SUGGESTIONS.map(suggestion => <button key={suggestion} onClick={() => send(suggestion)} className="ecla-control min-h-11 rounded-full border border-line-strong bg-white/[.03] px-4 text-sm text-stone hover:border-ember/35 hover:text-ivory">{suggestion}</button>)}
                                     </div>
                                 </div>
                             </div>
@@ -255,9 +248,13 @@ function ChatPageContent() {
                         <div className="flex min-w-0 items-end gap-1.5 rounded-surface border border-line-strong bg-carbon p-1.5 focus-within:border-ember/45">
                             <textarea ref={textareaRef} value={input} onChange={event => { setInput(event.target.value); setSendError(null) }} onKeyDown={handleKeyDown} placeholder="Say something in Spanish…" aria-label="Message Ecla" rows={1} enterKeyHint="send" maxLength={2000} className="max-h-[120px] min-h-11 min-w-0 flex-1 resize-none self-center bg-transparent px-3 py-2 text-sm leading-6 text-ivory placeholder:text-ash focus:outline-none" />
                             <button onClick={recording ? stopRecording : startRecording} disabled={thinking} aria-label={recording ? 'Stop recording and transcribe' : 'Dictate a message'} className={`ecla-control flex size-11 shrink-0 items-center justify-center rounded-full ${recording ? 'animate-mic-pulse bg-danger text-ivory' : 'text-stone hover:bg-white/[.05] hover:text-ivory'}`}>{recording ? <span className="size-3 rounded-sm bg-current" /> : <Mic className="size-4" />}</button>
-                            <button onClick={() => send(input)} disabled={thinking || !input.trim()} aria-label="Send message" className="ecla-control flex size-11 shrink-0 items-center justify-center rounded-full bg-ember text-obsidian hover:bg-ember-soft"><ArrowUp className="size-4" /></button>
+                            {input.trim() ? (
+                                <button onClick={() => send(input)} disabled={thinking} aria-label="Send message" className="ecla-control flex size-11 shrink-0 items-center justify-center rounded-full bg-ember text-obsidian hover:bg-ember-soft"><ArrowUp className="size-4" /></button>
+                            ) : (
+                                <button onClick={() => setShowCall(true)} disabled={thinking || recording} aria-label="Start a live voice conversation" className="ecla-control flex size-11 shrink-0 items-center justify-center rounded-full bg-ember text-obsidian hover:bg-ember-soft"><AudioLines className="size-4" /></button>
+                            )}
                         </div>
-                        <p className="mt-2 flex items-center justify-center gap-1.5 text-center text-[10px] leading-4 text-ash"><ShieldCheck className="size-3 shrink-0" />Voice transcripts are temporary and deleted.</p>
+                        <p className="mt-2 text-center text-[11px] leading-4 text-ash">Enter to send · Shift + Enter for a new line</p>
                     </div>
                 </footer>
 

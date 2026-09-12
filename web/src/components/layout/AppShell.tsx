@@ -9,16 +9,21 @@ import { BookOpen, Home, LogOut, MessageCircle, Repeat2, Route, Settings, Trendi
 import { Logo } from '@/components/BrandLogo'
 import { IconButton } from '@/components/ui'
 
-const PRIMARY_NAV = [
+const DESKTOP_NAV = [
   { href: '/dashboard', label: 'Home', icon: Home },
   { href: '/course', label: 'Learn', icon: Route },
   { href: '/review', label: 'Practice', icon: Repeat2 },
+  { href: '/chat', label: 'Chat', icon: MessageCircle },
   { href: '/progress', label: 'Progress', icon: TrendingUp },
+  { href: '/gateway', label: 'Gateway', icon: BookOpen },
 ] as const
 
-const SECONDARY_NAV = [
-  { href: '/chat', label: 'Chat with Ecla', icon: MessageCircle },
-  { href: '/gateway', label: 'Gateway assessment', icon: BookOpen },
+const MOBILE_NAV = [
+  { href: '/dashboard', label: 'Home', icon: Home },
+  { href: '/course', label: 'Learn', icon: Route },
+  { href: '/review', label: 'Practice', icon: Repeat2 },
+  { href: '/chat', label: 'Chat', icon: MessageCircle },
+  { href: '/progress', label: 'Progress', icon: TrendingUp },
 ] as const
 
 function isCurrent(pathname: string, href: string) {
@@ -36,19 +41,20 @@ function Brand() {
 
 function PrimaryNavigation({ mobile = false }: { mobile?: boolean }) {
   const pathname = usePathname()
+  const items = mobile ? MOBILE_NAV : DESKTOP_NAV
   return (
-    <nav aria-label="Primary navigation" className={mobile ? 'grid grid-cols-4' : 'flex items-stretch gap-1'}>
-      {PRIMARY_NAV.map(({ href, label, icon: Icon }) => {
+    <nav aria-label="Primary navigation" className={mobile ? 'grid grid-cols-5' : 'flex items-stretch gap-0.5'}>
+      {items.map(({ href, label, icon: Icon }) => {
         const active = isCurrent(pathname, href)
         return (
           <Link key={href} href={href} aria-current={active ? 'page' : undefined}
             className={mobile
               ? `ecla-control relative flex min-h-14 flex-col items-center justify-center gap-0.5 rounded-control text-[10px] font-medium ${active ? 'text-ember-soft' : 'text-ash'}`
-              : `ecla-control relative flex min-h-14 items-center px-3 text-xs font-medium ${active ? 'text-ivory' : 'text-stone hover:text-ivory'}`}>
+              : `ecla-control relative flex min-h-14 items-center px-2.5 text-xs font-medium ${active ? 'text-ivory' : 'text-stone hover:text-ivory'}`}>
             <Icon className={mobile ? 'size-5' : 'hidden'} aria-hidden />
             <span>{label}</span>
             {mobile && active ? <span className="absolute inset-x-5 top-0 h-px bg-ember" /> : null}
-            {!mobile && active ? <span className="absolute inset-x-3 bottom-0 h-px bg-ember shadow-[0_0_12px_rgba(230,162,60,.7)]" /> : null}
+            {!mobile && active ? <span className="absolute inset-x-2.5 bottom-0 h-px bg-ember shadow-[0_0_12px_rgba(230,162,60,.7)]" /> : null}
           </Link>
         )
       })}
@@ -86,8 +92,12 @@ export default function AppShell({ children }: { children: ReactNode }) {
       <header className="sticky top-0 z-40 border-b border-line bg-obsidian/82 backdrop-blur-xl">
         <div className="mx-auto flex h-14 max-w-[1280px] items-center gap-6 px-4 sm:h-16 sm:px-6 lg:px-8">
           <Brand />
-          <div className="hidden xl:block"><PrimaryNavigation /></div>
-          <div ref={accountRef} className="relative ml-auto">
+          <div className="hidden lg:block"><PrimaryNavigation /></div>
+          <div className="ml-auto flex items-center gap-2">
+            <Link href="/gateway" aria-label="Open Gateway assessment" className="ecla-control flex min-h-11 items-center gap-2 rounded-full border border-line bg-surface px-3 text-xs font-medium text-stone hover:border-line-strong hover:text-ivory lg:hidden">
+              <BookOpen className="size-4" /><span className="hidden sm:inline">Gateway</span>
+            </Link>
+          <div ref={accountRef} className="relative">
             <button onClick={() => setAccountOpen(value => !value)} aria-expanded={accountOpen} aria-haspopup="menu"
               className="ecla-control flex min-h-11 items-center gap-2 rounded-full border border-line bg-surface py-1 pl-1 pr-3 text-stone hover:border-line-strong hover:text-ivory">
               {image ? <Image src={image} alt="" width={32} height={32} className="size-8 rounded-full object-cover" /> : <span className="flex size-8 items-center justify-center rounded-full bg-ember/15 text-xs font-semibold text-ember-soft">{name.charAt(0).toUpperCase()}</span>}
@@ -101,10 +111,10 @@ export default function AppShell({ children }: { children: ReactNode }) {
                 </div>
                 <div className="my-1 h-px bg-line" />
                 <Link role="menuitem" href="/profile" onClick={() => setAccountOpen(false)} className="ecla-control flex min-h-11 items-center gap-3 rounded-control px-3 text-sm text-stone hover:bg-white/[0.05] hover:text-ivory"><Settings className="size-4" />Profile &amp; settings</Link>
-                {SECONDARY_NAV.map(({ href, label, icon: Icon }) => <Link role="menuitem" key={href} href={href} onClick={() => setAccountOpen(false)} className="ecla-control flex min-h-11 items-center gap-3 rounded-control px-3 text-sm text-stone hover:bg-white/[0.05] hover:text-ivory"><Icon className="size-4" />{label}</Link>)}
                 <button role="menuitem" onClick={() => signOut()} className="ecla-control flex min-h-11 w-full items-center gap-3 rounded-control px-3 text-sm text-stone hover:bg-white/[0.05] hover:text-ivory"><LogOut className="size-4" />Sign out</button>
               </div>
             ) : null}
+          </div>
           </div>
         </div>
       </header>
