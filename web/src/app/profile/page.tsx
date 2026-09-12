@@ -2,6 +2,7 @@
 
 import { useEffect, useMemo, useState, type ComponentType, type FormEvent, type ReactNode } from 'react'
 import Image from 'next/image'
+import { useRouter } from 'next/navigation'
 import { useClerk, useUser } from '@clerk/nextjs'
 import { ArrowDownToLine, Briefcase, Check, Clock3, ExternalLink, Heart, Laptop, LogOut, Moon, Plane, Shield, Sparkles, Sun, Trash2, UserRound } from 'lucide-react'
 import AppShell from '@/components/layout/AppShell'
@@ -37,6 +38,7 @@ export default function ProfilePage() {
   const { isLoaded, isSignedIn, getToken } = useAuthReady()
   const { user } = useUser()
   const clerk = useClerk()
+  const router = useRouter()
   const { preference, setPreference } = useTheme()
   const [account, setAccount] = useState<LearnerAccount | null>(null)
   const [error, setError] = useState<ApiError | null>(null)
@@ -50,16 +52,24 @@ export default function ProfilePage() {
   const [accountConfirmation, setAccountConfirmation] = useState('')
 
   const load = async () => {
-    setError(null)
     try {
       const value = await apiFetch<LearnerAccount>('/api/v1/users/me', getToken)
+      setError(null)
       setAccount(value); setMotivation(value.motivation)
       setDailyGoalXp(PACES.some(pace => pace.id === value.dailyGoalXp) ? value.dailyGoalXp as Pace : 50)
     } catch (reason) { setError(reason instanceof ApiError ? reason : new ApiError('network', 'We could not load your account.')) }
   }
 
-  useEffect(() => { if (isLoaded && isSignedIn) void load() }, [isLoaded, isSignedIn]) // eslint-disable-line react-hooks/exhaustive-deps
-  useEffect(() => { if (user) { setFirstName(user.firstName ?? ''); setLastName(user.lastName ?? '') } }, [user])
+  useEffect(() => {
+    if (!isLoaded || !isSignedIn) return
+    const request = window.setTimeout(() => { void load() }, 0)
+    return () => window.clearTimeout(request)
+  }, [isLoaded, isSignedIn]) // eslint-disable-line react-hooks/exhaustive-deps
+  useEffect(() => {
+    if (!user) return
+    const sync = window.setTimeout(() => { setFirstName(user.firstName ?? ''); setLastName(user.lastName ?? '') }, 0)
+    return () => window.clearTimeout(sync)
+  }, [user])
   const displayName = useMemo(() => [firstName, lastName].filter(Boolean).join(' ') || account?.displayName || 'Learner', [account?.displayName, firstName, lastName])
 
   const saveProfile = async (event: FormEvent) => {
@@ -94,7 +104,7 @@ export default function ProfilePage() {
     setBusy('learning-delete'); setNotice(null); setError(null)
     try {
       await apiFetch('/api/v1/privacy/learning-data', getToken, { method: 'DELETE', body: JSON.stringify({ confirmation: learningConfirmation }) })
-      window.location.assign('/onboarding')
+      router.push('/onboarding')
     } catch (reason) { setError(reason instanceof ApiError ? reason : new ApiError('network', 'We could not delete your learning data.')); setBusy(null) }
   }
   const deleteAccount = async () => {
@@ -102,7 +112,7 @@ export default function ProfilePage() {
     setBusy('account-delete'); setNotice(null); setError(null)
     try {
       await apiFetch('/api/v1/privacy/account', getToken, { method: 'DELETE', body: JSON.stringify({ confirmation: accountConfirmation }) })
-      try { await clerk.signOut({ redirectUrl: '/' }) } catch { window.location.assign('/') }
+      try { await clerk.signOut({ redirectUrl: '/' }) } catch { router.push('/') }
     } catch (reason) { setError(reason instanceof ApiError ? reason : new ApiError('network', 'We could not delete your account.')); setBusy(null) }
   }
 

@@ -8,7 +8,6 @@ import { useClerk, useUser } from '@clerk/nextjs'
 import { BookOpen, Home, LogOut, MessageCircle, Repeat2, Route, Settings, TrendingUp, X } from 'lucide-react'
 import { Logo } from '@/components/BrandLogo'
 import { IconButton } from '@/components/ui'
-import { useTheme } from '@/components/ThemeProvider'
 
 const PRIMARY_NAV = [
   { href: '/dashboard', label: 'Home', icon: Home },
@@ -26,10 +25,11 @@ function isCurrent(pathname: string, href: string) {
   return pathname === href || (href === '/course' && pathname.startsWith('/learn/'))
 }
 
-function Brand({ tone }: { tone: 'dark' | 'light' }) {
+function Brand() {
   return (
     <Link href="/dashboard" className="ecla-control inline-flex min-h-11 items-center gap-2 rounded-control px-1 text-ivory" aria-label="Ecla home">
-      <Logo height={32} className="h-8 w-auto" tone={tone} />
+      <Logo height={32} className="ecla-logo-for-dark h-8 w-auto" tone="dark" />
+      <Logo height={32} className="ecla-logo-for-light h-8 w-auto" tone="light" />
     </Link>
   )
 }
@@ -43,10 +43,11 @@ function PrimaryNavigation({ mobile = false }: { mobile?: boolean }) {
         return (
           <Link key={href} href={href} aria-current={active ? 'page' : undefined}
             className={mobile
-              ? `ecla-control flex min-h-14 flex-col items-center justify-center gap-1 rounded-control text-[10px] font-medium ${active ? 'text-ember-soft' : 'text-ash'}`
+              ? `ecla-control relative flex min-h-14 flex-col items-center justify-center gap-0.5 rounded-control text-[10px] font-medium ${active ? 'text-ember-soft' : 'text-ash'}`
               : `ecla-control relative flex min-h-14 items-center px-3 text-xs font-medium ${active ? 'text-ivory' : 'text-stone hover:text-ivory'}`}>
             <Icon className={mobile ? 'size-5' : 'hidden'} aria-hidden />
             <span>{label}</span>
+            {mobile && active ? <span className="absolute inset-x-5 top-0 h-px bg-ember" /> : null}
             {!mobile && active ? <span className="absolute inset-x-3 bottom-0 h-px bg-ember shadow-[0_0_12px_rgba(230,162,60,.7)]" /> : null}
           </Link>
         )
@@ -58,7 +59,6 @@ function PrimaryNavigation({ mobile = false }: { mobile?: boolean }) {
 export default function AppShell({ children }: { children: ReactNode }) {
   const { user } = useUser()
   const { signOut } = useClerk()
-  const { resolvedTheme } = useTheme()
   const [accountOpen, setAccountOpen] = useState(false)
   const accountRef = useRef<HTMLDivElement>(null)
   const name = user?.firstName ?? user?.username ?? 'Learner'
@@ -84,8 +84,8 @@ export default function AppShell({ children }: { children: ReactNode }) {
     <main className="min-h-screen bg-transparent font-body text-ivory">
       <a href="#main-content" className="fixed left-3 top-3 z-[70] -translate-y-20 rounded-control bg-ember px-4 py-2 text-sm font-semibold text-obsidian transition-transform focus:translate-y-0">Skip to content</a>
       <header className="sticky top-0 z-40 border-b border-line bg-obsidian/82 backdrop-blur-xl">
-        <div className="mx-auto flex h-16 max-w-[1440px] items-center gap-6 px-4 sm:px-6 lg:px-10">
-          <Brand tone={resolvedTheme} />
+        <div className="mx-auto flex h-14 max-w-[1280px] items-center gap-6 px-4 sm:h-16 sm:px-6 lg:px-8">
+          <Brand />
           <div className="hidden xl:block"><PrimaryNavigation /></div>
           <div ref={accountRef} className="relative ml-auto">
             <button onClick={() => setAccountOpen(value => !value)} aria-expanded={accountOpen} aria-haspopup="menu"
@@ -108,8 +108,8 @@ export default function AppShell({ children }: { children: ReactNode }) {
           </div>
         </div>
       </header>
-      <div id="main-content" className="mx-auto min-w-0 max-w-[1320px] overflow-x-clip px-4 py-6 pb-24 sm:px-6 md:py-8 lg:px-8 xl:px-10 xl:pb-10">{children}</div>
-      <div className="safe-bottom fixed inset-x-0 bottom-0 z-40 border-t border-line bg-obsidian/94 px-1 pt-1 backdrop-blur-xl xl:hidden"><PrimaryNavigation mobile /></div>
+      <div id="main-content" className="mx-auto min-w-0 max-w-[1200px] overflow-x-clip px-4 py-5 pb-24 sm:px-6 sm:py-7 lg:px-8 xl:pb-9">{children}</div>
+      <div className="safe-bottom fixed inset-x-0 bottom-0 z-40 border-t border-line bg-obsidian/96 px-1 backdrop-blur-xl xl:hidden"><div className="mx-auto max-w-2xl"><PrimaryNavigation mobile /></div></div>
     </main>
   )
 }

@@ -17,9 +17,7 @@ export default function FeedbackButton() {
     // everywhere inside the signed-in product where it is contextually useful.
     if (pathname === '/') return null
 
-    const position = pathname === '/chat'
-        ? 'bottom-24 right-4 lg:bottom-6 lg:right-6'
-        : 'bottom-4 right-4 sm:bottom-6 sm:right-6'
+    const position = 'bottom-[calc(env(safe-area-inset-bottom)+4.5rem)] right-3 xl:bottom-5 xl:right-5'
 
     const handleSubmit = async (e: FormEvent<HTMLFormElement>) => {
         e.preventDefault()
@@ -50,7 +48,7 @@ export default function FeedbackButton() {
         <>
             <button
                 onClick={() => setIsOpen(true)}
-                className={`fixed ${position} z-40 flex h-11 w-11 items-center justify-center rounded-full border border-white/10 bg-night-800/80 text-cream/60 opacity-80 backdrop-blur-sm shadow-glow-sm transition-all duration-200 hover:opacity-100 hover:text-cream hover:border-glow/40 active:scale-95`}
+                className={`fixed ${position} z-30 flex size-11 items-center justify-center rounded-full border border-line bg-surface text-stone opacity-90 shadow-glow-sm transition-all duration-200 hover:border-ember/40 hover:text-ivory active:scale-95`}
                 title="Send feedback"
                 aria-label="Send feedback"
             >

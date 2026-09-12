@@ -36,10 +36,13 @@ export function ThemeProvider({ children }: { children: ReactNode }) {
   const [resolvedTheme, setResolvedTheme] = useState<ResolvedTheme>('dark')
 
   useEffect(() => {
-    const stored = window.localStorage.getItem(STORAGE_KEY)
-    const initial = isTheme(stored) ? stored : 'system'
-    setPreferenceState(initial)
-    setResolvedTheme(applyTheme(initial))
+    const sync = window.setTimeout(() => {
+      const stored = window.localStorage.getItem(STORAGE_KEY)
+      const initial = isTheme(stored) ? stored : 'system'
+      setPreferenceState(initial)
+      setResolvedTheme(applyTheme(initial))
+    }, 0)
+    return () => window.clearTimeout(sync)
   }, [])
 
   useEffect(() => {
@@ -66,4 +69,3 @@ export function useTheme() {
   if (!value) throw new Error('useTheme must be used inside ThemeProvider')
   return value
 }
-
