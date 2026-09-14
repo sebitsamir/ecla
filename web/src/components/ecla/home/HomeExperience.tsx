@@ -50,14 +50,14 @@ export default function HomeExperience({ home, fallbackName }: { home: LearnerHo
 
   return (
     <div className="space-y-9 pb-2 sm:space-y-12">
-      <section className="ecla-dark-scene ecla-reveal relative isolate min-h-[430px] overflow-hidden rounded-[22px] border border-line bg-ink shadow-[0_24px_70px_rgba(0,0,0,.35)] sm:min-h-[480px] sm:rounded-experience lg:min-h-[510px]">
+      <section className="ecla-reveal relative isolate min-h-[430px] overflow-hidden rounded-[22px] border border-line bg-ink shadow-[0_24px_70px_rgba(0,0,0,.35)] sm:min-h-[480px] sm:rounded-experience lg:min-h-[510px]">
         <Image src={atmosphere.src} alt="" fill priority sizes="(max-width: 768px) 100vw, 1200px" className="object-cover object-[66%_center]" />
         <div className="absolute inset-0" style={{ background: atmosphere.overlay }} />
         <div className="absolute inset-0 bg-obsidian/10 sm:hidden" />
         <div className="absolute inset-x-0 bottom-0 h-px ecla-thread opacity-80" />
 
         <div className="relative flex min-h-[430px] flex-col p-4 sm:min-h-[480px] sm:p-7 lg:min-h-[510px] lg:p-9">
-          <div className="max-w-xl animate-fade-up">
+          <div className="ecla-dark-scene ecla-image-copy max-w-xl animate-fade-up">
             <p className="text-xs font-medium tracking-[0.16em] text-ember-soft">{atmosphere.greeting}, {name}.</p>
             <h1 className="mt-3 font-display text-[clamp(2.35rem,6vw,4.75rem)] leading-[.94] tracking-[-.035em] text-ivory">
               {course?.title ? <>{course.title}<br /><span className="text-stone">is waiting.</span></> : <>Your language<br /><span className="text-stone">is waiting.</span></>}
@@ -68,7 +68,7 @@ export default function HomeExperience({ home, fallbackName }: { home: LearnerHo
           </div>
 
           <div className="mt-auto grid items-end gap-4 pt-10 sm:pt-12 lg:grid-cols-[minmax(0,1fr)_auto]">
-            <div className="ecla-surface max-w-3xl rounded-surface p-4 sm:p-5">
+            <div className="ecla-theme-panel ecla-surface max-w-3xl rounded-surface p-4 sm:p-5">
               <p className="text-[10px] font-semibold uppercase tracking-[.2em] text-ember-soft">
                 {next?.kind === 'review' ? 'Ready to strengthen' : next?.kind === 'gateway' ? 'Ready to prove' : 'Continue your journey'}
               </p>
@@ -87,7 +87,7 @@ export default function HomeExperience({ home, fallbackName }: { home: LearnerHo
             </div>
 
             <Link href="/progress" aria-label={`View progress: ${summary.demonstrated} of ${summary.total} capabilities demonstrated`}
-              className="ecla-surface ecla-control relative hidden size-32 shrink-0 place-content-center overflow-hidden rounded-full text-center hover:border-line-strong lg:grid">
+              className="ecla-theme-panel ecla-surface ecla-control relative hidden size-32 shrink-0 place-content-center overflow-hidden rounded-full text-center hover:border-line-strong lg:grid">
               <svg aria-hidden className="absolute inset-2 -rotate-90" viewBox="0 0 100 100">
                 <circle cx="50" cy="50" r="46" fill="none" stroke="var(--ecla-line-strong)" strokeWidth="3" />
                 <circle cx="50" cy="50" r="46" fill="none" stroke="var(--ecla-ember)" strokeWidth="3" strokeLinecap="round" pathLength="100" strokeDasharray={`${pct} 100`} />

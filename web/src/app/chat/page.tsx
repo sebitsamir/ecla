@@ -204,8 +204,8 @@ function ChatPageContent() {
 
     return (
         <AppShell>
-            <section className="mx-auto flex h-[calc(100dvh-9.5rem)] min-h-[28rem] min-w-0 max-w-4xl flex-col overflow-hidden rounded-[22px] border border-line bg-ink shadow-glow-md sm:rounded-experience xl:h-[calc(100dvh-8rem)] xl:max-h-[52rem]">
-                <header className="flex min-w-0 items-center justify-between gap-4 border-b border-line px-4 py-3 sm:px-6">
+            <section className="ecla-surface mx-auto flex h-[calc(100dvh-9.5rem)] min-h-[28rem] min-w-0 max-w-4xl flex-col overflow-hidden rounded-[22px] sm:rounded-experience xl:h-[calc(100dvh-8rem)] xl:max-h-[52rem]">
+                <header className="flex min-w-0 items-center justify-between gap-4 border-b border-line bg-surface px-4 py-3 sm:px-6">
                     <div className="min-w-0"><h1 className="truncate text-sm font-semibold text-ivory">Ecla conversation</h1><p className="mt-0.5 truncate text-xs text-ash">Spanish · adapts to your current level</p></div>
                     <div className="flex shrink-0 items-center gap-2">
                         <button onClick={toggleVoiceReplies} aria-pressed={voiceMode} aria-label={voiceMode ? 'Turn voice replies off' : 'Turn voice replies on'} className={`ecla-control flex min-h-11 items-center gap-2 rounded-control border px-3 text-xs ${voiceMode ? 'border-ember/30 bg-ember/10 text-ember-soft' : 'border-line bg-surface text-stone hover:text-ivory'}`}>
@@ -223,7 +223,7 @@ function ChatPageContent() {
                                     <h2 className="font-display mt-5 text-3xl leading-tight text-ivory sm:text-4xl">What would you like to say?</h2>
                                     <p className="mx-auto mt-3 max-w-md text-sm leading-6 text-stone">{chatContext?.currentCompetency ? chatContext.currentCompetency.canDo : 'Speak naturally, ask a question, or practice a short Spanish exchange.'}</p>
                                     <div className="mt-6 flex flex-wrap justify-center gap-2">
-                                        {SUGGESTIONS.map(suggestion => <button key={suggestion} onClick={() => send(suggestion)} className="ecla-control min-h-11 rounded-full border border-line-strong bg-white/[.03] px-4 text-sm text-stone hover:border-ember/35 hover:text-ivory">{suggestion}</button>)}
+                                        {SUGGESTIONS.map(suggestion => <button key={suggestion} onClick={() => send(suggestion)} className="ecla-control min-h-11 rounded-full border border-line-strong bg-surface px-4 text-sm text-stone hover:border-ember/35 hover:text-ivory">{suggestion}</button>)}
                                     </div>
                                 </div>
                             </div>
@@ -232,7 +232,7 @@ function ChatPageContent() {
                                 {messages.map((message, index) => {
                                     if (message.role === 'user') return <div key={index} className="flex justify-end"><div className="max-w-[88%] break-words rounded-surface rounded-br-sm bg-ember px-4 py-3 text-sm font-medium leading-6 text-obsidian sm:max-w-[75%]">{message.content}</div></div>
                                     const { spanish, english } = splitReply(message.content)
-                                    return <div key={index} className="group flex min-w-0 items-end gap-2"><div className="max-w-[88%] break-words rounded-surface rounded-bl-sm border border-line bg-carbon px-4 py-3 text-sm leading-6 text-ivory sm:max-w-[75%]"><p lang="es">{spanish}</p>{english ? <p className="mt-2 border-t border-line pt-2 text-xs leading-5 text-stone">{english}</p> : null}</div><button onClick={() => { cancelSpeech(); speakSpanish(message.content, speakOpts) }} aria-label="Hear this reply" className="ecla-control flex size-11 shrink-0 items-center justify-center rounded-full text-ash hover:bg-white/[.05] hover:text-ember-soft"><Volume2 className="size-4" /></button></div>
+                                    return <div key={index} className="group flex min-w-0 items-end gap-2"><div className="max-w-[88%] break-words rounded-surface rounded-bl-sm border border-line bg-surface-raised px-4 py-3 text-sm leading-6 text-ivory shadow-sm sm:max-w-[75%]"><p lang="es">{spanish}</p>{english ? <p className="mt-2 border-t border-line pt-2 text-xs leading-5 text-stone">{english}</p> : null}</div><button onClick={() => { cancelSpeech(); speakSpanish(message.content, speakOpts) }} aria-label="Hear this reply" className="ecla-control flex size-11 shrink-0 items-center justify-center rounded-full text-ash hover:bg-surface hover:text-ember-soft"><Volume2 className="size-4" /></button></div>
                                 })}
                                 {thinking ? <div className="flex justify-start"><div className="flex items-center gap-2 rounded-surface rounded-bl-sm border border-line bg-carbon px-4 py-3" role="status" aria-label="Ecla is thinking"><span className="ecla-loading-mark text-ember-soft" /><span className="text-xs text-stone">Ecla is listening to the meaning…</span></div></div> : null}
                             </div>
@@ -240,14 +240,14 @@ function ChatPageContent() {
                     </div>
                 </div>
 
-                <footer className="border-t border-line bg-obsidian/85 px-3 py-3 backdrop-blur-xl sm:px-5">
+                <footer className="border-t border-line bg-surface px-3 py-3 backdrop-blur-xl sm:px-5">
                     <div className="mx-auto max-w-3xl">
                         {sendError ? <div className="mb-2"><ApiState error={sendError} onRetry={() => send(input)} /></div> : null}
                         {voiceError ? <p role="status" className="mb-2 rounded-control border border-warning/30 bg-warning/10 px-3 py-2 text-xs leading-5 text-ivory">{voiceError}</p> : null}
                         {(recording || speaking) ? <p className={`mb-2 text-center text-xs ${recording ? 'text-danger-soft' : 'text-ember-soft'}`}>{recording ? 'Listening… tap Stop when you are finished.' : 'Ecla is speaking…'}</p> : null}
                         <div className="flex min-w-0 items-end gap-1.5 rounded-surface border border-line-strong bg-carbon p-1.5 focus-within:border-ember/45">
                             <textarea ref={textareaRef} value={input} onChange={event => { setInput(event.target.value); setSendError(null) }} onKeyDown={handleKeyDown} placeholder="Say something in Spanish…" aria-label="Message Ecla" rows={1} enterKeyHint="send" maxLength={2000} className="max-h-[120px] min-h-11 min-w-0 flex-1 resize-none self-center bg-transparent px-3 py-2 text-sm leading-6 text-ivory placeholder:text-ash focus:outline-none" />
-                            <button onClick={recording ? stopRecording : startRecording} disabled={thinking} aria-label={recording ? 'Stop recording and transcribe' : 'Dictate a message'} className={`ecla-control flex size-11 shrink-0 items-center justify-center rounded-full ${recording ? 'animate-mic-pulse bg-danger text-ivory' : 'text-stone hover:bg-white/[.05] hover:text-ivory'}`}>{recording ? <span className="size-3 rounded-sm bg-current" /> : <Mic className="size-4" />}</button>
+                            <button onClick={recording ? stopRecording : startRecording} disabled={thinking} aria-label={recording ? 'Stop recording and transcribe' : 'Dictate a message'} className={`ecla-control flex size-11 shrink-0 items-center justify-center rounded-full ${recording ? 'animate-mic-pulse bg-danger text-ivory' : 'text-stone hover:bg-surface hover:text-ivory'}`}>{recording ? <span className="size-3 rounded-sm bg-current" /> : <Mic className="size-4" />}</button>
                             {input.trim() ? (
                                 <button onClick={() => send(input)} disabled={thinking} aria-label="Send message" className="ecla-control flex size-11 shrink-0 items-center justify-center rounded-full bg-ember text-obsidian hover:bg-ember-soft"><ArrowUp className="size-4" /></button>
                             ) : (

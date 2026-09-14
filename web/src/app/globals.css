@@ -92,6 +92,60 @@
   --color-surface-raised: rgba(23,33,43,.96);
 }
 
+/* Photography keeps a stable readable foreground while embedded controls and
+   panels can still follow the learner's selected theme. */
+.ecla-image-copy {
+  color-scheme: dark;
+  --ecla-ivory: #f7f2e8;
+  --ecla-stone: #d4d9df;
+  --ecla-ash: #b6c0ca;
+  --ecla-ember: #e6a23c;
+  --ecla-ember-soft: #ffd083;
+  --color-ivory: #f7f2e8;
+  --color-stone: #d4d9df;
+  --color-ash: #b6c0ca;
+  --color-ember: #e6a23c;
+  --color-ember-soft: #ffd083;
+  text-shadow: 0 2px 18px rgba(8,17,26,.56);
+}
+
+.ecla-image-shade {
+  background: rgba(8,17,26,.43);
+}
+
+:root[data-theme="light"] .ecla-theme-panel {
+  color-scheme: light;
+  --ecla-obsidian: #f7f2e8;
+  --ecla-ink: #fffaf2;
+  --ecla-carbon: #eee7db;
+  --ecla-slate: #d7cdbd;
+  --ecla-ivory: #17212b;
+  --ecla-stone: #52606d;
+  --ecla-ash: #6e7882;
+  --ecla-ember: #bd7418;
+  --ecla-ember-soft: #9b5b0d;
+  --ecla-ember-deep: #7c4608;
+  --ecla-line: rgba(82,67,48,.2);
+  --ecla-line-strong: rgba(82,67,48,.36);
+  --ecla-surface: rgba(255,250,242,.95);
+  --ecla-surface-raised: rgba(255,255,255,.98);
+  --color-obsidian: #f7f2e8;
+  --color-ink: #fffaf2;
+  --color-carbon: #eee7db;
+  --color-slate: #d7cdbd;
+  --color-ivory: #17212b;
+  --color-stone: #52606d;
+  --color-ash: #6e7882;
+  --color-ember: #bd7418;
+  --color-ember-soft: #9b5b0d;
+  --color-ember-deep: #7c4608;
+  --color-line: rgba(82,67,48,.2);
+  --color-line-strong: rgba(82,67,48,.36);
+  --color-surface: rgba(255,250,242,.95);
+  --color-surface-raised: rgba(255,255,255,.98);
+  text-shadow: none;
+}
+
 @theme {
   --color-background: var(--background);
   --color-foreground: var(--foreground);
@@ -182,6 +236,9 @@ button,input,textarea,select { font: inherit; }
 @keyframes ecla-mic-pulse { 0%,100% { box-shadow:0 0 0 0 rgba(230,162,60,.34) } 50% { box-shadow:0 0 0 16px rgba(230,162,60,0) } }
 @keyframes scene-presence { 0%,100% { transform:translateY(0) } 50% { transform:translateY(-3px) } }
 @keyframes ecla-scroll-arrive { from { opacity:.35;transform:translateY(22px) } to { opacity:1;transform:translateY(0) } }
+@keyframes ecla-camera-drift { 0% { transform:scale(1.04) translate3d(-.4%,0,0) } 50% { transform:scale(1.085) translate3d(.6%,-.6%,0) } 100% { transform:scale(1.04) translate3d(-.4%,0,0) } }
+@keyframes ecla-cue { 0%,100% { transform:translateY(0);opacity:.5 } 50% { transform:translateY(7px);opacity:1 } }
+@keyframes ecla-signal-travel { from { transform:translateX(-30%) } to { transform:translateX(230%) } }
 .animate-fade-up { animation:ecla-fade-up 520ms var(--ecla-ease) both; }
 .animate-fade-in { animation:ecla-fade-in 420ms var(--ecla-ease) both; }
 .animate-breathe { animation:ecla-breathe 14s ease-in-out infinite; }
@@ -193,6 +250,14 @@ button,input,textarea,select { font: inherit; }
 .animate-mic-pulse { animation:ecla-mic-pulse 1.8s ease-out infinite; }
 .animate-flash-green,.animate-flash-amber { animation:ecla-fade-in 320ms var(--ecla-ease); }
 .scene-character { animation:scene-presence 6s ease-in-out infinite; }
+.ecla-spatial-hero { --ecla-pointer-x:0;--ecla-pointer-y:0;--ecla-pointer-left:50%;--ecla-pointer-top:50%; }
+.ecla-hero-media { animation:ecla-camera-drift 24s ease-in-out infinite; }
+.ecla-hero-copy { transform:translate3d(calc(var(--ecla-pointer-x) * -5px),calc(var(--ecla-pointer-y) * -4px),0);transition:transform 500ms var(--ecla-ease); }
+.ecla-hero-card { transform:perspective(1200px) rotateY(calc(var(--ecla-pointer-x) * 2.2deg)) rotateX(calc(var(--ecla-pointer-y) * -2deg)) translate3d(calc(var(--ecla-pointer-x) * 8px),calc(var(--ecla-pointer-y) * 6px),0);transition:transform 500ms var(--ecla-ease); }
+.ecla-pointer-light { left:var(--ecla-pointer-left);top:var(--ecla-pointer-top);transform:translate(-50%,-50%);transition:left 140ms linear,top 140ms linear; }
+.ecla-scroll-cue { animation:ecla-cue 1.8s ease-in-out infinite; }
+.ecla-page-enter { animation:ecla-fade-up 380ms var(--ecla-ease) both; }
+.ecla-signal-runner { animation:ecla-signal-travel 1.7s ease-in-out infinite alternate; }
 @media (hover:hover) and (pointer:fine) {
   .ecla-lift { transition:transform 180ms var(--ecla-ease),border-color 180ms var(--ecla-ease),box-shadow 180ms var(--ecla-ease); }
   .ecla-lift:hover { transform:translateY(-3px); box-shadow:0 16px 34px rgba(8,17,26,.2); }
@@ -203,4 +268,41 @@ button,input,textarea,select { font: inherit; }
 }
 @media (prefers-reduced-motion:reduce) {
   *,*::before,*::after { scroll-behavior:auto!important; animation-duration:.01ms!important; animation-iteration-count:1!important; transition-duration:.01ms!important; }
+  .ecla-hero-copy,.ecla-hero-card,.ecla-hero-media { transform:none!important; }
+}
+.ecla-card-stack {
+  height: var(--stack-height);
+}
+
+.ecla-stack-card {
+  height: var(--stack-card-height);
+  transform: translate3d(var(--stack-x), var(--stack-y), 0)
+    scale(var(--stack-scale)) rotate(var(--stack-rotate));
+  opacity: var(--stack-opacity);
+  z-index: var(--stack-z);
+  transition:
+    transform 420ms var(--ecla-ease),
+    opacity 260ms ease;
+  will-change: transform, opacity;
+}
+
+.ecla-card-stack.is-dragging .ecla-stack-card {
+  transition: none;
+}
+
+@media (min-width: 640px) {
+  .ecla-card-stack {
+    height: auto;
+  }
+
+  .ecla-stack-card {
+    position: relative;
+    inset: auto;
+    height: auto;
+    min-height: var(--stack-card-height);
+    transform: none;
+    opacity: 1;
+    z-index: auto;
+    will-change: auto;
+  }
 }

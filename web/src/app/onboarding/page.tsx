@@ -139,22 +139,22 @@ export default function OnboardingPage() {
     return (
         <main className="relative min-h-dvh overflow-x-hidden bg-obsidian text-ivory">
             <Image src={STEP_IMAGES[step - 1]} alt="" fill priority sizes="100vw" className="fixed object-cover" />
-            <div aria-hidden className="fixed inset-0 bg-obsidian/42" />
+            <div aria-hidden className="ecla-image-shade fixed inset-0" />
 
-            <header className="safe-top relative z-10 mx-auto flex max-w-[1440px] items-center justify-between px-4 py-4 sm:px-6 lg:px-10">
+            <header className="ecla-dark-scene ecla-image-copy safe-top relative z-10 mx-auto flex max-w-[1440px] items-center justify-between px-4 py-4 sm:px-6 lg:px-10">
                 <Logo height={32} className="h-8 w-auto" />
                 <p className="text-xs text-ivory/65">Step {step} of 4</p>
             </header>
 
             <div className="relative z-10 mx-auto grid min-h-[calc(100dvh-4.5rem)] max-w-[1440px] items-end px-4 pb-6 sm:px-6 sm:pb-8 lg:grid-cols-[minmax(0,1fr)_minmax(28rem,34rem)] lg:items-center lg:gap-12 lg:px-10 lg:pb-10">
-                <section className="hidden max-w-xl pb-8 lg:block">
+                <section className="ecla-dark-scene ecla-image-copy hidden max-w-xl pb-8 lg:block">
                     <p className="text-xs font-semibold uppercase tracking-[.2em] text-ember-soft">Spanish · Pre-A1</p>
                     <h2 className="font-display mt-4 text-6xl leading-[.98]">A more human way to begin.</h2>
                     <p className="mt-5 max-w-md text-base leading-7 text-ivory/75">A few choices help Ecla shape the first encounter. Your ability will still be established by what you actually do.</p>
                 </section>
 
-                <section className="min-w-0 overflow-hidden rounded-experience border border-white/15 bg-ink/92 shadow-[0_28px_100px_rgba(0,0,0,.5)] backdrop-blur-xl">
-                    <div className="h-1 bg-white/[.08]"><div className="h-full bg-ember transition-[width] duration-500" style={{ width: `${step * 25}%` }} /></div>
+                <section className="ecla-theme-panel min-w-0 overflow-hidden rounded-experience border border-line bg-ink/95 shadow-[0_28px_100px_rgba(0,0,0,.34)] backdrop-blur-xl">
+                    <div className="h-1 bg-line"><div className="h-full bg-ember transition-[width] duration-500" style={{ width: `${step * 25}%` }} /></div>
                     <div key={step} className="animate-fade-up p-5 sm:p-7 lg:p-8">
                         {step === 1 ? (
                             <div>
@@ -171,7 +171,7 @@ export default function OnboardingPage() {
                                 <h1 className="font-display mt-3 text-4xl leading-tight sm:text-5xl">Why Spanish, now?</h1>
                                 <p className="mt-3 text-sm leading-6 text-stone">This shapes the situations Ecla emphasizes. You can refine it later.</p>
                                 <div className="mt-6 grid gap-3 sm:grid-cols-2">
-                                    {MOTIVATIONS.map(option => { const Icon = option.icon; const selected = motivation === option.id; return <button key={option.id} onClick={() => chooseMotivation(option)} aria-pressed={selected} className={`ecla-control min-h-28 rounded-surface border p-4 text-left ${selected ? 'border-ember/45 bg-ember/10' : 'border-line bg-white/[.025] hover:border-line-strong'}`}><div className="flex items-start gap-3"><span className={`flex size-10 shrink-0 items-center justify-center rounded-full ${selected ? 'bg-ember text-obsidian' : 'bg-white/[.05] text-stone'}`}><Icon className="size-4" /></span><div className="min-w-0 flex-1"><p className="font-medium text-ivory">{option.label}</p><p className="mt-1 text-xs leading-5 text-stone">{option.description}</p></div><SelectionMark selected={selected} /></div></button> })}
+                                    {MOTIVATIONS.map(option => { const Icon = option.icon; const selected = motivation === option.id; return <button key={option.id} onClick={() => chooseMotivation(option)} aria-pressed={selected} className={`ecla-control min-h-28 rounded-surface border p-4 text-left ${selected ? 'border-ember/45 bg-ember/10' : 'border-line bg-surface hover:border-line-strong hover:bg-surface-raised'}`}><div className="flex items-start gap-3"><span className={`flex size-10 shrink-0 items-center justify-center rounded-full ${selected ? 'bg-ember text-obsidian' : 'bg-carbon text-stone'}`}><Icon className="size-4" /></span><div className="min-w-0 flex-1"><p className="font-medium text-ivory">{option.label}</p><p className="mt-1 text-xs leading-5 text-stone">{option.description}</p></div><SelectionMark selected={selected} /></div></button> })}
                                 </div>
                             </div>
                         ) : null}
@@ -182,9 +182,9 @@ export default function OnboardingPage() {
                                 <h1 className="font-display mt-3 text-4xl leading-tight sm:text-5xl">How much can you already do?</h1>
                                 <p className="mt-3 text-sm leading-6 text-stone">This helps set the tone of your first encounter. It does not award a level or skip evidence.</p>
                                 <div className="mt-6 space-y-3">
-                                    {EXPERIENCES.map(option => { const selected = experience === option.id; return <button key={option.id} onClick={() => setExperience(option.id)} aria-pressed={selected} className={`ecla-control flex min-h-20 w-full items-start gap-4 rounded-surface border p-4 text-left ${selected ? 'border-ember/45 bg-ember/10' : 'border-line bg-white/[.025] hover:border-line-strong'}`}><SelectionMark selected={selected} /><span className="min-w-0"><span className="block font-medium text-ivory">{option.label}</span><span className="mt-1 block text-xs leading-5 text-stone">{option.description}</span></span></button> })}
+                                    {EXPERIENCES.map(option => { const selected = experience === option.id; return <button key={option.id} onClick={() => setExperience(option.id)} aria-pressed={selected} className={`ecla-control flex min-h-20 w-full items-start gap-4 rounded-surface border p-4 text-left ${selected ? 'border-ember/45 bg-ember/10' : 'border-line bg-surface hover:border-line-strong hover:bg-surface-raised'}`}><SelectionMark selected={selected} /><span className="min-w-0"><span className="block font-medium text-ivory">{option.label}</span><span className="mt-1 block text-xs leading-5 text-stone">{option.description}</span></span></button> })}
                                 </div>
-                                <p className="mt-5 flex items-start gap-2 rounded-control border border-line bg-white/[.025] p-3 text-xs leading-5 text-stone"><ShieldCheck className="mt-0.5 size-4 shrink-0 text-success" /><span><strong className="font-medium text-ivory">Evidence-based Pre-A1 start.</strong> Placement and progression come from completed, server-scored situations.</span></p>
+                                <p className="mt-5 flex items-start gap-2 rounded-control border border-line bg-surface p-3 text-xs leading-5 text-stone"><ShieldCheck className="mt-0.5 size-4 shrink-0 text-success" /><span><strong className="font-medium text-ivory">Evidence-based Pre-A1 start.</strong> Placement and progression come from completed, server-scored situations.</span></p>
                             </div>
                         ) : null}
 
@@ -193,7 +193,7 @@ export default function OnboardingPage() {
                                 <p className="text-xs font-semibold uppercase tracking-[.18em] text-ember-soft">Your rhythm</p>
                                 <h1 className="font-display mt-3 text-4xl leading-tight sm:text-5xl">Choose a pace that fits real life.</h1>
                                 <p className="mt-3 text-sm leading-6 text-stone">Ecla will choose the right kind of practice from your progress and the situation. You only need to decide how much time feels sustainable.</p>
-                                <fieldset className="mt-7"><legend className="text-[10px] font-semibold uppercase tracking-[.16em] text-ash">Daily pace</legend><div className="mt-3 grid grid-cols-3 gap-2">{DAILY_GOALS.map(option => { const Icon = option.icon; const selected = dailyGoalXp === option.xp; return <button type="button" key={option.xp} onClick={() => setDailyGoalXp(option.xp)} aria-pressed={selected} className={`ecla-control min-w-0 rounded-control border px-2 py-4 text-center ${selected ? 'border-ember/45 bg-ember/10' : 'border-line bg-white/[.025] hover:border-line-strong'}`}><Icon className={`mx-auto size-5 ${selected ? 'text-ember-soft' : 'text-stone'}`} /><span className="mt-3 block truncate text-sm font-medium text-ivory">{option.label}</span><span className="mt-1 block text-[10px] leading-4 text-ash">{option.description}</span></button> })}</div></fieldset>
+                                <fieldset className="mt-7"><legend className="text-[10px] font-semibold uppercase tracking-[.16em] text-ash">Daily pace</legend><div className="mt-3 grid grid-cols-3 gap-2">{DAILY_GOALS.map(option => { const Icon = option.icon; const selected = dailyGoalXp === option.xp; return <button type="button" key={option.xp} onClick={() => setDailyGoalXp(option.xp)} aria-pressed={selected} className={`ecla-control min-w-0 rounded-control border px-2 py-4 text-center ${selected ? 'border-ember/45 bg-ember/10' : 'border-line bg-surface hover:border-line-strong hover:bg-surface-raised'}`}><Icon className={`mx-auto size-5 ${selected ? 'text-ember-soft' : 'text-stone'}`} /><span className="mt-3 block truncate text-sm font-medium text-ivory">{option.label}</span><span className="mt-1 block text-[10px] leading-4 text-ash">{option.description}</span></button> })}</div></fieldset>
                                 <p className="mt-5 flex items-start gap-2 text-xs leading-5 text-stone"><Sparkles className="mt-0.5 size-4 shrink-0 text-ember-soft" />Your learning path adapts after every recorded scene. There is no mode to manage before you begin.</p>
                                 {saveError ? <div className="mt-5"><ApiState error={saveError} onRetry={submitOnboarding} /></div> : null}
                             </div>

@@ -9,11 +9,11 @@ import { isAssessmentSession, type AssessmentSession } from '../../../../package
 
 type Props = { kind: 'mission' | 'gateway'; competencyId?: string; getToken: () => Promise<string | null>; onExit: () => void }
 const primary = 'ecla-control inline-flex min-h-12 items-center justify-center gap-2 rounded-control bg-ember px-5 text-sm font-semibold text-obsidian hover:bg-ember-soft disabled:cursor-not-allowed disabled:opacity-40'
-const quiet = 'ecla-control inline-flex min-h-11 items-center justify-center gap-2 rounded-control border border-line-strong bg-black/20 px-4 text-sm font-medium text-ivory hover:border-ember/45 hover:bg-ember/10 disabled:cursor-not-allowed disabled:opacity-40'
+const quiet = 'ecla-control inline-flex min-h-11 items-center justify-center gap-2 rounded-control border border-line-strong bg-surface px-4 text-sm font-medium text-ivory hover:border-ember/45 hover:bg-ember/10 disabled:cursor-not-allowed disabled:opacity-40'
 
 function ProgressLine({ current, total }: { current: number; total: number }) {
     const width = Math.max(0, Math.min(100, (current / Math.max(total, 1)) * 100))
-    return <div className="h-1 overflow-hidden rounded-full bg-white/10" aria-label={`Scene ${current} of ${total}`}><div className="h-full rounded-full bg-ember transition-[width] duration-500" style={{ width: `${width}%` }} /></div>
+    return <div className="h-1 overflow-hidden rounded-full bg-line-strong" aria-label={`Scene ${current} of ${total}`}><div className="h-full rounded-full bg-ember transition-[width] duration-500" style={{ width: `${width}%` }} /></div>
 }
 
 export default function AssessmentRunner({ kind, competencyId, getToken, onExit }: Props) {
@@ -75,8 +75,8 @@ export default function AssessmentRunner({ kind, competencyId, getToken, onExit 
         return (
             <main className="relative min-h-dvh overflow-hidden bg-obsidian text-ivory">
                 <div aria-hidden className={`absolute inset-0 bg-cover bg-center ${mission ? "bg-[url('/worlds/journey/unit-everyday-survival.webp')]" : "bg-[url('/worlds/spanish-night-v1.webp')]"}`} />
-                <div aria-hidden className="absolute inset-0 bg-obsidian/38" />
-                <div className="relative mx-auto flex min-h-dvh w-full max-w-[1440px] flex-col px-5 py-5 sm:px-8 sm:py-7 lg:px-12">
+                <div aria-hidden className="ecla-image-shade absolute inset-0" />
+                <div className="ecla-dark-scene ecla-image-copy relative mx-auto flex min-h-dvh w-full max-w-[1440px] flex-col px-5 py-5 sm:px-8 sm:py-7 lg:px-12">
                     <header className="flex items-center justify-between gap-4">
                         <Logo height={32} className="h-8 w-auto" tone="dark" />
                         <button className={quiet} onClick={onExit}><ArrowLeft className="size-4" />Back to journey</button>
@@ -92,7 +92,7 @@ export default function AssessmentRunner({ kind, competencyId, getToken, onExit 
                             <div><dt className="text-[10px] uppercase tracking-[.16em] text-ash">Responses</dt><dd className="mt-1 text-ivory">Speak or type</dd></div>
                             <div><dt className="text-[10px] uppercase tracking-[.16em] text-ash">Evidence</dt><dd className="mt-1 text-ivory">Reviewed</dd></div>
                         </dl>
-                        <div className="mt-7 flex max-w-xl items-start gap-3 rounded-surface border border-white/10 bg-black/30 p-4 text-xs leading-5 text-stone backdrop-blur-sm">
+                        <div className="ecla-theme-panel mt-7 flex max-w-xl items-start gap-3 rounded-surface border border-line bg-ink/95 p-4 text-xs leading-5 text-stone backdrop-blur-sm">
                             <ShieldCheck className="mt-0.5 size-4 shrink-0 text-success" />
                             <p>Ecla checks reviewed readiness before opening this assessment. Results remain pending until the required human and acoustic review is complete.</p>
                         </div>
@@ -115,7 +115,7 @@ export default function AssessmentRunner({ kind, competencyId, getToken, onExit 
             <div aria-hidden className="fixed inset-0 bg-obsidian/70" />
             <div className="relative mx-auto flex min-h-dvh w-full max-w-[1440px] flex-col px-4 py-4 sm:px-7 sm:py-6 lg:px-10">
                 <header className="grid min-w-0 grid-cols-[auto_minmax(0,1fr)_auto] items-center gap-3 border-b border-line pb-4 sm:gap-5">
-                    <button className="ecla-control flex size-11 shrink-0 items-center justify-center rounded-full border border-line-strong bg-black/20" aria-label="Exit assessment" onClick={onExit}><ArrowLeft className="size-4" /></button>
+                    <button className="ecla-control flex size-11 shrink-0 items-center justify-center rounded-full border border-line-strong bg-surface" aria-label="Exit assessment" onClick={onExit}><ArrowLeft className="size-4" /></button>
                     <div className="min-w-0">
                         <div className="flex min-w-0 items-center justify-between gap-3 text-[10px] font-semibold uppercase tracking-[.16em] text-stone"><span className="truncate">{session.kind === 'gateway' ? 'Pre-A1 Gateway' : 'Mission'}</span><span className="shrink-0">{session.scenarioNumber} / {session.scenarioTotal}</span></div>
                         <div className="mt-2"><ProgressLine current={session.scenarioNumber} total={session.scenarioTotal} /></div>

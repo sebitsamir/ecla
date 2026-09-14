@@ -267,7 +267,7 @@ export default function VoiceCall({ onEnd }: { onEnd: (lines: CallLine[]) => voi
         'Listening'
 
     return (
-        <div className="fixed inset-0 z-[60] flex h-dvh min-w-0 flex-col overflow-hidden bg-obsidian font-body text-ivory">
+        <div className="ecla-dark-scene fixed inset-0 z-[60] flex h-dvh min-w-0 flex-col overflow-hidden bg-obsidian font-body text-ivory">
             <Image src="/worlds/spanish-cafe-scene-v1.webp" alt="" fill priority sizes="100vw" className="object-cover object-center" />
             <div aria-hidden className="absolute inset-0 bg-obsidian/38" />
             <div aria-hidden className={`absolute inset-0 transition-colors duration-500 ${listening ? 'bg-black/5' : phase === 'thinking' ? 'bg-black/30' : 'bg-transparent'}`} />
@@ -314,7 +314,7 @@ export default function VoiceCall({ onEnd }: { onEnd: (lines: CallLine[]) => voi
 
                 <div
                     ref={scrollRef}
-                        className="vc-scroll mt-4 flex max-h-[32dvh] w-full max-w-xl flex-col gap-2 overflow-y-auto rounded-surface border border-white/10 bg-black/40 p-3 backdrop-blur-md sm:max-h-[28dvh] sm:p-4"
+                        className="ecla-theme-panel vc-scroll mt-4 flex max-h-[32dvh] w-full max-w-xl flex-col gap-2 overflow-y-auto rounded-surface border border-line bg-ink/95 p-3 backdrop-blur-md sm:max-h-[28dvh] sm:p-4"
                 >
                     {lines.map((l, i) => (
                         l.text ? (
