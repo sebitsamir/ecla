@@ -1,13 +1,12 @@
 'use client'
 
-import { useEffect, useRef, useState, type ReactNode } from 'react'
+import { type ReactNode } from 'react'
 import Link from 'next/link'
 import Image from 'next/image'
 import { usePathname } from 'next/navigation'
-import { useClerk, useUser } from '@clerk/nextjs'
-import { BookOpen, Home, LogOut, MessageCircle, Repeat2, Route, Settings, TrendingUp, X } from 'lucide-react'
+import { useUser } from '@clerk/nextjs'
+import { BookOpen, Home, MessageCircle, Repeat2, Route, TrendingUp } from 'lucide-react'
 import { Logo } from '@/components/BrandLogo'
-import { IconButton } from '@/components/ui'
 
 const DESKTOP_NAV = [
   { href: '/dashboard', label: 'Home', icon: Home },
@@ -64,27 +63,8 @@ function PrimaryNavigation({ mobile = false }: { mobile?: boolean }) {
 
 export default function AppShell({ children }: { children: ReactNode }) {
   const { user } = useUser()
-  const { signOut } = useClerk()
-  const [accountOpen, setAccountOpen] = useState(false)
-  const accountRef = useRef<HTMLDivElement>(null)
   const name = user?.firstName ?? user?.username ?? 'Learner'
   const image = user?.imageUrl
-
-  useEffect(() => {
-    if (!accountOpen) return
-    const close = (event: MouseEvent) => {
-      if (!accountRef.current?.contains(event.target as Node)) setAccountOpen(false)
-    }
-    const escape = (event: KeyboardEvent) => {
-      if (event.key === 'Escape') setAccountOpen(false)
-    }
-    document.addEventListener('mousedown', close)
-    document.addEventListener('keydown', escape)
-    return () => {
-      document.removeEventListener('mousedown', close)
-      document.removeEventListener('keydown', escape)
-    }
-  }, [accountOpen])
 
   return (
     <main className="min-h-screen bg-transparent font-body text-ivory">
@@ -97,28 +77,15 @@ export default function AppShell({ children }: { children: ReactNode }) {
             <Link href="/gateway" aria-label="Open Gateway assessment" className="ecla-control flex min-h-11 items-center gap-2 rounded-full border border-line bg-surface px-3 text-xs font-medium text-stone hover:border-line-strong hover:text-ivory lg:hidden">
               <BookOpen className="size-4" /><span className="hidden sm:inline">Gateway</span>
             </Link>
-          <div ref={accountRef} className="relative">
-            <button onClick={() => setAccountOpen(value => !value)} aria-expanded={accountOpen} aria-haspopup="menu"
+            <Link href="/profile" aria-label={`Open profile and settings for ${name}`}
               className="ecla-control flex min-h-11 items-center gap-2 rounded-full border border-line bg-surface py-1 pl-1 pr-3 text-stone hover:border-line-strong hover:text-ivory">
               {image ? <Image src={image} alt="" width={32} height={32} className="size-8 rounded-full object-cover" /> : <span className="flex size-8 items-center justify-center rounded-full bg-ember/15 text-xs font-semibold text-ember-soft">{name.charAt(0).toUpperCase()}</span>}
-              <span className="hidden max-w-32 truncate text-xs sm:block">{name}</span>
-            </button>
-            {accountOpen ? (
-              <div role="menu" className="ecla-surface absolute right-0 mt-2 w-64 rounded-surface p-2 animate-fade-in">
-                <div className="flex items-center justify-between px-3 py-2">
-                  <div className="min-w-0"><p className="truncate text-sm font-medium text-ivory">{name}</p><p className="truncate text-xs text-ash">{user?.primaryEmailAddress?.emailAddress ?? ''}</p></div>
-                  <IconButton label="Close account menu" onClick={() => setAccountOpen(false)} className="size-9 border-transparent bg-transparent"><X className="size-4" /></IconButton>
-                </div>
-                <div className="my-1 h-px bg-line" />
-                <Link role="menuitem" href="/profile" onClick={() => setAccountOpen(false)} className="ecla-control flex min-h-11 items-center gap-3 rounded-control px-3 text-sm text-stone hover:bg-white/[0.05] hover:text-ivory"><Settings className="size-4" />Profile &amp; settings</Link>
-                <button role="menuitem" onClick={() => signOut()} className="ecla-control flex min-h-11 w-full items-center gap-3 rounded-control px-3 text-sm text-stone hover:bg-white/[0.05] hover:text-ivory"><LogOut className="size-4" />Sign out</button>
-              </div>
-            ) : null}
-          </div>
+              <span className="hidden text-xs font-medium sm:block">Profile</span>
+            </Link>
           </div>
         </div>
       </header>
-      <div id="main-content" className="mx-auto min-w-0 max-w-[1200px] overflow-x-clip px-4 py-5 pb-24 sm:px-6 sm:py-7 lg:px-8 xl:pb-9">{children}</div>
+      <div id="main-content" className="ecla-page-enter mx-auto min-w-0 max-w-[1200px] overflow-x-clip px-4 py-5 pb-24 sm:px-6 sm:py-7 lg:px-8 xl:pb-9">{children}</div>
       <div className="safe-bottom fixed inset-x-0 bottom-0 z-40 border-t border-line bg-obsidian/96 px-1 backdrop-blur-xl xl:hidden"><div className="mx-auto max-w-2xl"><PrimaryNavigation mobile /></div></div>
     </main>
   )

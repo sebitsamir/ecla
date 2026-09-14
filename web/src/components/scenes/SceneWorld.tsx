@@ -5,7 +5,7 @@ import { sceneBackground, sceneMood, speakerIdentity } from '@/lib/scenePresenta
 export function SceneWorld({ setting, speaker, title }: { setting: string; speaker?: string | null; title: string }) {
     const mood = sceneMood(setting)
     const person = speakerIdentity(speaker)
-    return <div className="relative min-h-[23rem] overflow-hidden bg-obsidian sm:min-h-[30rem] lg:min-h-[36rem]">
+    return <div className="ecla-dark-scene relative min-h-[23rem] overflow-hidden bg-obsidian sm:min-h-[30rem] lg:min-h-[36rem]">
         <Image src={sceneBackground[mood]} alt="" fill priority sizes="100vw" className="object-cover" />
         <div aria-hidden className="absolute inset-0 bg-obsidian/35" />
         <div className="relative flex min-h-[23rem] flex-col justify-between p-5 sm:min-h-[30rem] sm:p-8 lg:min-h-[36rem]">
