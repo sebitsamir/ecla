@@ -4,6 +4,7 @@ import { AppError } from '../lib/errors'
 import { GOLDEN_CODE, GOLDEN_CONTRACT, type GoldenAttempt, type GoldenCatalog, type GoldenResult } from '../../../packages/contracts/golden'
 import { definitionSchema, EVALUATOR_VERSION, DAY_MS, gradeStep, publicStep } from './definition'
 import { availability, passedAttempt, projectEvidence, type ObservedAttempt } from './evidence'
+import { PRE_A1_CURRICULUM_VERSION } from '../../prisma/content/spanish/pre-a1/registry'
 
 const snapshotSchema = z.object({ definition: definitionSchema, reviewed: z.boolean() }).strict()
 const json = (value: unknown) => JSON.parse(JSON.stringify(value)) as Prisma.InputJsonValue
@@ -24,9 +25,9 @@ export class GoldenService {
         }, { maxWait: 10000, timeout: 15000 })
     }
 
-    private async history(tx: Tx | PrismaClient, userId: string): Promise<ObservedAttempt[]> {
+    private async history(tx: Tx | PrismaClient, userId: string, competency: { code?: string; id?: string }): Promise<ObservedAttempt[]> {
         const rows = await tx.learningAttempt.findMany({
-            where: { userId, competency: { code: GOLDEN_CODE }, status: 'completed' },
+            where: { userId, competency: competency.id ? { id: competency.id } : { code: competency.code }, status: 'completed' },
             include: { responses: { orderBy: { sequence: 'asc' } } }, orderBy: [{ completedAt: 'asc' }, { id: 'asc' }],
         })
         return rows.map(row => {
@@ -59,15 +60,16 @@ export class GoldenService {
         }
     }
 
-    async catalog(userId: string): Promise<GoldenCatalog> {
+    async catalog(userId: string, competencyCode = GOLDEN_CODE): Promise<GoldenCatalog> {
+        const activeKey = `benchmark:${competencyCode}`
         const [versions, history, active] = await Promise.all([
-            this.db.assessmentSceneVersion.findMany({ where: { published: true, scene: { competency: { code: GOLDEN_CODE }, isPublished: true } }, include: { scene: true }, orderBy: { createdAt: 'desc' } }),
-            this.history(this.db, userId),
-            this.db.learningAttempt.findFirst({ where: { userId, activeKey: GOLDEN_CODE, status: 'active', expiresAt: { gt: this.clock() } }, select: { id: true } }),
+            this.db.assessmentSceneVersion.findMany({ where: { published: true, scene: { competency: { code: competencyCode }, isPublished: true } }, include: { scene: true }, orderBy: { createdAt: 'desc' } }),
+            this.history(this.db, userId, { code: competencyCode }),
+            this.db.learningAttempt.findFirst({ where: { userId, activeKey, status: 'active', expiresAt: { gt: this.clock() } }, select: { id: true } }),
         ])
         const current = versions.filter((version, index) => versions.findIndex(other => other.sceneId === version.sceneId) === index)
         return {
-            contract: GOLDEN_CONTRACT, competencyCode: GOLDEN_CODE, activeAttemptId: active?.id ?? null,
+            contract: GOLDEN_CONTRACT, competencyCode, activeAttemptId: active?.id ?? null,
             reviewStatus: current.length && current.every(version => version.educatorReviewed) ? 'reviewed' : 'educator_review_pending',
             scenes: current.map(version => {
                 const definition = definitionSchema.parse(version.definition)
@@ -87,29 +89,31 @@ export class GoldenService {
                 return this.view(prior)
             }
             const now = this.clock()
-            await tx.learningAttempt.updateMany({ where: { userId, activeKey: GOLDEN_CODE, expiresAt: { lte: now } }, data: { status: 'expired', activeKey: null } })
-            const active = await tx.learningAttempt.findFirst({ where: { userId, activeKey: GOLDEN_CODE }, include: { sceneVersion: true } })
+            const version = await tx.assessmentSceneVersion.findFirst({ where: { id: sceneVersionId, published: true, scene: { isPublished: true } }, include: { scene: { include: { competency: true } }, experience: true } })
+            if (!version || version.experience.competencyId !== version.scene.competencyId) throw new AppError('Published benchmark scene not found', 404)
+            const definition = definitionSchema.parse(version.definition)
+            if (definition.competencyCode !== version.scene.competency.code) throw new AppError('Benchmark competency integrity failed', 409)
+            const activeKey = `benchmark:${definition.competencyCode}`
+            await tx.learningAttempt.updateMany({ where: { userId, activeKey, expiresAt: { lte: now } }, data: { status: 'expired', activeKey: null } })
+            const active = await tx.learningAttempt.findFirst({ where: { userId, activeKey }, include: { sceneVersion: true } })
             if (active) {
-                if (active.sceneVersionId !== sceneVersionId) throw new AppError('Finish or resume your active greeting scene first.', 409)
+                if (active.sceneVersionId !== sceneVersionId) throw new AppError('Finish or resume your active benchmark scene first.', 409)
                 return this.view(active)
             }
             const count = await tx.learningAttempt.count({ where: { userId, startedAt: { gte: new Date(now.getTime() - 86400000) } } })
             if (count >= 50) throw new AppError('Daily attempt limit reached. Return tomorrow.', 429)
-            const version = await tx.assessmentSceneVersion.findFirst({ where: { id: sceneVersionId, published: true, scene: { isPublished: true, competency: { code: GOLDEN_CODE } } }, include: { scene: true, experience: true } })
-            if (!version || version.experience.competencyId !== version.scene.competencyId) throw new AppError('Published greeting scene not found', 404)
-            const definition = definitionSchema.parse(version.definition)
-            const history = await this.history(tx, userId)
+            const history = await this.history(tx, userId, { id: version.scene.competencyId })
             const reason = availability(definition, history, now)
             if (reason) throw new AppError(reason, 409)
             const visited = await tx.learningAttempt.findMany({ where: { userId, competencyId: version.scene.competencyId }, select: { snapshot: true, startedAt: true } })
             const practiceVisits = await tx.sceneVisit.findMany({ where: { userId, revision: { scene: { competencyId: version.scene.competencyId } } }, include: { revision: { select: { source: true } } } })
             if (definition.purpose === 'retention' && (visited.some(row => now.getTime() - row.startedAt.getTime() < DAY_MS) || practiceVisits.some(row => now.getTime() - row.createdAt.getTime() < DAY_MS))) {
-                throw new AppError('Wait a full day after your last greeting attempt before a retention check.', 409)
+                throw new AppError('Wait for the scheduled delay after your last attempt before a retention check.', 409)
             }
             const contextNovel = !visited.some(row => snapshotSchema.parse(row.snapshot).definition.contextFingerprint === definition.contextFingerprint)
                 && !practiceVisits.some(row => (row.revision.source as { contextFingerprint?: string }).contextFingerprint === definition.contextFingerprint)
             const attempt = await tx.learningAttempt.create({ data: {
-                userId, competencyId: version.scene.competencyId, sceneVersionId, idempotencyKey, activeKey: GOLDEN_CODE,
+                userId, competencyId: version.scene.competencyId, sceneVersionId, idempotencyKey, activeKey,
                 startedAt: now, expiresAt: new Date(now.getTime() + ATTEMPT_TTL),
                 snapshot: json({ definition, reviewed: version.educatorReviewed }), contextNovel,
                 retentionEligible: definition.purpose === 'retention',
@@ -161,7 +165,7 @@ export class GoldenService {
             const snapshot = snapshotSchema.parse(attempt.snapshot)
             const responses = await tx.attemptResponse.findMany({ where: { attemptId: id }, orderBy: { sequence: 'asc' } })
             if (attempt.sequence !== snapshot.definition.steps.length || responses.length !== snapshot.definition.steps.length) throw new AppError('Respond to every task before completing the scene.', 409)
-            const previousHistory = await this.history(tx, userId)
+            const previousHistory = await this.history(tx, userId, { id: attempt.competencyId })
             // The learner lock establishes order; preserve it when two completions
             // share a millisecond (or the wall clock moves backwards).
             const now = new Date(Math.max(this.clock().getTime(), (previousHistory.at(-1)?.completedAt.getTime() ?? 0) + 1))
@@ -183,6 +187,10 @@ export class GoldenService {
                     ? 'This is server-graded, text-mediated pilot evidence. Educator review and recorded audio are pending, so it does not prove spoken fluency or unlock transferred mastery.'
                     : 'This result measures text-mediated greeting tasks. It does not assess pronunciation, acoustic intelligibility or spontaneous spoken fluency.',
             }
+            await tx.evidenceObservation.createMany({ data: responses.map((response,index)=>{
+                const step=snapshot.definition.steps[index]
+                return { userId,competencyId:attempt.competencyId,competencyVersion:PRE_A1_CURRICULUM_VERSION,taskVersion:`${attempt.sceneVersion.version}:${step.id}`,contentVersion:attempt.sceneVersion.version,contextFingerprint:snapshot.definition.contextFingerprint,modality:step.stage==='INTERACT'?'interaction':'writing',rawResponseRef:`attempt-response:${response.id}`,allowedAssistance:['answer_model'],usedAssistance:response.supported?['answer_model']:[],outcome:json({achieved:response.correct,score:response.correct?(response.supported?50:100):0,practicalResult:response.correct?'Task outcome achieved':'Task outcome not established'}),rubricVersion:snapshot.definition.evaluatorVersion,evaluatorVersion:response.evaluatorVersion,confidence:snapshot.reviewed ? .9 : .5,purpose:snapshot.definition.purpose,reviewState:snapshot.reviewed?'reviewed':'unreviewed',observedAt:response.observedAt }
+            }) })
             await tx.learningAttempt.update({ where: { id }, data: { status: 'completed', activeKey: null, completedAt: now, result: json(result), xpAwarded } })
             await tx.userExperienceProgress.upsert({
                 where: { userId_experienceId: { userId, experienceId: attempt.sceneVersion.experienceId } },

@@ -67,6 +67,7 @@ model User {
   assessmentSessions AssessmentSession[]
   learnerPlanSnapshots LearnerPlanSnapshot[]
   pilotParticipations PilotParticipant[]
+  evidenceObservations EvidenceObservation[]
 }
 
 model PilotStudy {
@@ -329,6 +330,7 @@ model Competency {
   learningAttempts            LearningAttempt[]
   assessmentSessions AssessmentSession[]
   portfolioReviewDecisions PortfolioReviewDecision[]
+  evidenceObservations EvidenceObservation[]
 
   @@index([unitId, orderIndex])
 }
@@ -618,6 +620,35 @@ model AttemptResponse {
   attempt LearningAttempt @relation(fields: [attemptId], references: [id], onDelete: Cascade)
   @@unique([attemptId, sequence])
   @@unique([attemptId, responseKey])
+}
+
+model EvidenceObservation {
+  id                    String   @id @default(uuid())
+  userId                String
+  competencyId          String
+  competencyVersion     String
+  taskVersion           String
+  contentVersion        String
+  contextFingerprint    String
+  modality              String
+  rawResponseRef        String?
+  allowedAssistance     String[] @default([])
+  usedAssistance        String[] @default([])
+  outcome               Json
+  rubricVersion         String
+  evaluatorVersion      String
+  confidence            Float
+  purpose               String
+  reviewState           String   @default("unreviewed")
+  observedAt            DateTime
+  createdAt             DateTime @default(now())
+
+  user       User       @relation(fields: [userId], references: [id], onDelete: Cascade)
+  competency Competency @relation(fields: [competencyId], references: [id], onDelete: Restrict)
+
+  @@index([userId, competencyId, observedAt])
+  @@index([competencyId, contextFingerprint])
+  @@index([reviewState, purpose])
 }
 
 model SceneRevision {

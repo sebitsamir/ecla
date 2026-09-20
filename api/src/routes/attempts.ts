@@ -5,6 +5,7 @@ import { AppError } from '../lib/errors'
 import { prisma } from '../lib/prisma'
 import { GoldenService } from '../golden/service'
 import { startSchema, responseSchema, supportSchema, completeSchema } from '../golden/definition'
+import { BENCHMARK_CODES } from '../../../packages/contracts/golden'
 
 /** Dependency injection enables HTTP tests without weakening production auth. */
 export function createAttemptRouter(service: GoldenService, userId: (req: Request) => Promise<string>) {
@@ -20,7 +21,10 @@ export function createAttemptRouter(service: GoldenService, userId: (req: Reques
         return parsed.data
     }
     router.get('/api/v1/attempts/golden', async (req, res, next) => {
-        try { res.json(await service.catalog(await userId(req))) } catch (error) { next(error) }
+        try {
+            const code = z.enum(BENCHMARK_CODES).parse(req.query.competencyCode ?? BENCHMARK_CODES[0])
+            res.json(await service.catalog(await userId(req), code))
+        } catch (error) { next(error) }
     })
     router.post('/api/v1/attempts/start', async (req, res, next) => {
         try {
