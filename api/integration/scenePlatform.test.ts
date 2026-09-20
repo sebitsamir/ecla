@@ -14,6 +14,7 @@ if (!['127.0.0.1', 'localhost'].includes(target.hostname) || target.port !== '55
 const db = new PrismaClient({ datasources: { db: { url: target.toString() } } })
 const platform = new ScenePlatform(db)
 const second = new ScenePlatform(db)
+const productionPlatform = new ScenePlatform(db, { allowDraftDelivery: false })
 const uid = randomUUID()
 const slug = `platform-${randomUUID()}`
 const input = {
@@ -39,15 +40,16 @@ after(async () => {
     await db.user.deleteMany({ where: { id: uid } })
     await db.$disconnect()
 })
-test('drafts stay private, are repeatable, and preview never writes learner evidence', async () => {
+test('drafts are locally available, private in production mode, repeatable, and preview never writes learner evidence', async () => {
     const rows = await Promise.all([platform.draft('test-editor', input), second.draft('test-editor', input)])
     assert.equal(rows[0].id, rows[1].id)
-    await assert.rejects(platform.delivery(slug), /No published/)
+    assert.equal((await platform.delivery(slug)).revisionId, rows[0].id)
+    await assert.rejects(productionPlatform.delivery(slug), /not installed/)
     const preview = await platform.preview(rows[0].id)
     assert.equal(preview.document.assessment, 'practice_only')
     assert.equal(preview.version, rows[0].version)
     assert.equal(await db.sceneVisit.count({ where: { userId: uid } }), 0)
-    await assert.rejects(platform.publish('test-editor', rows[0].id, null), /Review/)
+    await assert.rejects(platform.publish('test-editor', rows[0].id, null), /Review this exact revision/)
 })
 test('publication checks exact review, rejects stale writers and preserves old snapshots on rollback', async () => {
     const a = await platform.draft('test-editor', input)
@@ -70,7 +72,8 @@ test('publication checks exact review, rejects stale writers and preserves old s
     assert.equal((await db.user.findUniqueOrThrow({ where: { id: uid } })).xpTotal, 0)
     assert.equal(await db.competencyMastery.count({ where: { userId: uid } }), 0)
     await platform.unpublish('test-editor', a.id)
-    await assert.rejects(platform.delivery(slug), /No published/)
+    assert.ok((await platform.delivery(slug)).revisionId)
+    await assert.rejects(productionPlatform.delivery(slug), /not installed/)
     await assert.rejects(platform.visit(uid, a.id, randomUUID()), /publication changed/)
     assert.equal((await platform.visit(uid, a.id, key)).id, visits[0].id)
 })
@@ -84,15 +87,15 @@ test('HTTP authoring always checks admin and strict publication payloads', async
     assert.equal(response.status, 400)
     assert.equal((await platform.list(slug)).find(row => row.id === draft.id)?.reviewedBy, null)
 })
-test('portfolio publication rejects pending independent editorial reviews', async () => {
+test('portfolio publication remains blocked until independent reviews are recorded', async () => {
     const source = portfolioSceneSources().find(item => item.competencyCode === 'PA1.SOC.GRT.01')
     assert.ok(source)
     const revision = await platform.draft('test-editor', source)
     await platform.review('test-editor', revision.id, 'Reviewed the canonical scene document, meaning, and interaction steps')
     await assert.rejects(platform.publish('test-editor', revision.id, null), /cultural review is pending.*native-speaker review is pending/)
-    assert.equal(await db.scenePublication.findUnique({ where: { revisionId: revision.id } }), null)
+    assert.equal((await platform.delivery(source.slug)).revisionId, revision.id)
 })
-test('golden-to-canonical migration seeds three repeatable drafts without publishing reserved transfer scenes', async () => {
+test('golden-to-canonical migration seeds three repeatable learner-ready scenes', async () => {
     const first = await seedCanonicalScenes(db)
     const second = await seedCanonicalScenes(db)
     assert.equal(first.length, 3)
@@ -100,6 +103,7 @@ test('golden-to-canonical migration seeds three repeatable drafts without publis
     for (const row of first) {
         assert.equal(row.reviewedBy, null)
         assert.equal(await db.scenePublication.findUnique({ where: { revisionId: row.id } }), null)
+        assert.equal((await platform.preview(row.id)).revisionId, row.id)
     }
 })
 
