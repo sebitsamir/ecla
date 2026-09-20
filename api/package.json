@@ -24,7 +24,8 @@
     "validate:content": "tsx prisma/content/validate-cli.ts",
     "validate:curriculum": "tsx prisma/content/validate-curriculum-cli.ts",
     "validate:portfolio": "tsx prisma/content/validate-portfolio-cli.ts",
-    "validate": "npm run typecheck && npm test && npm run validate:content && npm run validate:curriculum && npm run validate:portfolio",
+    "validate:reconciliation": "tsx prisma/content/validate-reconciliation-cli.ts",
+    "validate": "npm run typecheck && npm test && npm run validate:content && npm run validate:curriculum && npm run validate:portfolio && npm run validate:reconciliation",
     "retention": "node dist/api/src/ops/retention.js"
   },
   "keywords": [],
