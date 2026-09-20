@@ -6,6 +6,7 @@
   "scripts": {
     "test": "tsx --test tests/**/*.test.ts",
     "dev": "tsx watch src/server.ts",
+    "prestart": "npm run build",
     "start": "node dist/api/src/server.js",
     "start:source": "tsx src/server.ts",
     "build": "prisma generate && tsc -p tsconfig.json",
