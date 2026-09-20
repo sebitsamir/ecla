@@ -24,6 +24,8 @@ export function projectEvidence(history: ObservedAttempt[]) {
     let repairs = 0
     let transferred = false
     let retained = false
+    const transferContexts = new Set<string>()
+    const retentionContexts = new Set<string>()
     let allReviewed = history.length > 0
     for (const attempt of history) {
         allReviewed &&= attempt.reviewed
@@ -38,8 +40,11 @@ export function projectEvidence(history: ObservedAttempt[]) {
         }
         repairs += attempt.responses.filter(response => response.repair && response.correct && !response.supported).length
         if (passed && attempt.definition.purpose === 'practice') contexts.add(attempt.definition.contextFingerprint)
-        if (passed && attempt.definition.purpose === 'transfer' && attempt.contextNovel && contexts.size >= 3 && repairs > 0) transferred = true
-        if (passed && attempt.definition.purpose === 'retention' && attempt.retentionEligible && transferred) retained = true
+        if (passed && attempt.definition.purpose === 'transfer' && attempt.contextNovel) transferContexts.add(attempt.definition.contextFingerprint)
+        const greetingPilot = attempt.definition.competencyCode === 'PA1.SOC.GRT.01'
+        transferred = greetingPilot ? contexts.size >= 3 && repairs > 0 && transferContexts.size >= 1 : contexts.size >= 2 && transferContexts.size >= 2
+        if (passed && attempt.definition.purpose === 'retention' && attempt.retentionEligible && transferred) retentionContexts.add(attempt.definition.contextFingerprint)
+        retained = transferred && (greetingPilot ? retentionContexts.size >= 1 : retentionContexts.size >= 2)
         // A later failure invalidates the old highest-level claim until a new
         // successful transfer/retention observation replaces it.
         if (!passed) { transferred = false; retained = false }
@@ -49,18 +54,22 @@ export function projectEvidence(history: ObservedAttempt[]) {
     if (transferred && (dimensions.transfer ?? 0) >= 70) level = 'TRANSFERRED'
     if (retained && (dimensions.retention ?? 0) >= 70 && (dimensions.retrieval ?? 0) >= 70) level = 'RETAINED'
     const last = history.at(-1)
-    const nextReviewAt = last ? new Date(last.completedAt.getTime() + DAY_MS).toISOString() : null
+    const greetingPilot = last?.definition.competencyCode === 'PA1.SOC.GRT.01'
+    const nextDelay = greetingPilot ? 1 : retentionContexts.size ? 23 : 7
+    const nextReviewAt = last ? new Date(last.completedAt.getTime() + nextDelay * DAY_MS).toISOString() : null
     return { dimensions, level, allReviewed, contexts: [...contexts], repairs, nextReviewAt }
 }
 
 export function availability(definition: GoldenDefinition, history: ObservedAttempt[], now: Date): string | null {
     if (definition.purpose === 'practice') return null
     const practiced = new Set(history.filter(attempt => attempt.definition.purpose === 'practice' && passedAttempt(attempt)).map(attempt => attempt.definition.contextFingerprint))
-    if (practiced.size < 3) return 'Complete the three practice contexts independently first.'
+    const requiredPractice = definition.competencyCode === 'PA1.SOC.GRT.01' ? 3 : 2
+    if (practiced.size < requiredPractice) return `Complete the ${requiredPractice} practice contexts independently first.`
     if (definition.purpose === 'transfer') return null
     const projection = projectEvidence(history)
     if (projection.level !== 'TRANSFERRED' && projection.level !== 'RETAINED') return 'Complete a new-context transfer successfully before a retention check.'
-    const last = history.at(-1)
-    if (!last || now.getTime() - last.completedAt.getTime() < DAY_MS) return `Retention opens ${projection.nextReviewAt}; it requires a full day without another completed greeting practice.`
+    const transfer = history.filter(item=>item.definition.purpose==='transfer'&&passedAttempt(item)).at(-1)
+    const delay = (definition.retentionDelayDays ?? 1) * DAY_MS
+    if (!transfer || now.getTime() - transfer.completedAt.getTime() < delay) return `Retention opens after ${definition.retentionDelayDays ?? 1} delayed day(s) from successful transfer.`
     return null
 }

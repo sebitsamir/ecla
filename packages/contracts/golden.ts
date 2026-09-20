@@ -1,5 +1,6 @@
 /** Public assessment contract. Answer keys and evaluator configuration stay on the API. */
 export const GOLDEN_CODE = 'PA1.SOC.GRT.01'
+export const BENCHMARK_CODES = ['PA1.SOC.GRT.01','PA1.NED.FOD.01','PA1.GAT.INT.01'] as const
 export const GOLDEN_CONTRACT = 'golden-greeting/1' as const
 export type GoldenDimension = 'comprehension' | 'retrieval' | 'production' | 'interaction' | 'transfer' | 'retention'
 export type GoldenLevel = 'NOT_STARTED' | 'EXPOSED' | 'DEVELOPING' | 'CONTROLLED' | 'TRANSFERRED' | 'RETAINED'
@@ -42,7 +43,7 @@ export type GoldenAttempt = {
 }
 export type GoldenCatalog = {
     contract: typeof GOLDEN_CONTRACT
-    competencyCode: typeof GOLDEN_CODE
+    competencyCode: string
     reviewStatus: 'educator_review_pending' | 'reviewed'
     activeAttemptId: string | null
     scenes: { id: string; title: string; setting: string; purpose: 'practice' | 'transfer' | 'retention'; available: boolean; reason: string | null; completed: boolean }[]

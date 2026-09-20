@@ -1,7 +1,7 @@
 import { z } from 'zod'
 import type { GoldenStep } from '../../../packages/contracts/golden'
 
-export const EVALUATOR_VERSION = 'greeting-functional-exact/1'
+export const EVALUATOR_VERSION = 'functional-exact/2'
 export const DAY_MS = 24 * 60 * 60 * 1000
 export const dimensionSchema = z.enum(['comprehension', 'retrieval', 'production', 'interaction', 'transfer', 'retention'])
 export const stepSchema = z.object({
@@ -17,9 +17,10 @@ export const stepSchema = z.object({
 }).strict()
 export const definitionSchema = z.object({
     contract: z.literal('golden-greeting/1'),
-    competencyCode: z.literal('PA1.SOC.GRT.01'),
+    competencyCode: z.enum(['PA1.SOC.GRT.01','PA1.NED.FOD.01','PA1.GAT.INT.01']),
     title: z.string(), setting: z.string(), contextFingerprint: z.string().min(1),
     purpose: z.enum(['practice', 'transfer', 'retention']),
+    retentionDelayDays: z.union([z.literal(7),z.literal(30)]).optional(),
     evaluatorVersion: z.literal(EVALUATOR_VERSION),
     culturalNote: z.string(), steps: z.array(stepSchema).min(3).max(20),
 }).strict().superRefine((definition, ctx) => {
@@ -37,6 +38,7 @@ export const definitionSchema = z.object({
             ctx.addIssue({ code: 'custom', message: 'Independent assessments must not show models before responses' })
         }
     }
+    if (definition.purpose === 'retention' && definition.competencyCode !== 'PA1.SOC.GRT.01' && !definition.retentionDelayDays) ctx.addIssue({ code:'custom', message:'Reconciled benchmark retention requires a 7-day or 30-day delay' })
 })
 export type GoldenDefinition = z.infer<typeof definitionSchema>
 export type DefinedStep = z.infer<typeof stepSchema>

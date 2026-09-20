@@ -1,21 +1,25 @@
 import { createHash } from 'node:crypto'
 import type { PrismaClient, Prisma } from '@prisma/client'
 import { GOLDEN_SCENES } from './curriculum'
+import { benchmarkGoldenScenes } from './benchmarkCurriculum'
 import { GOLDEN_CODE } from '../../../packages/contracts/golden'
 
 /** Explicit seed command only. Never mutates databases during server startup. */
 export async function seedGolden(db: PrismaClient) {
-    const competency = await db.competency.findUnique({ where: { code: GOLDEN_CODE }, include: { experiences: { where: { type: 'STORY' }, orderBy: { orderIndex: 'asc' }, take: 1 } } })
-    if (!competency?.experiences[0]) throw new Error('Seed the core curriculum and its STORY experience before golden scenes.')
     return db.$transaction(async tx => {
         const ids: string[] = []
-        for (const { slug, definition } of GOLDEN_SCENES) {
+        for (const { slug, definition } of [...GOLDEN_SCENES,...benchmarkGoldenScenes()]) {
+            const competency = await tx.competency.findUnique({ where: { code: definition.competencyCode }, include: { experiences: { where: { type: 'STORY' }, orderBy: { orderIndex: 'asc' }, take: 1 } } })
+            if (!competency?.experiences[0]) {
+                if (definition.competencyCode === GOLDEN_CODE) throw new Error(`Seed ${definition.competencyCode} and its STORY experience before benchmark scenes.`)
+                continue
+            }
             const version = createHash('sha256').update(JSON.stringify(definition)).digest('hex')
             const scene = await tx.scene.upsert({
                 where: { slug },
                 update: {},
                 create: {
-                    competencyId: competency.id, slug, archetype: 'golden-greeting', title: definition.title,
+                    competencyId: competency.id, slug, archetype: 'benchmark', title: definition.title,
                     environment: definition.setting, objective: competency.canDo,
                     isPublished: true, metadata: { contract: definition.contract, reviewStatus: 'educator_review_pending' },
                 },

@@ -9,10 +9,10 @@ import { SceneWorld } from '@/components/scenes/SceneWorld'
 import { GOLDEN_CONTRACT, type GoldenAttempt, type GoldenCatalog, type GoldenResult } from '../../../../packages/contracts/golden'
 import { ArrowLeft, ArrowRight, Lightbulb, Mic, ShieldCheck } from 'lucide-react'
 
-type Props = { getToken: () => Promise<string | null>; onExit: () => void }
+type Props = { competencyCode: string; getToken: () => Promise<string | null>; onExit: () => void }
 const button = 'ecla-control min-h-12 rounded-control border border-line-strong px-4 py-3 text-sm font-semibold hover:border-ember/50 hover:bg-ember/10 disabled:opacity-40'
 
-export default function GoldenJourney({ getToken, onExit }: Props) {
+export default function GoldenJourney({ competencyCode, getToken, onExit }: Props) {
     const [catalog, setCatalog] = useState<GoldenCatalog | null>(null)
     const [attempt, setAttempt] = useState<GoldenAttempt | null>(null)
     const [answer, setAnswer] = useState('')
@@ -37,20 +37,20 @@ export default function GoldenJourney({ getToken, onExit }: Props) {
     }, [getToken])
 
     const load = useCallback(async () => {
-        const next = await request<GoldenCatalog>('/api/v1/attempts/golden')
+        const next = await request<GoldenCatalog>(`/api/v1/attempts/golden?competencyCode=${encodeURIComponent(competencyCode)}`)
         setCatalog(next)
         if (next.activeAttemptId) setAttempt(await request<GoldenAttempt>(`/api/v1/attempts/${next.activeAttemptId}`))
         else setAttempt(null)
-    }, [request])
+    }, [competencyCode, request])
 
     useEffect(() => {
         let cancelled = false
-        request<GoldenCatalog>('/api/v1/attempts/golden').then(async next => {
+        request<GoldenCatalog>(`/api/v1/attempts/golden?competencyCode=${encodeURIComponent(competencyCode)}`).then(async next => {
             const active = next.activeAttemptId ? await request<GoldenAttempt>(`/api/v1/attempts/${next.activeAttemptId}`) : null
             if (!cancelled) { setCatalog(next); setAttempt(active); setResumed(!!active) }
-        }).catch(reason => { if (!cancelled) setError(reason instanceof Error ? reason.message : 'Could not load your greeting journey.') })
+        }).catch(reason => { if (!cancelled) setError(reason instanceof Error ? reason.message : 'Could not load this benchmark journey.') })
         return () => { cancelled = true; window.speechSynthesis?.cancel() }
-    }, [request])
+    }, [competencyCode, request])
 
     useEffect(() => { taskRef.current?.focus() }, [attempt?.id, attempt?.sequence])
 
@@ -90,14 +90,14 @@ export default function GoldenJourney({ getToken, onExit }: Props) {
 
     return <main className="min-h-dvh bg-obsidian text-ivory">
         <div className="mx-auto max-w-5xl space-y-6 px-4 py-5 sm:px-6 sm:py-7">
-            <header className="flex items-center justify-between gap-4"><button className="ecla-control inline-flex min-h-11 items-center gap-2 rounded-full border border-line-strong bg-surface px-4 text-sm text-stone hover:text-ivory" onClick={onExit}><ArrowLeft className="size-4" />Course</button><p className="text-[11px] font-semibold uppercase tracking-[.18em] text-stone">First contact · Greeting pilot</p></header>
+            <header className="flex items-center justify-between gap-4"><button className="ecla-control inline-flex min-h-11 items-center gap-2 rounded-full border border-line-strong bg-surface px-4 text-sm text-stone hover:text-ivory" onClick={onExit}><ArrowLeft className="size-4" />Course</button><p className="text-[11px] font-semibold uppercase tracking-[.18em] text-stone">Evidence benchmark · {competencyCode}</p></header>
             <p className="flex items-start gap-3 rounded-control border border-line bg-surface p-4 text-sm leading-relaxed text-stone"><ShieldCheck className="mt-0.5 size-4 shrink-0 text-success" /><span>Responses are evaluated by the server as text. Browser speech supports listening and transcription; it does not produce a pronunciation score. Educator review remains separate.</span></p>
             {error && <div role="alert" className="space-y-3 rounded-control border border-danger/40 bg-danger/10 p-4 text-danger-soft"><p>{error}</p><button className={button} disabled={busy || mic.state !== 'idle'} onClick={() => run(load)}>Reload saved state</button></div>}
-            {!catalog && !error && <p role="status">Loading greeting scenes…</p>}
+            {!catalog && !error && <p role="status">Loading benchmark scenes…</p>}
             {catalog && !attempt && <section className="pb-10">
-                <div className="max-w-2xl pb-9 pt-8"><p className="text-xs font-semibold uppercase tracking-[.2em] text-ember-soft">Your first conversations</p><h1 className="font-display mt-3 text-4xl leading-tight sm:text-6xl">Greet someone in Spanish.</h1>
-                <p className="mt-4 leading-relaxed text-stone">Practice in three places, then respond in a new setting. Retention opens after a successful transfer and a full day without more greeting practice.</p></div>
-                {!catalog.scenes.length && <p role="status">Golden scenes have not been installed in this database yet. Apply the Phase 1 migration and golden seed before using this pilot.</p>}
+                <div className="max-w-2xl pb-9 pt-8"><p className="text-xs font-semibold uppercase tracking-[.2em] text-ember-soft">Practice, transfer, retain</p><h1 className="font-display mt-3 text-4xl leading-tight sm:text-6xl">Use this ability in context.</h1>
+                <p className="mt-4 leading-relaxed text-stone">Practise in developed situations, then respond in held-out settings. Support, modality, context, and delayed return are recorded separately.</p></div>
+                {!catalog.scenes.length && <p role="status">Benchmark scenes have not been installed in this database yet. Apply the reviewed migration and benchmark seed in an isolated environment first.</p>}
                 <div className="grid gap-4 md:grid-cols-3">{catalog.scenes.map((scene, index) => <article key={scene.id} className="relative flex min-h-60 flex-col overflow-hidden rounded-experience border border-line bg-carbon p-6 shadow-glow-md">
                     <div className="relative flex h-full flex-col">
                     <p className="text-[11px] font-semibold uppercase tracking-[.18em] text-ember-soft">{scene.purpose} · {String(index + 1).padStart(2,'0')}{scene.completed ? ' · completed' : ''}</p>
