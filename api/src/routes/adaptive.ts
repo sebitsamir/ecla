@@ -148,9 +148,7 @@ export async function computeNextAction(userId: string) {
         for (const unit of course.units) {
             for (const comp of unit.competencies) {
                 if (finished.has(comp.id)) continue
-                const open = (comp.prerequisitesAsCompetency as { prerequisiteId: string }[])
-                    .every(p => finished.has(p.prerequisiteId))
-                if (open) { target = { comp }; break }
+                target = { comp }; break
             }
             if (target) break
         }
