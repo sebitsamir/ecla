@@ -1,4 +1,5 @@
 import { Prisma, PrismaClient, ExperienceType } from "@prisma/client";
+import { PRE_A1_ADDED_COMPETENCIES } from './content/spanish/pre-a1/additions';
 
 const prisma = new PrismaClient();
 
@@ -1046,7 +1047,15 @@ function sanitizeUnits(raw: UnitSeed[]): UnitSeed[] {
     }));
 }
 
-const UNITS = sanitizeUnits(units);
+const UNITS = sanitizeUnits(units.map((unit, index) => ({
+    ...unit,
+    competencies: [
+        ...unit.competencies,
+        ...PRE_A1_ADDED_COMPETENCIES
+            .filter(item => item.unit === index + 1)
+            .map(({ unit: _unit, ...item }) => item),
+    ],
+})));
 
 // ============================================================
 // EXPERIENCE GENERATION (enhanced with accept[] + listening practice)

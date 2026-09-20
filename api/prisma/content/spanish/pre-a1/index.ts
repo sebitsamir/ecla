@@ -11,6 +11,8 @@
  */
 export { phases } from '../../phases'
 export { PRE_A1_CODES } from './codes'
+export { PRE_A1_CURRICULUM_VERSION, PRE_A1_REGISTRY, validatePreA1Registry } from './registry'
+export type { CanonicalCompetency, EvidenceDimension, Prerequisite, SkillFacet } from './registry'
 export { PRE_A1_PORTFOLIO } from './portfolio'
 export { validatePreA1Portfolio } from './portfolio-validation'
 export type { PreA1PortfolioEntry, PreA1Context, EditorialReview } from './portfolio-types'
