@@ -1,13 +1,13 @@
 'use client'
 
-import { API_URL } from '@/lib/apiClient'
+import { authFetch } from '@/lib/apiClient'
 
 import { useEffect, useState } from 'react'
 import { useAuth } from '@clerk/nextjs'
 import { COSMETICS, CosmeticId, DEFAULT_GLOW, GlowPalette } from '@/lib/cosmetics'
 
 
-/* Returns the equipped glow palette so every screen's firefly wears the user's choice */
+/* Returns the learner's equipped accent palette. */
 export function useEquippedGlow(): GlowPalette {
     const { getToken } = useAuth()
     const [glow, setGlow] = useState<GlowPalette>(DEFAULT_GLOW)
@@ -16,9 +16,7 @@ export function useEquippedGlow(): GlowPalette {
         let cancelled = false
         async function load() {
             try {
-                const token = await getToken()
-                const res = await fetch(`${API_URL}/api/v1/user/cosmetics`, {
-                    headers: { Authorization: `Bearer ${token}` },
+                const res = await authFetch(`/api/v1/user/cosmetics`, getToken, {
                 })
                 if (!res.ok) return
                 const data = await res.json()

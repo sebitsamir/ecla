@@ -22,7 +22,7 @@ export type StageName = (typeof STAGE_NAMES)[number]
 /** Recurring cast — real people with reasons to talk to you. */
 export type CharacterId = 'sofia' | 'marta' | 'daniel' | 'luis' | 'ana' | 'you'
 
-/** Environments get distinct visual treatment (gradient + label). */
+/** Environments get distinct imagery and a clear label. */
 export type Environment = 'cafe' | 'street' | 'shop' | 'home' | 'hotel' | 'office'
 
 /** Support ladder (§3.4) — measured, fadeable, never invisible. */

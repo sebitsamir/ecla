@@ -19,7 +19,10 @@ let server: Server; let origin: string
 const reviewer = (name: string) => ({ Authorization: `Bearer ${name}`, 'Content-Type': 'application/json' })
 
 before(async () => {
-    if (!await db.competency.findUnique({ where: { code } })) throw new Error('Seed the isolated Pre-A1 test curriculum first')
+    const language = await db.language.upsert({ where: { code: 'es' }, update: {}, create: { code: 'es', name: 'Spanish', nativeName: 'Español' } })
+    const course = await db.course.upsert({ where: { languageId_cefrLevel: { languageId: language.id, cefrLevel: 'Pre-A1' } }, update: {}, create: { languageId: language.id, cefrLevel: 'Pre-A1', title: 'Test course' } })
+    const unit = await db.unit.upsert({ where: { courseId_orderIndex: { courseId: course.id, orderIndex: 0 } }, update: {}, create: { courseId: course.id, orderIndex: 0, title: 'Test unit' } })
+    await db.competency.upsert({ where: { code }, update: {}, create: { code, unitId: unit.id, title: 'Recognize basic Spanish sounds', canDo: 'Recognize common Spanish sounds.', domain: 'SOUND', level: 'Pre-A1', orderIndex: 1 } })
     const app = express(); app.use(express.json()); app.use(portfolioReviewRouter(service, req => { const value = req.headers.authorization?.replace('Bearer ', ''); if (!value) throw Object.assign(new Error('Forbidden'), { statusCode: 403 }); return value }))
     app.use((error: Error & { statusCode?: number }, _req: express.Request, res: express.Response, _next: express.NextFunction) => res.status(error.statusCode ?? 500).json({ error: error.message }))
     server = await new Promise<Server>(resolve => { const listener = app.listen(0, '127.0.0.1', () => resolve(listener)) }); const address = server.address(); assert.ok(address && typeof address !== 'string'); origin = `http://127.0.0.1:${address.port}`

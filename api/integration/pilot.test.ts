@@ -25,10 +25,12 @@ test('pilot consent, locked prediction, outcome, and honest blockers persist', a
   const prediction = await service.lockPrediction('admin:test', slug, participant.id, { situationId: 'stranger-introduction', modelVersion: 'mastery/1' })
   assert.equal(prediction.predictedMastery, 0)
   const requestKey = randomUUID()
-  const input = { kind: 'ultimate_situation', situationId: 'stranger-introduction', predictionId: prediction.id, instrumentVersion: 'ultimate/1', observedPerformance: .75, assessorIndependent: true, evidenceReference: 'external://assessment-1', requestKey, observedAt: new Date('2026-09-02T01:00:00Z') }
+  const input = { kind: 'ultimate_situation', situationId: 'stranger-introduction', predictionId: prediction.id, instrumentVersion: 'ultimate/1', observedPerformance: .75, evidenceReference: 'external://assessment-1', requestKey, observedAt: new Date('2026-09-02T01:00:00Z') }
   const outcome = await service.measurement('assessor:test', slug, participant.id, input)
   const replay = await service.measurement('assessor:test', slug, participant.id, input)
   assert.equal(replay.id, outcome.id)
+  const secondPrediction = await service.lockPrediction('admin:test', slug, participant.id, { situationId: 'buy-requested-item', modelVersion: 'mastery/1' })
+  await assert.rejects(service.measurement('admin:test', slug, participant.id, { ...input, situationId: 'buy-requested-item', predictionId: secondPrediction.id, requestKey: randomUUID() }), /independent/)
   await assert.rejects(service.start('admin:test', slug), /20-30 consented/)
   const report = await service.report(slug)
   assert.equal(report.calibration.pairedObservations, 1)

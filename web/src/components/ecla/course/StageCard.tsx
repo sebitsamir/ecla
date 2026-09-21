@@ -1,17 +1,11 @@
 'use client'
 
-/**
- * StageCard — one unit of the journey (Phase D premium pass + boundary hardening).
- * Smooth grid-rows collapse (no max-height hacks), tactile rows,
- * status language: mastered ✓ / developing ● / upcoming ○ / locked.
- *
- * Boundary note: status/canDo/description are normalized at runtime so
- * unexpected API shapes degrade gracefully instead of crashing or erroring.
- */
 import { useState } from 'react'
+import Image from 'next/image'
 import { useRouter } from 'next/navigation'
-import { Check, ChevronDown, Lock } from 'lucide-react'
+import { ArrowRight, Check, ChevronDown, Lock, MapPin } from 'lucide-react'
 import { sceneTitleFor } from '@/content/sceneTitles'
+import { journeyUnitArtwork } from '@/lib/journeyPresentation'
 
 export type CourseCompetency = {
     id: string | number
@@ -41,28 +35,10 @@ export type CourseUnit = {
 }
 
 function StatusIcon({ status }: { status: string }) {
-    if (status === 'mastered') {
-        return (
-            <span className="mt-0.5 flex h-6 w-6 flex-shrink-0 items-center justify-center rounded-full bg-leaf text-night-900 shadow-[0_0_12px_rgba(34,197,94,0.35)]">
-                <Check className="h-3.5 w-3.5" strokeWidth={3} />
-            </span>
-        )
-    }
-    if (status === 'developing') {
-        return (
-            <span className="mt-0.5 flex h-6 w-6 flex-shrink-0 items-center justify-center rounded-full border-2 border-glow bg-glow/10">
-                <span className="h-2 w-2 rounded-full bg-glow" />
-            </span>
-        )
-    }
-    if (status === 'locked') {
-        return (
-            <span className="mt-0.5 flex h-6 w-6 flex-shrink-0 items-center justify-center rounded-full border border-white/10 text-cream/30">
-                <Lock className="h-3 w-3" />
-            </span>
-        )
-    }
-    return <span className="mt-0.5 h-6 w-6 flex-shrink-0 rounded-full border border-white/15" />
+    if (status === 'mastered') return <span className="flex size-8 shrink-0 items-center justify-center rounded-full bg-success text-obsidian shadow-[0_0_20px_rgba(120,173,130,.2)]"><Check className="size-4" strokeWidth={3} /></span>
+    if (status === 'developing') return <span className="relative flex size-8 shrink-0 items-center justify-center rounded-full border border-ember bg-ember/10"><span className="absolute inset-0 animate-pulse-ring rounded-full border border-ember/35" /><span className="size-2.5 rounded-full bg-ember" /></span>
+    if (status === 'locked') return <span className="flex size-8 shrink-0 items-center justify-center rounded-full border border-line text-ash"><Lock className="size-3.5" /></span>
+    return <span className="flex size-8 shrink-0 items-center justify-center rounded-full border border-line-strong bg-carbon"><span className="size-2 rounded-full bg-stone" /></span>
 }
 
 export default function StageCard({ unit, index, defaultOpen = false, onSelect }: {
@@ -73,96 +49,39 @@ export default function StageCard({ unit, index, defaultOpen = false, onSelect }
 }) {
     const router = useRouter()
     const [open, setOpen] = useState(defaultOpen)
-    const c = unit.counts ?? {}
+    const counts = unit.counts ?? {}
     const list = unit.competencies ?? []
-    const openCount = (c.developing ?? 0) + (c.upcoming ?? 0)
+    const complete = counts.mastered ?? 0
+    const total = list.length
+    const progress = total > 0 ? Math.round((complete / total) * 100) : 0
+    const artwork = journeyUnitArtwork(unit.title, index)
 
-    return (
-        <li className="relative">
-            <div className={`overflow-hidden rounded-2xl border bg-[#13131B] transition-colors duration-300 ${
-                open ? 'border-violet-500/30' : 'border-white/10 hover:border-white/20'
-            }`}>
-                {/* Header */}
-                <button
-                    onClick={() => setOpen(v => !v)}
-                    aria-expanded={open}
-                    className="flex w-full items-center gap-4 px-4 py-4 text-left sm:px-6"
-                >
-                    <span className={`flex h-9 w-9 flex-shrink-0 items-center justify-center rounded-full text-sm font-bold transition-colors ${
-                        open ? 'bg-violet-600 text-white' : 'bg-white/5 text-cream/60'
-                    }`}>
-                        {index + 1}
-                    </span>
-                    <span className="min-w-0 flex-1">
-                        <span className="block truncate font-display text-base font-bold text-cream sm:text-lg">
-                            {unit.title}
-                        </span>
-                        {unit.description && (
-                            <span className="mt-0.5 block truncate text-xs text-cream/45 sm:text-sm">
-                                {unit.description}
-                            </span>
-                        )}
-                    </span>
-                    <span className="hidden flex-shrink-0 items-center gap-2 text-[11px] font-semibold text-cream/40 sm:flex">
-                        <span className="text-leaf">{c.mastered ?? 0}✓</span>
-                        <span>·</span>
-                        <span>{openCount} open</span>
-                        {(c.locked ?? 0) > 0 && (
-                            <>
-                                <span>·</span>
-                                <span className="flex items-center gap-1">
-                                    {c.locked} <Lock className="h-3 w-3" />
-                                </span>
-                            </>
-                        )}
-                    </span>
-                    <ChevronDown className={`h-4 w-4 flex-shrink-0 text-cream/40 transition-transform duration-300 ${open ? 'rotate-180' : ''}`} />
-                </button>
-
-                {/* Body — smooth collapse */}
-                <div className={`grid transition-[grid-template-rows] duration-300 ease-out ${open ? 'grid-rows-[1fr]' : 'grid-rows-[0fr]'}`}>
-                    <div className="overflow-hidden">
-                        <ul className="border-t border-white/5">
-                            {list.map(cp => {
-                                const clickable = cp.status !== 'locked'
-                                const sceneTitle = sceneTitleFor(cp.code, cp.title ?? cp.canDo)
-                                const href = cp.href ?? `/learn/${cp.id}?mode=STORY`
-                                return (
-                                    <li key={cp.id}>
-                                        <button
-                                            onClick={() => {
-                                                if (!clickable) return
-                                                onSelect?.(cp)
-                                                router.push(href)
-                                            }}
-                                            disabled={!clickable}
-                                            aria-disabled={!clickable}
-                                            className={`flex w-full items-start gap-3 px-4 py-3.5 text-left transition-colors sm:px-6 ${
-                                                clickable ? 'hover:bg-white/[0.04] active:bg-white/[0.06]' : 'cursor-not-allowed opacity-45'
-                                            }`}
-                                        >
-                                            <StatusIcon status={cp.status} />
-                                            <span className="min-w-0 flex-1">
-                                                <span className={`block text-sm leading-snug ${cp.status === 'mastered' ? 'text-cream/70' : 'text-cream/90'}`}>
-                                                    {sceneTitle}
-                                                </span>
-                                                {cp.canDo && cp.canDo !== sceneTitle && (
-                                                    <span className="mt-1 block text-xs leading-relaxed text-cream/45">
-                                                        {cp.canDo}
-                                                    </span>
-                                                )}
-                                                <span className="mt-1 block text-[10px] font-semibold uppercase tracking-widest text-cream/30">
-                                                    {cp.code}
-                                                </span>
-                                            </span>
-                                        </button>
-                                    </li>
-                                )
-                            })}
-                        </ul>
-                    </div>
-                </div>
-            </div>
-        </li>
-    )
+    return <li className="relative max-w-full min-w-0 overflow-hidden pl-10 sm:pl-13 xl:pl-14">
+        <div aria-hidden className="absolute bottom-[-1.5rem] left-[1.15rem] top-0 w-px bg-line-strong sm:left-[1.4rem] xl:left-[1.55rem]" />
+        <span aria-hidden style={{ boxShadow: '0 0 0 5px var(--ecla-obsidian)' }} className={`absolute left-0 top-5 z-10 flex size-8 items-center justify-center rounded-full border text-xs font-semibold sm:top-6 sm:size-10 ${complete === total && total > 0 ? 'border-success/50 bg-success text-obsidian' : open ? 'border-ember bg-ember text-obsidian' : 'border-line-strong bg-carbon text-stone'}`}>{complete === total && total > 0 ? <Check className="size-4" /> : index + 1}</span>
+        <button onClick={() => setOpen(value => !value)} aria-expanded={open} className={`ecla-dark-scene ecla-control group relative block w-full max-w-full min-w-0 overflow-hidden rounded-experience border text-left shadow-glow-md ${open ? 'border-ember/40 bg-carbon' : 'border-line bg-carbon hover:border-line-strong'}`}>
+            <span className={`relative flex items-end ${open ? 'min-h-44 sm:min-h-48' : 'min-h-32 sm:min-h-36'}`}>
+                <Image src={artwork.src} alt={artwork.alt} fill sizes="(max-width: 640px) calc(100vw - 4.5rem), (max-width: 1279px) calc(100vw - 7rem), 720px" className="object-cover object-center transition-transform duration-700 group-hover:scale-[1.025]" />
+                <span aria-hidden className="absolute inset-0 bg-obsidian/55" />
+                <span className="relative flex min-w-0 flex-1 items-end gap-3 p-4 sm:p-5">
+                    <span className="min-w-0 flex-1"><span className="flex items-center gap-1.5 text-[10px] font-semibold uppercase tracking-[.16em] text-ember-soft"><MapPin className="size-3 shrink-0" />Unit {String(index + 1).padStart(2, '0')}</span><span className="font-display mt-1 block break-words text-xl leading-tight text-ivory sm:text-2xl">{unit.title}</span><span className="mt-1.5 block break-words text-xs leading-5 text-ivory/80">{unit.description ?? '\u00a0'}</span>
+                    <span className="mt-2.5 flex items-center gap-2 sm:mt-3"><span className="h-1 flex-1 overflow-hidden rounded-full bg-white/15"><span className="block h-full rounded-full bg-success" style={{width: `${progress}%`}} /></span><span className="text-[10px] tabular-nums text-ivory/60">{complete}/{total}</span></span></span>
+                    <ChevronDown className={`mb-1 size-5 shrink-0 text-ivory/70 transition-transform duration-300 ${open ? 'rotate-180' : ''}`} />
+                </span>
+            </span>
+        </button>
+        <div className={`grid transition-[grid-template-rows] duration-500 [transition-timing-function:var(--ecla-ease)] ${open ? 'grid-rows-[1fr]' : 'grid-rows-[0fr]'}`}>
+            <div className="min-w-0 overflow-hidden"><ol className="min-w-0 space-y-2 py-3">
+                {list.map((competency, itemIndex) => {
+                    const clickable = competency.status !== 'locked'
+                    const sceneTitle = sceneTitleFor(competency.code, competency.title ?? competency.canDo)
+                    const href = competency.href ?? `/learn/${competency.id}?mode=STORY`
+                    const supportingText = competency.canDo && competency.canDo !== sceneTitle ? competency.canDo : '\u00a0'
+                    return <li key={competency.id} className="min-w-0"><button onClick={() => { if (!clickable) return; onSelect?.(competency); router.push(href) }} disabled={!clickable} aria-disabled={!clickable} className={`ecla-control flex min-h-24 w-full min-w-0 items-center gap-3 overflow-hidden rounded-surface border p-3 text-left sm:min-h-20 sm:p-3.5 ${clickable ? 'border-line bg-surface hover:border-ember/40 hover:bg-surface-raised' : 'cursor-not-allowed border-line/60 bg-surface/40 opacity-50'}`}>
+                        <StatusIcon status={competency.status} /><span className="min-w-0 flex-1"><span className="block break-all text-[9px] font-semibold uppercase tracking-[.12em] text-ash sm:text-[10px]">Step {itemIndex + 1} · {competency.code}</span><span className="mt-1 block break-words text-sm font-medium leading-snug text-ivory">{sceneTitle}</span><span className="mt-1 block min-h-4 break-words text-xs leading-4 text-stone">{supportingText}</span></span>{clickable ? <ArrowRight className="size-4 shrink-0 text-ember-soft" /> : null}
+                    </button></li>
+                })}
+            </ol></div>
+        </div>
+    </li>
 }

@@ -55,7 +55,7 @@ export default function CharacterPresence({ character, environment, feedback, sp
                     alt=""
                     className={`h-14 w-14 sm:h-24 sm:w-24 rounded-full object-cover border-2 border-white/15 shadow-2xl transition-all duration-500 ${reaction}`}
                 />
-                <span className="absolute -bottom-2 left-1/2 hidden -translate-x-1/2 whitespace-nowrap rounded-full bg-[#0B0B10]/80 px-2.5 py-0.5 text-[10px] font-bold uppercase tracking-wider text-cream/70 backdrop-blur sm:block">
+                <span className="absolute -bottom-2 left-1/2 hidden -translate-x-1/2 whitespace-nowrap rounded-full bg-obsidian/80 px-2.5 py-0.5 text-[10px] font-bold uppercase tracking-wider text-cream/70 backdrop-blur sm:block">
                     {meta?.name ?? character}
                 </span>
             </div>

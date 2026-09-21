@@ -72,12 +72,9 @@ export class AdaptationService {
         const mastery = new Map(masteries.map(row => [row.competencyId, row]))
         const recent = attempts.slice(-2).map(row => row.competencyId)
         const competencies = [...new Map(courses.flatMap(course => course.units.flatMap(unit => unit.competencies)).map(row => [row.id, row])).values()]
-        const progressed = new Set(reliable.filter(row => ['DEVELOPING','CONTROLLED','TRANSFERRED','RETAINED'].includes(row.level)).map(row => row.competencyId))
-        for (const [competencyId, s] of stats) if (s.independentTotal >= 2 && s.independentCorrect / s.independentTotal >= .7) progressed.add(competencyId)
         const candidates: Array<{ score: number; action: Omit<PlanAction,'rank'> }> = []
         for (const comp of competencies) {
-            const m = mastery.get(comp.id); const s = stats.get(comp.id); const open = comp.prerequisitesAsCompetency.every(edge => progressed.has(edge.prerequisiteId))
-            if (!open && comp.prerequisitesAsCompetency.length) continue
+            const m = mastery.get(comp.id); const s = stats.get(comp.id)
             const accuracy = s?.weight ? s.weightedCorrect / s.weight : null
             const independent = s?.independentTotal ? s.independentCorrect / s.independentTotal : 0
             const support: SupportBand = independent >= .85 && (s?.independentTotal ?? 0) >= 3 ? 'minimal' : independent >= .7 ? 'low' : accuracy !== null && accuracy >= .55 ? 'medium' : attempts.length ? 'high' : 'maximum'
@@ -100,7 +97,7 @@ export class AdaptationService {
             selected.push(candidate)
         }
         const actions = selected.map((row,index) => ({ rank:index+1,...row.action }))
-        if (!actions.length) actions.push({ rank:1, kind:'gateway', title:'Pre-A1 Gateway', canDo:'Demonstrate reviewed abilities across unpredictable situations.', mode:'MISSION', href:'/gateway', support:'minimal', dueAt:null, reason:'No open practice action remains; verify readiness at the Gateway.', evidence:['All curriculum candidates are progressed or locked.'] })
+        if (!actions.length) actions.push({ rank:1, kind:'gateway', title:'Pre-A1 Gateway', canDo:'Use your Spanish across unpredictable situations.', mode:'MISSION', href:'/gateway', support:'minimal', dueAt:null, reason:'No open practice action remains; continue with the Gateway.', evidence:['Every installed curriculum activity is available.'] })
         const generatedAt = now.toISOString(); const expiresAt = new Date(now.getTime()+15*60*1000).toISOString()
         const plan: AdaptationPlan = { contract: ADAPTATION_CONTRACT, version: PLAN_VERSION, evidenceVersion, generatedAt, expiresAt, placement, confidenceCalibration, repairPlan, actions }
         await this.db.learnerPlanSnapshot.upsert({ where: { userId_evidenceVersion: { userId, evidenceVersion } }, create: { userId, version: PLAN_VERSION, evidenceVersion, plan: json(plan), generatedAt: now, expiresAt: new Date(expiresAt) }, update: {} })

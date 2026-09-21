@@ -8,7 +8,7 @@
  * Character encounters sync to the API so reunion greetings work across sessions.
  * Every helper fails soft — memory must never block a scene.
  */
-import { API_URL } from '@/lib/apiClient'
+import { authFetch } from '@/lib/apiClient'
 
 const KEY = 'ecla.learner.name'
 
@@ -54,9 +54,7 @@ export function seedNameFromProfile(first?: string | null): void {
 /** Load name + encounter history from the server. Null on failure. */
 export async function fetchMemory(getToken: () => Promise<string | null>): Promise<LearnerMemory | null> {
     try {
-        const token = await getToken()
-        const res = await fetch(`${API_URL}/api/v1/learner/memory`, {
-            headers: { Authorization: `Bearer ${token}` },
+        const res = await authFetch(`/api/v1/learner/memory`, getToken, {
         })
         if (!res.ok) return null
         const data = await res.json()
@@ -75,10 +73,9 @@ export async function recordCharacterEncounter(
     learnerName?: string | null,
 ): Promise<void> {
     try {
-        const token = await getToken()
-        await fetch(`${API_URL}/api/v1/learner/memory/encounter`, {
+        await authFetch(`/api/v1/learner/memory/encounter`, getToken, {
             method: 'POST',
-            headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+            headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ characterId, learnerName: learnerName ?? undefined }),
         })
     } catch {

@@ -34,7 +34,7 @@ const textToneFor = (band: string) =>
 export default function AbilityProfile({ dimensions }: { dimensions: Dimension[] }) {
     const list = dimensions ?? []
     return (
-        <section className="h-full rounded-2xl border border-white/10 bg-[#13131B] p-5 sm:p-6">
+        <section className="h-full min-w-0 overflow-hidden rounded-2xl border border-white/10 bg-[#13131B] p-5 sm:p-6">
             <p className="mb-4 text-[11px] font-semibold uppercase tracking-widest text-cream/50">
                 Your Spanish
             </p>
@@ -47,10 +47,10 @@ export default function AbilityProfile({ dimensions }: { dimensions: Dimension[]
                         ? Math.max(4, Math.min(100, raw))
                         : (BAND_WIDTH[band] ?? 40)
                     return (
-                        <li key={label}>
-                            <div className="mb-1.5 flex items-baseline justify-between gap-2">
-                                <span className="text-xs font-semibold text-cream/80">{label}</span>
-                                <span className={`text-[10px] font-bold uppercase tracking-wider ${textToneFor(band)}`}>
+                        <li key={label} className="min-w-0">
+                            <div className="mb-1.5 flex min-w-0 items-baseline justify-between gap-2">
+                                <span className="min-w-0 truncate text-xs font-semibold text-cream/80">{label}</span>
+                                <span className={`shrink-0 text-[10px] font-bold uppercase tracking-wider ${textToneFor(band)}`}>
                                     {band}
                                 </span>
                             </div>

@@ -1,6 +1,6 @@
 'use client'
 
-import { API_URL } from '@/lib/apiClient'
+import { authFetch } from '@/lib/apiClient'
 
 /**
  * Can-Do Truth Panel — ECLA Dashboard Component
@@ -79,9 +79,7 @@ export default function CanDoPanel() {
     useEffect(() => {
         async function fetchLearnerData() {
             try {
-                const token = await getToken()
-                const res = await fetch(`${API_URL}/api/v1/learner/competencies`, {
-                    headers: { Authorization: `Bearer ${token}` },
+                const res = await authFetch(`/api/v1/learner/competencies`, getToken, {
                 })
                 if (res.ok) {
                     const json = await res.json()
@@ -165,7 +163,7 @@ export default function CanDoPanel() {
             <div className="rounded-2xl border border-glow/20 bg-glow/5 p-5">
                 <div className="flex items-center gap-2 mb-2">
                     <Target className="h-5 w-5 text-glow" />
-                    <h2 className="font-display text-lg font-bold text-cream">Your Abilities</h2>
+                    <h2 className="font-display text-lg font-normal text-cream">Your Abilities</h2>
                 </div>
                 <p className="text-xs text-cream/60 mb-3">
                     What you can actually do in Spanish, based on demonstrated evidence.

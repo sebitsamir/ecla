@@ -123,10 +123,7 @@ export async function buildLearnerHome(user: { id: string; displayName?: string 
 
     const unitCards = curriculum[0]?.units.slice(0, 4).map(unit => {
         const done = unit.competencies.filter(c => mastered.has(c.id)).length
-        const firstOpen = unit.competencies.find(c =>
-            !progressed.has(c.id) &&
-            c.prerequisiteIds.every(id => progressed.has(id)),
-        )
+        const firstOpen = unit.competencies.find(c => !progressed.has(c.id))
         return {
             id: unit.id,
             title: unit.title,

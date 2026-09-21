@@ -1,6 +1,6 @@
 'use client'
 
-import { API_URL } from '@/lib/apiClient'
+import { authFetch } from '@/lib/apiClient'
 
 /**
  * /admin — Competency authoring (Phase 19).
@@ -32,9 +32,7 @@ export default function AdminPage() {
     useEffect(() => {
         (async () => {
             try {
-                const token = await getToken()
-                const res = await fetch(`${API_URL}/api/v1/admin/course-tree`, {
-                    headers: { Authorization: `Bearer ${token}` },
+                const res = await authFetch(`/api/v1/admin/course-tree`, getToken, {
                 })
                 const data = await res.json()
                 setUnits(data.courses?.[0]?.units ?? [])
@@ -44,9 +42,7 @@ export default function AdminPage() {
 
     const loadCompetency = async (comp: CompRef) => {
         setSelected(comp)
-        const token = await getToken()
-        const res = await fetch(`${API_URL}/api/v1/admin/competencies/${comp.code}`, {
-            headers: { Authorization: `Bearer ${token}` },
+        const res = await authFetch(`/api/v1/admin/competencies/${comp.code}`, getToken, {
         })
         const data = await res.json()
         setDetail(data.competency)
@@ -64,10 +60,9 @@ export default function AdminPage() {
         if (!selected) return
         setSaving(true)
         try {
-            const token = await getToken()
-            await fetch(`${API_URL}/api/v1/admin/competencies/${selected.code}`, {
+            await authFetch(`/api/v1/admin/competencies/${selected.code}`, getToken, {
                 method: 'PATCH',
-                headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+                headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify(form),
             })
         } finally { setSaving(false) }
@@ -76,10 +71,8 @@ export default function AdminPage() {
     const validateContent = async () => {
         setValidating(true)
         try {
-            const token = await getToken()
-            const res = await fetch(`${API_URL}/api/v1/admin/validate-content`, {
+            const res = await authFetch(`/api/v1/admin/validate-content`, getToken, {
                 method: 'POST',
-                headers: { Authorization: `Bearer ${token}` },
             })
             setValidation(await res.json())
         } finally { setValidating(false) }
@@ -93,7 +86,7 @@ export default function AdminPage() {
                         <ArrowLeft className="h-5 w-5" />
                     </button>
                     <div>
-                        <div className="mb-3 flex flex-wrap gap-3"><a href="/admin/portfolio" className="rounded-xl border border-white/20 px-4 py-2 text-sm">Pre-A1 review</a><a href="/admin/assessment" className="rounded-xl border border-white/20 px-4 py-2 text-sm">Assessment review</a><a href="/admin/scenes" className="rounded-xl border border-white/20 px-4 py-2 text-sm">Canonical scenes</a></div><h1 className="font-display text-2xl font-bold text-cream">Content authoring</h1>
+                        <div className="mb-3 flex flex-wrap gap-3"><a href="/admin/portfolio" className="rounded-xl border border-white/20 px-4 py-2 text-sm">Pre-A1 review</a><a href="/admin/assessment" className="rounded-xl border border-white/20 px-4 py-2 text-sm">Assessment review</a><a href="/admin/scenes" className="rounded-xl border border-white/20 px-4 py-2 text-sm">Canonical scenes</a></div><h1 className="font-display text-2xl font-normal text-cream">Content authoring</h1>
                         <p className="text-sm text-cream/50">Competency metadata · validation gate · seed phases for depth</p>
                     </div>
                 </header>
@@ -166,7 +159,7 @@ export default function AdminPage() {
                                                 value={form[field]}
                                                 onChange={e => setForm(f => ({ ...f, [field]: e.target.value }))}
                                                 rows={field === 'canDo' ? 2 : 1}
-                                                className="mt-1 w-full rounded-xl border border-white/10 bg-[#0B0B10] px-3 py-2 text-sm text-cream"
+                                                className="mt-1 w-full rounded-xl border border-line bg-obsidian px-3 py-2 text-sm text-cream"
                                             />
                                         </div>
                                     ))}

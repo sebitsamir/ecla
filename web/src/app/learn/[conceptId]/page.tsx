@@ -6,7 +6,7 @@ import { apiFetch } from '@/lib/apiClient'
 import GoldenJourney from '@/components/golden/GoldenJourney'
 import CanonicalJourney from '@/components/scenes/CanonicalJourney'
 import AssessmentRunner from '@/components/assessment/AssessmentRunner'
-import { GOLDEN_CODE } from '../../../../../packages/contracts/golden'
+import { BENCHMARK_CODES } from '../../../../../packages/contracts/golden'
 
 function LearnPlayer() {
     const params = useParams()
@@ -26,10 +26,10 @@ function LearnPlayer() {
         return () => { cancelled = true }
     }, [competencyId, getToken, isLoaded, isSignedIn, router])
     const exit = () => router.push('/course')
-    if (error) return <main className="min-h-screen bg-[#0B0B10] p-6 text-cream"><p role="alert">{error}</p><button onClick={exit}>Back to course</button></main>
-    if (!code || !isLoaded || !isSignedIn) return <main className="min-h-screen bg-[#0B0B10] p-6 text-cream" role="status">Loading scene…</main>
+    if (error) return <main className="flex min-h-dvh items-center justify-center bg-obsidian p-6 text-ivory"><div className="ecla-surface w-full max-w-lg rounded-experience p-7"><p className="text-xs font-semibold uppercase tracking-[.18em] text-danger-soft">Scene unavailable</p><p role="alert" className="mt-3 text-stone">{error}</p><button className="ecla-control mt-6 min-h-11 rounded-control bg-ember px-5 font-semibold text-obsidian" onClick={exit}>Back to course</button></div></main>
+    if (!code || !isLoaded || !isSignedIn) return <main className="flex min-h-dvh items-center justify-center bg-obsidian p-6 text-ivory" role="status"><div className="text-center"><span className="ecla-loading-mark mx-auto block text-ember-soft" /><p className="font-display mt-5 text-2xl">Preparing your scene…</p><p className="mt-2 text-sm text-stone">Restoring your place and conversation.</p></div></main>
     if (searchParams.get('mode') === 'MISSION') return <AssessmentRunner kind="mission" competencyId={competencyId} getToken={getToken} onExit={exit} />
-    if (code === GOLDEN_CODE) return <GoldenJourney key={competencyId} getToken={getToken} onExit={exit} />
+    if ((BENCHMARK_CODES as readonly string[]).includes(code)) return <GoldenJourney key={competencyId} competencyCode={code} getToken={getToken} onExit={exit} />
     return <CanonicalJourney key={competencyId} competencyId={competencyId} getToken={getToken} onExit={exit} />
 }
-export default function LearnPage() { return <Suspense fallback={<p role="status">Loading…</p>}><LearnPlayer /></Suspense> }
+export default function LearnPage() { return <Suspense fallback={<main className="flex min-h-dvh items-center justify-center bg-obsidian text-stone" role="status">Preparing your scene…</main>}><LearnPlayer /></Suspense> }

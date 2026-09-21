@@ -6,9 +6,11 @@
   "scripts": {
     "test": "tsx --test tests/**/*.test.ts",
     "dev": "tsx watch src/server.ts",
-    "start": "node dist/api/src/server.js",
+    "start": "npm run seed:runtime && node -e \"process.env.ECLA_RELEASE_MODE='true'; require('./dist/api/src/server.js')\"",
+    "start:strict": "node dist/api/src/server.js",
     "start:source": "tsx src/server.ts",
     "build": "prisma generate && tsc -p tsconfig.json",
+    "postinstall": "npm run build",
     "typecheck": "tsc --noEmit",
     "prisma:migrate": "prisma migrate dev",
     "prisma:generate": "prisma generate",
@@ -18,17 +20,17 @@
     "seed:all": "tsx prisma/seedAll.ts",
     "seed:golden": "tsx prisma/seedGolden.ts",
     "seed:scenes": "tsx prisma/seedScenes.ts",
+    "seed:release": "prisma migrate deploy && npm run seed:all && npm run seed:golden && npm run seed:scenes",
+    "seed:runtime": "npm run seed:golden && npm run seed:scenes",
     "test:integration": "node scripts/run-integration.mjs",
     "db:patch": "prisma db execute --schema prisma/schema.prisma --file prisma/migrations/20260829180000_phase31_learner_extensions/migration.sql",
     "db:status": "prisma migrate status",
     "validate:content": "tsx prisma/content/validate-cli.ts",
     "validate:curriculum": "tsx prisma/content/validate-curriculum-cli.ts",
     "validate:portfolio": "tsx prisma/content/validate-portfolio-cli.ts",
-    "validate": "npm run typecheck && npm test && npm run validate:content && npm run validate:curriculum && npm run validate:portfolio",
+    "validate:reconciliation": "tsx prisma/content/validate-reconciliation-cli.ts",
+    "validate": "npm run typecheck && npm test && npm run validate:content && npm run validate:curriculum && npm run validate:portfolio && npm run validate:reconciliation",
     "retention": "node dist/api/src/ops/retention.js"
-  },
-  "prisma": {
-    "seed": "tsx prisma/seed.ts"
   },
   "keywords": [],
   "author": "",
@@ -41,6 +43,7 @@
     "dotenv": "^17.4.2",
     "express": "^5.2.1",
     "groq-sdk": "^1.5.0",
+    "music-metadata": "^11.15.0",
     "stripe": "^22.0.0",
     "zod": "^4.4.3"
   },
@@ -50,6 +53,9 @@
     "@types/node": "^26.1.2",
     "prisma": "^6.19.3",
     "tsx": "^4.23.9",
-    "typescript": "^7.0.2"
+    "typescript": "5.9.3"
+  },
+  "overrides": {
+    "deepmerge-ts": "^8.0.0"
   }
 }

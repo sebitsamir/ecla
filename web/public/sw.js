@@ -1,5 +1,5 @@
-const CACHE = 'ecla-static-v1'
-const SHELL = ['/offline.html', '/favicon.svg', '/manifest.webmanifest']
+const CACHE = 'ecla-static-v2'
+const SHELL = ['/offline.html', '/brand/ecla-app-icon.png', '/manifest.webmanifest']
 self.addEventListener('install', event => event.waitUntil(caches.open(CACHE).then(cache => cache.addAll(SHELL))))
 self.addEventListener('activate', event => event.waitUntil(caches.keys().then(keys => Promise.all(keys.filter(key => key !== CACHE).map(key => caches.delete(key))))))
 self.addEventListener('fetch', event => {

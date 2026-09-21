@@ -1,15 +1,17 @@
 import assert from 'node:assert/strict'
 import test from 'node:test'
 
-import { apiFetch } from '../src/lib/apiClient'
+import { apiFetch, authFetch } from '../src/lib/apiClient'
 
 test('waits for Clerk to expose the first session token', async () => {
     const originalFetch = globalThis.fetch
     let tokenCalls = 0
     let authorization = ''
+    let cacheMode: RequestCache | undefined
 
     globalThis.fetch = async (_input, init) => {
         authorization = new Headers(init?.headers).get('Authorization') ?? ''
+        cacheMode = init?.cache
         return Response.json({ ready: true })
     }
 
@@ -22,6 +24,7 @@ test('waits for Clerk to expose the first session token', async () => {
         assert.deepEqual(result, { ready: true })
         assert.equal(tokenCalls, 2)
         assert.equal(authorization, 'Bearer session-token')
+        assert.equal(cacheMode, 'no-store')
     } finally {
         globalThis.fetch = originalFetch
     }
@@ -48,6 +51,30 @@ test('refreshes the Clerk token once after a first-load 401', async () => {
         assert.deepEqual(result, { ready: true })
         assert.deepEqual(authorizations, ['Bearer cached-token', 'Bearer fresh-token'])
         assert.deepEqual(tokenOptions, [undefined, { skipCache: true }])
+    } finally {
+        globalThis.fetch = originalFetch
+    }
+})
+
+test('preserves an explicit audio content type for authenticated transcription', async () => {
+    const originalFetch = globalThis.fetch
+    let contentType = ''
+
+    globalThis.fetch = async (_input, init) => {
+        contentType = new Headers(init?.headers).get('Content-Type') ?? ''
+        return Response.json({ text: 'hola' })
+    }
+
+    try {
+        const audio = new Blob(['recording'], { type: 'audio/webm' })
+        const response = await authFetch('/api/v1/voice/transcribe', async () => 'session-token', {
+            method: 'POST',
+            headers: { 'Content-Type': audio.type },
+            body: audio,
+        })
+
+        assert.equal(response.ok, true)
+        assert.equal(contentType, 'audio/webm')
     } finally {
         globalThis.fetch = originalFetch
     }

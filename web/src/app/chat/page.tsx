@@ -1,27 +1,22 @@
 'use client'
 
-import { API_URL } from '@/lib/apiClient'
-
-/**
- * /chat — AI tutor conversational interface (premium pass).
- * Text-based chat with voice mode toggle, dictation, bilingual display,
- * suggestion chips, auto-scrolling, typing indicator.
- */
-import { useEffect, useRef, useState, Suspense, KeyboardEvent } from 'react'
-import { useStoredPreference } from '@/hooks/useStoredPreference'
+import { Suspense, useEffect, useRef, useState, type KeyboardEvent } from 'react'
 import { useSearchParams } from 'next/navigation'
-import { useAuth } from '@clerk/nextjs'
-import { ArrowUp, Mic, Volume2, VolumeX, AudioLines } from 'lucide-react'
+import { ArrowUp, AudioLines, Mic, Volume2, VolumeX } from 'lucide-react'
 import AppShell from '@/components/layout/AppShell'
+import ApiState from '@/components/ApiState'
 import VoiceCall, { type CallLine } from '@/components/VoiceCall'
+import { useAuthReady } from '@/hooks/useAuthReady'
+import { useStoredPreference } from '@/hooks/useStoredPreference'
+import { apiFetch, ApiError } from '@/lib/apiClient'
 import { speakSpanish, cancelSpeech } from '@/lib/speech'
 
-
 type Msg = { role: 'user' | 'assistant'; content: string }
+type ChatContext = { currentCompetency?: { canDo: string }; weakDimensions?: string[] }
 
 const SUGGESTIONS = [
     '¡Hola! ¿Cómo estás?',
-    '¿Cómo se dice "thank you"?',
+    '¿Cómo se dice “thank you”?',
     'Háblame de tu día',
 ]
 
@@ -31,14 +26,14 @@ function splitReply(content: string): { spanish: string; english?: string } {
 }
 
 function ChatPageContent() {
-
     const searchParams = useSearchParams()
-    const { getToken } = useAuth()
-
+    const { isLoaded, isSignedIn, getToken } = useAuthReady()
     const [messages, setMessages] = useState<Msg[]>([])
     const [input, setInput] = useState(searchParams.get('seed') ?? '')
     const [thinking, setThinking] = useState(false)
-    const [chatContext, setChatContext] = useState<{ currentCompetency?: { canDo: string }; weakDimensions?: string[] } | null>(null)
+    const [chatContext, setChatContext] = useState<ChatContext | null>(null)
+    const [sendError, setSendError] = useState<ApiError | null>(null)
+    const [voiceError, setVoiceError] = useState<string | null>(null)
     const [voicePreference, setVoicePreference] = useStoredPreference('ecla-voice-mode', 'off')
     const voiceMode = voicePreference === 'on'
     const [recording, setRecording] = useState(false)
@@ -48,33 +43,38 @@ function ChatPageContent() {
     const scrollRef = useRef<HTMLDivElement>(null)
     const textareaRef = useRef<HTMLTextAreaElement>(null)
     const thinkingRef = useRef(false)
+    const activeRef = useRef(true)
     const mediaRecorderRef = useRef<MediaRecorder | null>(null)
+    const mediaStreamRef = useRef<MediaStream | null>(null)
     const chunksRef = useRef<Blob[]>([])
 
     useEffect(() => {
-        ;(async () => {
-            try {
-                const token = await getToken()
-                const res = await fetch(`${API_URL}/api/v1/learner/chat-context`, {
-                    headers: { Authorization: `Bearer ${token}` },
-                })
-                if (res.ok) {
-                    const data = await res.json()
-                    setChatContext(data.context)
-                }
-            } catch { /* non-blocking */ }
-        })()
-    }, [searchParams, getToken])
+        activeRef.current = true
+        return () => {
+            activeRef.current = false
+            cancelSpeech()
+            mediaStreamRef.current?.getTracks().forEach(track => track.stop())
+        }
+    }, [])
+
+    useEffect(() => {
+        if (!isLoaded || !isSignedIn) return
+        let cancelled = false
+        apiFetch<{ context?: ChatContext }>('/api/v1/learner/chat-context', getToken)
+            .then(data => { if (!cancelled) setChatContext(data.context ?? null) })
+            .catch(() => { /* Context improves focus but does not block conversation. */ })
+        return () => { cancelled = true }
+    }, [getToken, isLoaded, isSignedIn])
 
     useEffect(() => {
         scrollRef.current?.scrollTo({ top: scrollRef.current.scrollHeight, behavior: 'smooth' })
     }, [messages, thinking])
 
     useEffect(() => {
-        const ta = textareaRef.current
-        if (!ta) return
-        ta.style.height = 'auto'
-        ta.style.height = `${Math.min(ta.scrollHeight, 120)}px`
+        const textarea = textareaRef.current
+        if (!textarea) return
+        textarea.style.height = 'auto'
+        textarea.style.height = `${Math.min(textarea.scrollHeight, 120)}px`
     }, [input])
 
     const speakOpts = {
@@ -84,38 +84,39 @@ function ChatPageContent() {
 
     const send = async (text: string) => {
         const clean = text.trim()
-        if (!clean || thinkingRef.current) return
+        if (!clean || thinkingRef.current || !isSignedIn) return
+        const previous = messages
+        const next = [...previous, { role: 'user' as const, content: clean }]
         setInput('')
+        setSendError(null)
         cancelSpeech()
         setSpeaking(false)
-        const next = [...messages, { role: 'user' as const, content: clean }]
         setMessages(next)
         setThinking(true)
         thinkingRef.current = true
         try {
-            const token = await getToken()
-            const res = await fetch(`${API_URL}/api/v1/chat`, {
+            const data = await apiFetch<{ reply?: string }>('/api/v1/chat', getToken, {
                 method: 'POST',
-                headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
                 body: JSON.stringify({
-                    messages: next.map(m => ({ role: m.role, content: m.content })),
+                    messages: next.map(message => ({ role: message.role, content: message.content })),
                     voice: voiceMode,
                 }),
             })
-            const data = await res.json()
-            const reply = data.reply ?? '…'
-            setMessages(m => [...m, { role: 'assistant', content: reply }])
+            if (typeof data.reply !== 'string' || !data.reply.trim()) throw new ApiError('server', 'Ecla returned an empty response.')
+            const reply = data.reply.trim()
+            setMessages(current => [...current, { role: 'assistant', content: reply }])
             if (voiceMode) speakSpanish(reply, speakOpts)
-        } catch (e) {
-            console.error(e)
-            setMessages(m => [...m, { role: 'assistant', content: '(Ecla lost the connection. Try again!)' }])
+        } catch (reason) {
+            setMessages(previous)
+            setInput(clean)
+            setSendError(reason instanceof ApiError ? reason : new ApiError('network', 'Ecla lost the connection.'))
         } finally {
             setThinking(false)
             thinkingRef.current = false
         }
     }
 
-    const toggleVoiceMode = () => {
+    const toggleVoiceReplies = () => {
         cancelSpeech()
         setSpeaking(false)
         setVoicePreference(voiceMode ? 'off' : 'on')
@@ -124,11 +125,11 @@ function ChatPageContent() {
     const handleCallEnd = (callLines: CallLine[]) => {
         setShowCall(false)
         if (callLines.length) {
-            setMessages(m => [
-                ...m,
-                ...callLines.map(l => ({
-                    role: (l.role === 'user' ? 'user' : 'assistant') as 'user' | 'assistant',
-                    content: l.text,
+            setMessages(current => [
+                ...current,
+                ...callLines.map(line => ({
+                    role: (line.role === 'user' ? 'user' : 'assistant') as Msg['role'],
+                    content: line.text,
                 })),
             ])
         }
@@ -136,223 +137,133 @@ function ChatPageContent() {
 
     const startRecording = async () => {
         if (thinkingRef.current) return
+        setVoiceError(null)
         cancelSpeech()
         setSpeaking(false)
+        if (!navigator.mediaDevices?.getUserMedia || typeof MediaRecorder === 'undefined') {
+            setVoiceError('Voice dictation is not supported in this browser. You can keep typing.')
+            return
+        }
         try {
             const stream = await navigator.mediaDevices.getUserMedia({ audio: true })
             const mediaRecorder = new MediaRecorder(stream)
+            mediaStreamRef.current = stream
             mediaRecorderRef.current = mediaRecorder
             chunksRef.current = []
-            mediaRecorder.ondataavailable = e => {
-                if (e.data.size > 0) chunksRef.current.push(e.data)
+            mediaRecorder.ondataavailable = event => {
+                if (event.data.size > 0) chunksRef.current.push(event.data)
             }
             mediaRecorder.onstop = async () => {
-                const blob = new Blob(chunksRef.current, { type: 'audio/webm' })
-                stream.getTracks().forEach(t => t.stop())
+                stream.getTracks().forEach(track => track.stop())
+                mediaStreamRef.current = null
+                if (!activeRef.current) return
+                const blob = new Blob(chunksRef.current, { type: mediaRecorder.mimeType || 'audio/webm' })
+                if (!blob.size) {
+                    setVoiceError('No speech was captured. Try again or type your message.')
+                    return
+                }
                 try {
-                    const token = await getToken()
-                    const res = await fetch(`${API_URL}/api/v1/voice/transcribe`, {
+                    const data = await apiFetch<{ text?: string }>('/api/v1/voice/transcribe', getToken, {
                         method: 'POST',
-                        headers: { Authorization: `Bearer ${token}`, 'Content-Type': blob.type },
+                        headers: { 'Content-Type': blob.type },
                         body: blob,
                     })
-                    const data = await res.json()
-                    if (data.text?.trim()) {
-                        if (thinkingRef.current) setInput(data.text.trim())
-                        else send(data.text.trim())
-                    }
-                } catch (e) {
-                    console.error('Transcription failed:', e)
+                    const transcript = data.text?.trim()
+                    if (transcript) await send(transcript)
+                    else setVoiceError('No words were recognized. Try again or type your message.')
+                } catch (reason) {
+                    setVoiceError(reason instanceof ApiError ? reason.message : 'Voice transcription is unavailable. You can keep typing.')
                 }
             }
             mediaRecorder.start()
             setRecording(true)
-        } catch (e) {
-            console.error('Mic access denied:', e)
+        } catch {
+            setVoiceError('Microphone access is unavailable. Allow access or keep typing.')
         }
     }
 
     const stopRecording = () => {
-        if (mediaRecorderRef.current && recording) {
-            mediaRecorderRef.current.stop()
-            setRecording(false)
-        }
+        if (mediaRecorderRef.current?.state === 'recording') mediaRecorderRef.current.stop()
+        setRecording(false)
     }
 
-    const handleKeyDown = (e: KeyboardEvent<HTMLTextAreaElement>) => {
-        if (e.key === 'Enter' && !e.shiftKey) {
-            e.preventDefault()
+    const handleKeyDown = (event: KeyboardEvent<HTMLTextAreaElement>) => {
+        if (event.key === 'Enter' && !event.shiftKey) {
+            event.preventDefault()
             send(input)
         }
     }
 
+    if (!isLoaded) {
+        return <AppShell><div className="flex min-h-[60vh] items-center justify-center" role="status"><div className="text-center"><span className="ecla-loading-mark mx-auto block text-ember-soft" /><p className="font-display mt-5 text-2xl text-ivory">Preparing the conversation…</p></div></div></AppShell>
+    }
+
+    if (!isSignedIn) {
+        return <AppShell><div className="mx-auto max-w-2xl py-16"><ApiState error={new ApiError('unauthorized', 'Your session needs to be renewed.', 401)} /></div></AppShell>
+    }
+
     return (
         <AppShell>
-            <div className="flex h-[calc(100vh-3.5rem)] flex-col">
-                <div className="border-b border-white/5 bg-[#0B0B10]/90 backdrop-blur">
-                    <div className="mx-auto flex h-14 max-w-2xl items-center justify-between px-4">
-                        <div className="flex items-center gap-2">
-                            <span className="text-sm font-semibold text-cream">AI Tutor</span>
-                        </div>
-                        <button
-                            onClick={toggleVoiceMode}
-                            title={voiceMode ? 'Voice replies on' : 'Voice replies off'}
-                            className={`flex h-8 w-8 items-center justify-center rounded-full transition-colors ${
-                                voiceMode ? 'text-glow' : 'text-cream/50 hover:bg-white/5 hover:text-cream'
-                            }`}
-                        >
-                            {voiceMode ? <Volume2 className="h-4 w-4" /> : <VolumeX className="h-4 w-4" />}
+            <section className="ecla-surface mx-auto flex h-[calc(100dvh-9.5rem)] min-h-[28rem] min-w-0 max-w-4xl flex-col overflow-hidden rounded-[22px] sm:rounded-experience xl:h-[calc(100dvh-8rem)] xl:max-h-[52rem]">
+                <header className="flex min-w-0 items-center justify-between gap-4 border-b border-line bg-surface px-4 py-3 sm:px-6">
+                    <div className="min-w-0"><h1 className="truncate text-sm font-semibold text-ivory">Ecla conversation</h1><p className="mt-0.5 truncate text-xs text-ash">Spanish · adapts to your current level</p></div>
+                    <div className="flex shrink-0 items-center gap-2">
+                        <button onClick={toggleVoiceReplies} aria-pressed={voiceMode} aria-label={voiceMode ? 'Turn voice replies off' : 'Turn voice replies on'} className={`ecla-control flex min-h-11 items-center gap-2 rounded-control border px-3 text-xs ${voiceMode ? 'border-ember/30 bg-ember/10 text-ember-soft' : 'border-line bg-surface text-stone hover:text-ivory'}`}>
+                            {voiceMode ? <Volume2 className="size-4" /> : <VolumeX className="size-4" />}<span className="hidden sm:inline">Voice replies</span>
                         </button>
                     </div>
-                </div>
+                </header>
 
-                <div ref={scrollRef} className="flex-1 min-h-0 overflow-y-auto overscroll-contain">
-                    <div className="mx-auto flex min-h-full max-w-2xl flex-col px-4 py-6">
+                <div ref={scrollRef} className="min-h-0 flex-1 overflow-y-auto overscroll-contain">
+                    <div className="mx-auto flex min-h-full max-w-3xl flex-col px-3 py-3 sm:px-6 sm:py-6">
                         {messages.length === 0 && !thinking ? (
-                            <div className="flex flex-1 flex-col items-center justify-center gap-6">
-                                <div className="text-center">
-                                    <h2 className="font-display text-lg font-semibold text-cream">Practice in context</h2>
-                                    <p className="mt-1 text-sm text-cream/50">
-                                        {chatContext?.currentCompetency
-                                            ? `Focused on: ${chatContext.currentCompetency.canDo}`
-                                            : 'Conversation stays inside your current competency.'}
-                                    </p>
-                                    {chatContext?.weakDimensions?.length ? (
-                                        <p className="mt-2 text-xs text-glow">
-                                            Practicing: {chatContext.weakDimensions.join(', ')}
-                                        </p>
-                                    ) : null}
-                                </div>
-                                <div className="flex flex-wrap justify-center gap-2">
-                                    {SUGGESTIONS.map(s => (
-                                        <button
-                                            key={s}
-                                            onClick={() => send(s)}
-                                            className="rounded-full border border-white/10 bg-[#13131B] px-4 py-2 text-xs font-medium text-cream/60 transition-colors hover:border-white/20 hover:text-cream active:scale-[0.98]"
-                                        >
-                                            {s}
-                                        </button>
-                                    ))}
+                            <div className="flex min-h-full items-center justify-center py-8 sm:py-12">
+                                <div className="w-full max-w-xl text-center">
+                                    <span className="mx-auto flex size-14 items-center justify-center rounded-full border border-ember/30 bg-ember/10 text-ember-soft"><AudioLines className="size-6" /></span>
+                                    <h2 className="font-display mt-5 text-3xl leading-tight text-ivory sm:text-4xl">What would you like to say?</h2>
+                                    <p className="mx-auto mt-3 max-w-md text-sm leading-6 text-stone">{chatContext?.currentCompetency ? chatContext.currentCompetency.canDo : 'Speak naturally, ask a question, or practice a short Spanish exchange.'}</p>
+                                    <div className="mt-6 flex flex-wrap justify-center gap-2">
+                                        {SUGGESTIONS.map(suggestion => <button key={suggestion} onClick={() => send(suggestion)} className="ecla-control min-h-11 rounded-full border border-line-strong bg-surface px-4 text-sm text-stone hover:border-ember/35 hover:text-ivory">{suggestion}</button>)}
+                                    </div>
                                 </div>
                             </div>
                         ) : (
-                            <div className="space-y-3">
-                                {messages.map((m, i) => {
-                                    if (m.role === 'user') {
-                                        return (
-                                            <div key={i} className="flex justify-end">
-                                                <div className="max-w-[80%] rounded-2xl rounded-br-md bg-glow px-4 py-2.5 text-sm font-medium leading-relaxed text-night-900">
-                                                    {m.content}
-                                                </div>
-                                            </div>
-                                        )
-                                    }
-                                    const { spanish, english } = splitReply(m.content)
-                                    return (
-                                        <div key={i} className="group flex items-center gap-1.5">
-                                            <div className="max-w-[80%] rounded-2xl rounded-bl-md border border-white/5 bg-[#13131B] px-4 py-2.5 text-sm leading-relaxed text-cream/90">
-                                                {spanish}
-                                                {english && (
-                                                    <p className="mt-1 text-[11px] italic leading-snug text-cream/45">{english}</p>
-                                                )}
-                                            </div>
-                                            <button
-                                                onClick={() => { cancelSpeech(); speakSpanish(m.content, speakOpts) }}
-                                                title="Hear it"
-                                                className="text-cream/25 transition-opacity hover:text-glow sm:opacity-0 sm:group-hover:opacity-100"
-                                            >
-                                                <Volume2 className="h-3.5 w-3.5" />
-                                            </button>
-                                        </div>
-                                    )
+                            <div className="mt-auto space-y-4" aria-live="polite">
+                                {messages.map((message, index) => {
+                                    if (message.role === 'user') return <div key={index} className="flex justify-end"><div className="max-w-[88%] break-words rounded-surface rounded-br-sm bg-ember px-4 py-3 text-sm font-medium leading-6 text-obsidian sm:max-w-[75%]">{message.content}</div></div>
+                                    const { spanish, english } = splitReply(message.content)
+                                    return <div key={index} className="group flex min-w-0 items-end gap-2"><div className="max-w-[88%] break-words rounded-surface rounded-bl-sm border border-line bg-surface-raised px-4 py-3 text-sm leading-6 text-ivory shadow-sm sm:max-w-[75%]"><p lang="es">{spanish}</p>{english ? <p className="mt-2 border-t border-line pt-2 text-xs leading-5 text-stone">{english}</p> : null}</div><button onClick={() => { cancelSpeech(); speakSpanish(message.content, speakOpts) }} aria-label="Hear this reply" className="ecla-control flex size-11 shrink-0 items-center justify-center rounded-full text-ash hover:bg-surface hover:text-ember-soft"><Volume2 className="size-4" /></button></div>
                                 })}
-                                {thinking && (
-                                    <div className="flex justify-start">
-                                        <div className="flex items-center gap-1.5 rounded-2xl rounded-bl-md border border-white/5 bg-[#13131B] px-4 py-3">
-                                            {[0, 1, 2].map(i => (
-                                                <span
-                                                    key={i}
-                                                    className="h-1.5 w-1.5 rounded-full bg-cream/40"
-                                                    style={{ animation: 'ecla-bounce 1.2s ease-in-out infinite', animationDelay: `${i * 150}ms` }}
-                                                />
-                                            ))}
-                                        </div>
-                                    </div>
-                                )}
+                                {thinking ? <div className="flex justify-start"><div className="flex items-center gap-2 rounded-surface rounded-bl-sm border border-line bg-carbon px-4 py-3" role="status" aria-label="Ecla is thinking"><span className="ecla-loading-mark text-ember-soft" /><span className="text-xs text-stone">Ecla is listening to the meaning…</span></div></div> : null}
                             </div>
                         )}
                     </div>
                 </div>
 
-                <div className="border-t border-white/5 bg-[#0B0B10]/90 backdrop-blur pb-[env(safe-area-inset-bottom)]">
-                    <div className="mx-auto max-w-2xl px-4 py-3">
-                        {(recording || speaking) && (
-                            <p className={`mb-2 text-center text-[11px] font-medium ${recording ? 'text-coral' : 'text-glow'}`}>
-                                {recording ? 'Listening… tap the mic to send' : 'Ecla is speaking…'}
-                            </p>
-                        )}
-                        <div className="flex items-end gap-1 rounded-full border border-white/10 bg-[#13131B] p-2 transition-colors focus-within:border-glow/40">
-                            <textarea
-                                ref={textareaRef}
-                                value={input}
-                                onChange={e => setInput(e.target.value)}
-                                onKeyDown={handleKeyDown}
-                                placeholder="Ask Ecla anything…"
-                                rows={1}
-                                enterKeyHint="send"
-                                className="max-h-[120px] flex-1 resize-none self-center bg-transparent px-3 py-1.5 text-sm text-cream placeholder:text-cream/30 focus:outline-none"
-                            />
-                            <button
-                                onClick={recording ? stopRecording : startRecording}
-                                disabled={thinking}
-                                title={recording ? 'Stop and send' : 'Dictate'}
-                                className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-full transition-colors disabled:opacity-40 active:scale-[0.98] ${
-                                    recording
-                                        ? 'bg-coral/15 text-coral animate-pulse'
-                                        : 'text-cream/50 hover:bg-white/5 hover:text-cream'
-                                }`}
-                            >
-                                <Mic className="h-4 w-4" />
-                            </button>
-                            <button
-                                onClick={() => (input.trim() ? send(input) : setShowCall(true))}
-                                disabled={thinking && !!input.trim()}
-                                title={input.trim() ? 'Send' : 'Voice mode — talk with Ecla'}
-                                className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-full transition-all disabled:opacity-40 active:scale-[0.98] ${
-                                    input.trim()
-                                        ? 'bg-glow text-night-900 hover:bg-glow/90'
-                                        : 'bg-glow/15 text-glow hover:bg-glow/25'
-                                }`}
-                            >
-                                {input.trim() ? <ArrowUp className="h-4 w-4" /> : <AudioLines className="h-4 w-4" />}
-                            </button>
+                <footer className="border-t border-line bg-surface px-3 py-3 backdrop-blur-xl sm:px-5">
+                    <div className="mx-auto max-w-3xl">
+                        {sendError ? <div className="mb-2"><ApiState error={sendError} onRetry={() => send(input)} /></div> : null}
+                        {voiceError ? <p role="status" className="mb-2 rounded-control border border-warning/30 bg-warning/10 px-3 py-2 text-xs leading-5 text-ivory">{voiceError}</p> : null}
+                        {(recording || speaking) ? <p className={`mb-2 text-center text-xs ${recording ? 'text-danger-soft' : 'text-ember-soft'}`}>{recording ? 'Listening… tap Stop when you are finished.' : 'Ecla is speaking…'}</p> : null}
+                        <div className="flex min-w-0 items-end gap-1.5 rounded-surface border border-line-strong bg-carbon p-1.5 focus-within:border-ember/45">
+                            <textarea ref={textareaRef} value={input} onChange={event => { setInput(event.target.value); setSendError(null) }} onKeyDown={handleKeyDown} placeholder="Say something in Spanish…" aria-label="Message Ecla" rows={1} enterKeyHint="send" maxLength={2000} className="max-h-[120px] min-h-11 min-w-0 flex-1 resize-none self-center bg-transparent px-3 py-2 text-sm leading-6 text-ivory placeholder:text-ash focus:outline-none" />
+                            <button onClick={recording ? stopRecording : startRecording} disabled={thinking} aria-label={recording ? 'Stop recording and transcribe' : 'Dictate a message'} className={`ecla-control flex size-11 shrink-0 items-center justify-center rounded-full ${recording ? 'animate-mic-pulse bg-danger text-ivory' : 'text-stone hover:bg-surface hover:text-ivory'}`}>{recording ? <span className="size-3 rounded-sm bg-current" /> : <Mic className="size-4" />}</button>
+                            {input.trim() ? (
+                                <button onClick={() => send(input)} disabled={thinking} aria-label="Send message" className="ecla-control flex size-11 shrink-0 items-center justify-center rounded-full bg-ember text-obsidian hover:bg-ember-soft"><ArrowUp className="size-4" /></button>
+                            ) : (
+                                <button onClick={() => setShowCall(true)} disabled={thinking || recording} aria-label="Start a live voice conversation" className="ecla-control flex size-11 shrink-0 items-center justify-center rounded-full bg-ember text-obsidian hover:bg-ember-soft"><AudioLines className="size-4" /></button>
+                            )}
                         </div>
+                        <p className="mt-2 text-center text-[11px] leading-4 text-ash">Enter to send · Shift + Enter for a new line</p>
                     </div>
-                </div>
+                </footer>
 
-                <style>{`
-                    @keyframes ecla-bounce {
-                        0%, 60%, 100% { transform: translateY(0); opacity: 0.4; }
-                        30% { transform: translateY(-3px); opacity: 1; }
-                    }
-                `}</style>
-
-                {showCall && <VoiceCall onEnd={handleCallEnd} />}
-            </div>
+                {showCall ? <VoiceCall onEnd={handleCallEnd} /> : null}
+            </section>
         </AppShell>
     )
 }
 
 export default function ChatPage() {
-    return (
-        <Suspense
-            fallback={
-                <div className="flex h-[calc(100vh-3.5rem)] items-center justify-center bg-[#0B0B10]">
-                    <div className="h-8 w-8 animate-spin rounded-full border-2 border-glow border-t-transparent" />
-                </div>
-            }
-        >
-            <ChatPageContent />
-        </Suspense>
-    )
+    return <Suspense fallback={<div className="flex min-h-dvh items-center justify-center bg-obsidian text-stone" role="status">Preparing the conversation…</div>}><ChatPageContent /></Suspense>
 }

@@ -1,6 +1,6 @@
 'use client'
 
-import { API_URL } from '@/lib/apiClient'
+import { authFetch } from '@/lib/apiClient'
 
 /**
  * SceneExperience — three-zone organism with mobile drawers (Phase S3.3 + S3.5 + S3.7 + Adaptive + Phase 3).
@@ -36,9 +36,7 @@ export default function SceneExperience({ scene, tools, mastery, getToken, onCom
     useEffect(() => {
         (async () => {
             try {
-                const token = await getToken()
-                const r = await fetch(`${API_URL}/api/v1/learner/recent-accuracy`, {
-                    headers: { Authorization: `Bearer ${token}` },
+                const r = await authFetch(`/api/v1/learner/recent-accuracy`, getToken, {
                 })
                 const j = await r.json()
                 if (typeof j?.recentAccuracy === 'number') setRecentAccuracy(j.recentAccuracy)
@@ -55,7 +53,7 @@ export default function SceneExperience({ scene, tools, mastery, getToken, onCom
     const { isMuted, toggleMute } = useSceneAudio(scene.environment, engine.stage, engine.feedback)
 
     const drawer =
-        'fixed inset-x-0 top-14 bottom-0 z-40 overflow-y-auto bg-[#0B0B10]/95 p-4 backdrop-blur'
+        'fixed inset-x-0 top-14 bottom-0 z-40 overflow-y-auto bg-obsidian/95 p-4 backdrop-blur'
 
     return (
         <>

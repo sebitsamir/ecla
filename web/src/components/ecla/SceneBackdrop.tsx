@@ -35,7 +35,7 @@ export default function SceneBackdrop({ environment, setting, title, timeOfDay =
         <div className="relative h-48 sm:h-56 w-full overflow-hidden border-b border-white/5">
             {/* Layer 1 — the world, breathing slowly */}
             <div
-                className={`absolute inset-0 bg-cover bg-center animate-breathe ${isEvening ? 'brightness-50 saturate-125' : 'brightness-90'}`}
+                className={`absolute inset-0 bg-cover bg-center animate-breathe ${isEvening ? 'brightness-75 saturate-110' : 'brightness-95'}`}
                 style={{ backgroundImage: `url(${IMAGES[environment]})` }}
             />
 
@@ -45,10 +45,10 @@ export default function SceneBackdrop({ environment, setting, title, timeOfDay =
             {/* Layer 3 — readability overlay */}
             <div className={`absolute inset-0 ${
                 isEvening
-                    ? 'bg-gradient-to-t from-[#0B0B10] via-[#0B0B10]/90 to-[#1A1025]/60'
+                    ? 'bg-obsidian/38'
                     : isBusy
-                        ? 'bg-gradient-to-t from-[#0B0B10] via-[#0B0B10]/85 to-[#0B0B10]/50'
-                        : 'bg-gradient-to-t from-[#0B0B10] via-[#0B0B10]/70 to-[#0B0B10]/30'
+                        ? 'bg-obsidian/32'
+                        : 'bg-obsidian/25'
             }`} />
 
             {/* Layer 4 — the person in the space */}
@@ -62,7 +62,7 @@ export default function SceneBackdrop({ environment, setting, title, timeOfDay =
             )}
 
             {/* Layer 5 — vignette */}
-            <div className="absolute inset-0 shadow-[inset_0_0_100px_rgba(0,0,0,0.8)]" />
+            <div className="absolute inset-0 shadow-[inset_0_0_100px_rgba(0,0,0,0.48)]" />
 
             {/* Layer 6 — typography (responsive) */}
             <div className="relative z-10 flex h-full flex-col justify-end px-4 pb-4 sm:px-8 sm:pb-6">
@@ -70,7 +70,7 @@ export default function SceneBackdrop({ environment, setting, title, timeOfDay =
                     {setting}
                 </p>
                 {title && (
-                    <h2 className="font-display text-xl sm:text-3xl font-bold text-cream tracking-tight drop-shadow-lg pr-16 sm:pr-0">
+                    <h2 className="font-display text-xl sm:text-3xl font-normal text-cream tracking-tight drop-shadow-lg pr-16 sm:pr-0">
                         {title}
                     </h2>
                 )}

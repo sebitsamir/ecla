@@ -12,7 +12,7 @@ const users: string[] = []
 after(async () => { await db.characterMemory.deleteMany({ where: { userId: { in: users } } }); await db.learnerEvent.deleteMany({ where: { userId: { in: users } } }); await db.user.deleteMany({ where: { id: { in: users } } }); await db.rateLimitBucket.deleteMany({ where: { key: { startsWith: 'operation-test:' } } }); await db.$disconnect() })
 
 test('PostgreSQL rate buckets count concurrent requests atomically', async () => {
-    const store = new PostgresRateLimitStore(db); const key = `operation-test:${randomUUID()}`; const start = new Date('2026-09-02T00:00:00Z'); const expiry = new Date('2026-09-03T00:00:00Z')
+    const store = new PostgresRateLimitStore(db); const key = `operation-test:${randomUUID()}`; const start = new Date(); const expiry = new Date(start.getTime() + 86_400_000)
     const counts = await Promise.all(Array.from({ length: 20 }, () => store.consume(key, start, expiry)))
     assert.deepEqual(counts.sort((a,b) => a-b), Array.from({ length: 20 }, (_, index) => index + 1))
     assert.equal((await db.rateLimitBucket.findUniqueOrThrow({ where: { key } })).count, 20)

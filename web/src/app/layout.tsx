@@ -4,9 +4,10 @@ import { ClerkProvider } from "@clerk/nextjs";
 import { PostHogProvider } from '@/components/PostHogProvider';
 import FeedbackButton from '@/components/FeedbackButton'; // <--- ADD THIS
 import ServiceWorkerRegistration from '@/components/ServiceWorkerRegistration'
+import { ThemeProvider } from '@/components/ThemeProvider'
 import "./globals.css";
 
-const instrumentserif = Instrument_Serif({ subsets: ['latin'], variable: '--font-ecla-display', weight: ['400'] })
+const instrumentSerif = Instrument_Serif({ subsets: ['latin'], variable: '--font-ecla-display', weight: ['400'], display: 'swap' })
 const geist = Geist({ subsets: ['latin'], variable: '--font-ecla-body', display: 'swap' })
 
 export const viewport = {
@@ -14,11 +15,13 @@ export const viewport = {
   initialScale: 1,
 }
 export const metadata: Metadata = {
-  title: 'Ecla',
-  description: 'One curriculum. Four ways to learn.',
-  icons: [{ url: '/favicon.svg', type: 'image/svg+xml' }],
+  title: 'ECLA',
+  description: 'A more human way to learn languages.',
+  icons: [{ url: '/brand/ecla-app-icon.png', type: 'image/png', sizes: '512x512' }],
   manifest: '/manifest.webmanifest',
 };
+
+const themeBootScript = `(function(){try{var p=localStorage.getItem('ecla-theme');if(p!=='light'&&p!=='dark'&&p!=='system')p='system';var t=p==='system'?(matchMedia('(prefers-color-scheme: light)').matches?'light':'dark'):p;document.documentElement.dataset.theme=t;document.documentElement.dataset.themePreference=p;document.documentElement.style.colorScheme=t}catch(e){document.documentElement.dataset.theme='dark'}})()`
 
 export default function RootLayout({
   children,
@@ -26,15 +29,21 @@ export default function RootLayout({
   children: React.ReactNode;
 }) {
   return (
-    <html lang="en">
-      <body className={`${instrumentserif.variable} ${geist.variable}`}>
-        <ClerkProvider dynamic>
-          <PostHogProvider>
-            {children}
-            <FeedbackButton />
-            <ServiceWorkerRegistration />
-          </PostHogProvider>
-        </ClerkProvider>
+    <html lang="en" suppressHydrationWarning>
+      <head>
+        <meta name="theme-color" content="#08111a" />
+        <script dangerouslySetInnerHTML={{ __html: themeBootScript }} />
+      </head>
+      <body className={`${instrumentSerif.variable} ${geist.variable}`}>
+        <ThemeProvider>
+          <ClerkProvider dynamic>
+            <PostHogProvider>
+              {children}
+              <FeedbackButton />
+              <ServiceWorkerRegistration />
+            </PostHogProvider>
+          </ClerkProvider>
+        </ThemeProvider>
       </body>
     </html>
   );

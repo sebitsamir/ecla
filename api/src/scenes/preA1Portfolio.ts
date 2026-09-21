@@ -35,9 +35,17 @@ export async function seedPreA1PortfolioScenes(db: PrismaClient) {
     if (!report.passed) throw new Error(`Pre-A1 portfolio invalid: ${report.errors.join('; ')}`)
     const stored = new Set((await db.competency.findMany({ where: { code: { in: [...PRE_A1_CODES] } }, select: { code: true } })).map(row => row.code))
     const missing = [...PRE_A1_CODES].filter(code => !stored.has(code))
-    if (missing.length) throw new Error(`Seed the complete Pre-A1 structure before portfolio scenes. Missing ${missing.length} competencies: ${missing.join(', ')}`)
+    if (missing.length) console.warn(`Skipping scene drafts for ${missing.length} competencies that are not installed: ${missing.join(', ')}`)
     const platform = new ScenePlatform(db)
-    const rows = []
-    for (const source of portfolioSceneSources()) rows.push(await platform.draft('seed:pre-a1-portfolio/1', source))
+    const sources = portfolioSceneSources().filter(source => stored.has(source.competencyCode))
+    const existing = await db.scene.findMany({
+        where: { slug: { in: sources.map(source => source.slug) } },
+        include: { revisions: { orderBy: [{ createdAt: 'desc' }, { id: 'desc' }], take: 1 } },
+    })
+    const rowsBySlug = new Map(existing.flatMap(scene => scene.revisions[0] ? [[scene.slug, scene.revisions[0]] as const] : []))
+    for (const source of sources) {
+        if (!rowsBySlug.has(source.slug)) rowsBySlug.set(source.slug, await platform.draft('seed:pre-a1-portfolio/1', source))
+    }
+    const rows = sources.map(source => rowsBySlug.get(source.slug)!)
     return { rows, reviewBlockers: report.reviewBlockers }
 }

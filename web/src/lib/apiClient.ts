@@ -51,16 +51,18 @@ async function acquireToken(getToken: TokenGetter, skipCache = false): Promise<s
     throw new ApiError('unauthorized', 'Your session is still starting. Please retry.', 401)
 }
 
-async function authenticatedFetch(path: string, getToken: TokenGetter, init?: RequestInit) {
+export async function authFetch(path: string, getToken: TokenGetter, init?: RequestInit) {
     const request = async (skipCache = false) => {
         const token = await acquireToken(getToken, skipCache)
+        const headers = new Headers(init?.headers)
+        headers.set('Authorization', `Bearer ${token}`)
+        if (init?.body && !(init.body instanceof FormData) && !headers.has('Content-Type')) {
+            headers.set('Content-Type', 'application/json')
+        }
         return fetch(`${API_URL}${path}`, {
             ...init,
-            headers: {
-                ...(init?.headers ?? {}),
-                Authorization: `Bearer ${token}`,
-                ...(init?.body && !(init.body instanceof FormData) ? { 'Content-Type': 'application/json' } : {}),
-            },
+            cache: init?.cache ?? 'no-store',
+            headers,
         })
     }
 
@@ -74,7 +76,7 @@ export async function apiFetch<T>(
     init?: RequestInit,
 ): Promise<T> {
     try {
-        const res = await authenticatedFetch(path, getToken, init)
+        const res = await authFetch(path, getToken, init)
         if (res.status === 401) throw new ApiError('unauthorized', 'Please sign in again.', 401)
         if (res.status === 403) throw new ApiError('forbidden', 'You do not have access to this.', 403)
         if (res.status === 404) throw new ApiError('not_found', 'That resource was not found.', 404)
