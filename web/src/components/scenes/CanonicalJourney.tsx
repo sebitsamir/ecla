@@ -43,7 +43,9 @@ export default function CanonicalJourney({ competencyId, getToken, onExit }: { c
         {offline && <p role="status" className="mb-5 rounded-control border border-warning/30 bg-warning/10 p-4 text-sm text-ivory">You are viewing an offline practice copy. Reconnect before an assessment.</p>}
         {error && <div role="alert" className="mb-5 rounded-control border border-danger/40 bg-danger/10 p-4 text-danger-soft">{error}</div>}
         {scenes === null && !error && <div role="status" className="grid gap-4 sm:grid-cols-2">{[0,1].map(item => <div key={item} className="ecla-skeleton h-40 rounded-experience" />)}</div>}
-        {scenes?.length === 0 && <div role="status" className="ecla-surface rounded-experience p-7 text-stone">This competency has no installed scene yet. Run the scene seed to add it.</div>}
+        {scenes?.length === 0 && <div role="status" className="ecla-surface rounded-experience p-7 text-stone">
+            Practice scenes are still being installed for this release. Reload shortly to continue.
+        </div>}
         <div className="grid gap-4 sm:grid-cols-2">{scenes?.map((scene, index) => <button key={scene.revisionId} disabled={busy} className="ecla-control group relative min-h-44 overflow-hidden rounded-experience border border-line-strong bg-carbon p-6 text-left shadow-glow-md hover:-translate-y-0.5 hover:border-ember/50 disabled:opacity-40" onClick={() => open(scene.slug)}>
             <div className="relative flex h-full flex-col justify-between"><p className="text-[11px] font-semibold uppercase tracking-[.18em] text-ember-soft">Scene {String(index + 1).padStart(2,'0')}</p><div><h2 className="font-display text-2xl text-ivory">{scene.title}</h2><p className="mt-3 inline-flex items-center gap-2 text-sm font-semibold text-stone group-hover:text-ivory">Enter scene <ArrowRight className="size-4" /></p></div></div>
         </button>)}</div>

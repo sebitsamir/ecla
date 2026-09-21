@@ -97,7 +97,7 @@ export default function GoldenJourney({ competencyCode, getToken, onExit }: Prop
             {catalog && !attempt && <section className="pb-10">
                 <div className="max-w-2xl pb-9 pt-8"><p className="text-xs font-semibold uppercase tracking-[.2em] text-ember-soft">Practice, transfer, retain</p><h1 className="font-display mt-3 text-4xl leading-tight sm:text-6xl">Use this ability in context.</h1>
                 <p className="mt-4 leading-relaxed text-stone">Practise in developed situations, then respond in held-out settings. Support, modality, context, and delayed return are recorded separately.</p></div>
-                {!catalog.scenes.length && <p role="status">Benchmark scenes have not been installed in this database yet. Apply the reviewed migration and benchmark seed in an isolated environment first.</p>}
+                {!catalog.scenes.length && <p role="status">Benchmark lessons are not installed in this release yet. Run the release seed against the deployed database, then reload this page.</p>}
                 <div className="grid gap-4 md:grid-cols-3">{catalog.scenes.map((scene, index) => <article key={scene.id} className="relative flex min-h-60 flex-col overflow-hidden rounded-experience border border-line bg-carbon p-6 shadow-glow-md">
                     <div className="relative flex h-full flex-col">
                     <p className="text-[11px] font-semibold uppercase tracking-[.18em] text-ember-soft">{scene.purpose} · {String(index + 1).padStart(2,'0')}{scene.completed ? ' · completed' : ''}</p>
