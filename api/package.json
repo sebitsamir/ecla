@@ -6,7 +6,7 @@
   "scripts": {
     "test": "tsx --test tests/**/*.test.ts",
     "dev": "tsx watch src/server.ts",
-    "start": "npm run seed:release && node -e \"process.env.ECLA_RELEASE_MODE='true'; require('./dist/api/src/server.js')\"",
+    "start": "npm run seed:runtime && node -e \"process.env.ECLA_RELEASE_MODE='true'; require('./dist/api/src/server.js')\"",
     "start:strict": "node dist/api/src/server.js",
     "start:source": "tsx src/server.ts",
     "build": "prisma generate && tsc -p tsconfig.json",
@@ -21,6 +21,7 @@
     "seed:golden": "tsx prisma/seedGolden.ts",
     "seed:scenes": "tsx prisma/seedScenes.ts",
     "seed:release": "prisma migrate deploy && npm run seed:all && npm run seed:golden && npm run seed:scenes",
+    "seed:runtime": "npm run seed:golden && npm run seed:scenes",
     "test:integration": "node scripts/run-integration.mjs",
     "db:patch": "prisma db execute --schema prisma/schema.prisma --file prisma/migrations/20260829180000_phase31_learner_extensions/migration.sql",
     "db:status": "prisma migrate status",
