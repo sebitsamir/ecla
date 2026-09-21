@@ -10,10 +10,12 @@ export async function seedGolden(db: PrismaClient) {
         const ids: string[] = []
         for (const { slug, definition } of [...GOLDEN_SCENES,...benchmarkGoldenScenes()]) {
             const competency = await tx.competency.findUnique({ where: { code: definition.competencyCode }, include: { experiences: { where: { type: 'STORY' }, orderBy: { orderIndex: 'asc' }, take: 1 } } })
-            if (!competency?.experiences[0]) {
-                if (definition.competencyCode === GOLDEN_CODE) throw new Error(`Seed ${definition.competencyCode} and its STORY experience before benchmark scenes.`)
-                continue
-            }
+            if (!competency) throw new Error(`Install competency ${definition.competencyCode} before its benchmark scenes.`)
+            const experience = competency.experiences[0] ?? await tx.learningExperience.create({ data: {
+                id: `${competency.id}-release-story`, competencyId: competency.id, type: 'STORY',
+                title: `${competency.title} — Guided scene`, description: competency.canDo,
+                orderIndex: 0, content: { source: 'release-bootstrap' }, estimatedMinutes: 8,
+            } })
             const version = createHash('sha256').update(JSON.stringify(definition)).digest('hex')
             const scene = await tx.scene.upsert({
                 where: { slug },
@@ -27,7 +29,7 @@ export async function seedGolden(db: PrismaClient) {
             if (scene.competencyId !== competency.id) throw new Error(`Scene ${slug} belongs to another competency`)
             const row = await tx.assessmentSceneVersion.upsert({
                 where: { sceneId_version: { sceneId: scene.id, version } }, update: {},
-                create: { sceneId: scene.id, experienceId: competency.experiences[0].id, version, definition: definition as unknown as Prisma.InputJsonValue, published: true, educatorReviewed: false },
+                create: { sceneId: scene.id, experienceId: experience.id, version, definition: definition as unknown as Prisma.InputJsonValue, published: true, educatorReviewed: false },
             })
             ids.push(row.id)
         }
