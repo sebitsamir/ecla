@@ -11,5 +11,5 @@ async function main() {
 }
 
 main()
-    .catch(error => { console.error(error instanceof Error ? error.message : 'Canonical seed failed'); process.exitCode = 1 })
+    .catch(error => { console.error('Canonical scene seed failed:', error); process.exitCode = 1 })
     .finally(() => db.$disconnect())
