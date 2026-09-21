@@ -9,7 +9,10 @@ const json = (value: unknown) => JSON.parse(JSON.stringify(value)) as Prisma.Inp
 export class ScenePlatform {
     private readonly allowDraftDelivery: boolean
     constructor(private db: PrismaClient, options: { allowDraftDelivery?: boolean } = {}) {
-        this.allowDraftDelivery = options.allowDraftDelivery ?? (process.env.NODE_ENV !== 'production' && process.env.ECLA_ALLOW_DRAFT_SCENES !== 'false')
+        // Release previews may intentionally deliver seeded drafts, but only when
+        // explicitly enabled. Normal production deployments remain publication-only.
+        const releaseMode = process.env.ECLA_RELEASE_MODE === 'true'
+        this.allowDraftDelivery = options.allowDraftDelivery ?? (releaseMode || (process.env.NODE_ENV !== 'production' && process.env.ECLA_ALLOW_DRAFT_SCENES !== 'false'))
     }
     async draft(actor: string, input: unknown) {
         const result = compileScene(input)
